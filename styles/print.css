@@ -1,0 +1,39 @@
+/* Print-specific styles */
+@media print {
+  /* Hide UI elements that shouldn't be printed */
+  button, 
+  .no-print {
+    display: none !important;
+  }
+  
+  /* Show elements that should only appear in print */
+  .print-only {
+    display: block !important;
+  }
+  
+  /* Ensure the logo appears properly */
+  .logo {
+    max-width: 200px;
+    height: auto;
+  }
+  
+  /* Set page margins */
+  @page {
+    margin: 0.5cm;
+  }
+  
+  /* Ensure proper page breaks */
+  .page-break {
+    page-break-before: always;
+  }
+  
+  /* Improve table appearance in print */
+  .items-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .table-row {
+    page-break-inside: avoid;
+  }
+} 

@@ -1,0 +1,32 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Client {
+  id         String   @id @default(uuid())
+  name       String
+  is_deleted Boolean  @default(false)
+  jobs       Job[]
+}
+
+model Job {
+  id        String   @id @default(uuid())
+  client    Client   @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  client_id String
+}
+
+model Company {
+  id            String   @id @default(uuid())
+  business_name String
+  address       String
+  email         String?
+  phone         String?
+  ein           String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+} 
