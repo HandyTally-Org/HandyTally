@@ -6,10 +6,8 @@ frontend:
         - npm ci
     build:
       commands:
-        - npx expo export:web
+        - npx expo export
   artifacts:
-    # The output directory might be web-build instead of dist
-    # depending on your Expo version
-    baseDirectory: web-build
+    baseDirectory: dist
     files:
       - '**/*' 
