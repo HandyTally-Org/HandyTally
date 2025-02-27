@@ -1,0 +1,15 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - npm ci
+    build:
+      commands:
+        - npx expo export:web
+  artifacts:
+    # The output directory might be web-build instead of dist
+    # depending on your Expo version
+    baseDirectory: web-build
+    files:
+      - '**/*' 
