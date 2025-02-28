@@ -3,6 +3,7 @@ import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text, Button, Searchbar, Card, DataTable, Chip, IconButton, Dialog, Portal, Snackbar, TextInput, RadioButton } from 'react-native-paper';
 import { supabase } from '../../lib/api';
 import { styles as globalStyles } from '../../styles';
+import { JobForm } from '../../components/JobForm';
 
 type Job = {
   uid: string;
@@ -32,10 +33,17 @@ export default function JobsScreen() {
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [sortColumn, setSortColumn] = useState<string>('name');
   const [sortDirection, setSortDirection] = useState<'ascending' | 'descending'>('ascending');
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
 
   useEffect(() => {
     fetchJobs();
   }, []);
+
+  useEffect(() => {
+    if (clients.length === 0) {
+      fetchClients();
+    }
+  }, [clients.length]);
 
   async function fetchJobs() {
     try {
@@ -66,6 +74,24 @@ export default function JobsScreen() {
       showSnackbar('Error loading jobs');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fetchClients() {
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('*')
+        .order('name');
+      
+      if (error) throw error;
+      
+      if (data) {
+        setClients(data);
+      }
+    } catch (error) {
+      console.error('Error fetching clients:', error);
+      showSnackbar('Error loading clients');
     }
   }
 
@@ -112,7 +138,8 @@ export default function JobsScreen() {
         description: editingJob.description || '',
         start_date: formatDateForDB(editingJob.start_date),
         end_date: formatDateForDB(editingJob.end_date),
-        status: editingJob.status || 'pending'
+        status: editingJob.status || 'pending',
+        client_id: editingJob.client_id // Add client_id to the update data
       };
       
       console.log('Updating job with data:', updateData);
@@ -130,32 +157,14 @@ export default function JobsScreen() {
       
       console.log('Update response:', data);
       
-      if (data && data.length > 0) {
-        // Get the updated job from the response
-        const updatedJob = {
-          ...data[0],
-          client_name: editingJob.client_name // Preserve the client name
-        };
-        
-        // Update the job in the local state
-        setJobs(jobs.map(job => 
-          job.uid === editingJob.uid ? updatedJob : job
-        ));
-        
-        showSnackbar('Job updated successfully');
-      } else {
-        // If no data returned but no error, still consider it a success
-        // Update the job in the local state with our edited data
-        setJobs(jobs.map(job => 
-          job.uid === editingJob.uid ? editingJob : job
-        ));
-        
-        showSnackbar('Job updated successfully');
-      }
-      
       // Close the edit dialog
       setShowEditDialog(false);
       setEditingJob(null);
+      
+      // Refresh the jobs list to get updated data including client names
+      await fetchJobs();
+      
+      showSnackbar('Job updated successfully');
     } catch (error: any) {
       console.error('Error updating job:', error);
       showSnackbar('Error updating job: ' + (error.message || 'Unknown error'));
@@ -164,9 +173,32 @@ export default function JobsScreen() {
     }
   };
 
-  const handleAddJob = () => {
-    // Navigate to add job page
-    window.location.href = '/jobs/add';
+  const handleAddJob = async (jobData) => {
+    try {
+      setLoading(true);
+      
+      // Create the job in the database
+      const { data, error } = await supabase
+        .from('jobs')
+        .insert([jobData])
+        .select();
+      
+      if (error) throw error;
+      
+      // Update the jobs list
+      setJobs([...(data || []), ...jobs]);
+      
+      // Close the form
+      setShowAddForm(false);
+      
+      // Show success message
+      showSnackbar('Job created successfully');
+    } catch (error) {
+      console.error('Error adding job:', error);
+      showSnackbar('Failed to create job');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getStatusChip = (status: string | undefined) => {
@@ -381,8 +413,7 @@ export default function JobsScreen() {
         
         <Button
           mode="contained"
-          onPress={handleAddJob}
-          icon="plus"
+          onPress={() => setShowAddForm(true)}
           style={styles.addButton}
         >
           Add New Job
@@ -544,6 +575,67 @@ export default function JobsScreen() {
                   mode="outlined"
                 />
                 
+                <Text style={styles.inputLabel}>Client</Text>
+                <View style={styles.dropdownContainer}>
+                  <TextInput
+                    value={clients.find(client => client.uid === editingJob.client_id)?.name || 'Select Client'}
+                    style={[styles.input, { cursor: 'pointer' }]}
+                    mode="outlined"
+                    right={
+                      <TextInput.Icon 
+                        icon="menu-down" 
+                        onPress={() => setShowClientDropdown(!showClientDropdown)} 
+                      />
+                    }
+                    onTouchStart={() => setShowClientDropdown(!showClientDropdown)}
+                    onClick={() => setShowClientDropdown(!showClientDropdown)}
+                    editable={false}
+                    pointerEvents="auto"
+                  />
+                  {showClientDropdown && (
+                    <View style={styles.dropdown}>
+                      {clients.map(client => (
+                        <TouchableOpacity
+                          key={client.uid}
+                          style={{
+                            padding: 12,
+                            borderBottomWidth: 1,
+                            borderBottomColor: '#f0f0f0',
+                            backgroundColor: client.uid === editingJob.client_id 
+                              ? '#f0f0f0' 
+                              : 'white',
+                            width: '100%',
+                            display: 'flex',
+                            flexDirection: 'row',
+                            alignItems: 'center'
+                          }}
+                          onPress={() => {
+                            setEditingJob({
+                              ...editingJob, 
+                              client_id: client.uid,
+                              client_name: client.name // Also update the client_name in the local state
+                            });
+                            setShowClientDropdown(false);
+                          }}
+                          onMouseEnter={(e) => {
+                            // @ts-ignore - Add hover effect
+                            e.currentTarget.style.backgroundColor = '#f5f5f5';
+                          }}
+                          onMouseLeave={(e) => {
+                            // @ts-ignore - Remove hover effect
+                            e.currentTarget.style.backgroundColor = 
+                              client.uid === editingJob.client_id 
+                                ? '#f0f0f0' 
+                                : 'white';
+                          }}
+                        >
+                          <Text style={{ flex: 1, fontSize: 16, fontWeight: '500', marginLeft: 8 }}>{client.name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
+                
                 <Text style={styles.inputLabel}>Description</Text>
                 <TextInput
                   value={editingJob.description}
@@ -604,16 +696,20 @@ export default function JobsScreen() {
                       {statusOptions.map(option => (
                         <TouchableOpacity
                           key={option.value}
-                          style={[
-                            styles.dropdownItem,
-                            { 
-                              backgroundColor: option.value === editingJob.status 
-                                ? getStatusColor(option.value) 
-                                : 'white',
-                              borderLeftWidth: 4,
-                              borderLeftColor: getStatusColor(option.value)
-                            }
-                          ]}
+                          style={{
+                            padding: 12,
+                            borderBottomWidth: 1,
+                            borderBottomColor: '#f0f0f0',
+                            backgroundColor: option.value === editingJob.status 
+                              ? getStatusColor(option.value) 
+                              : 'white',
+                            borderLeftWidth: 4,
+                            borderLeftColor: getStatusColor(option.value),
+                            width: '100%',
+                            display: 'flex',
+                            flexDirection: 'row',
+                            alignItems: 'center'
+                          }}
                           onPress={() => {
                             setEditingJob({...editingJob, status: option.value as Job['status']});
                             setShowStatusDropdown(false);
@@ -634,7 +730,7 @@ export default function JobsScreen() {
                             e.currentTarget.style.opacity = 1;
                           }}
                         >
-                          <Text style={styles.dropdownItemText}>{option.label}</Text>
+                          <Text style={{ flex: 1, fontSize: 16, fontWeight: '500', marginLeft: 8 }}>{option.label}</Text>
                         </TouchableOpacity>
                       ))}
                     </View>
@@ -656,6 +752,18 @@ export default function JobsScreen() {
           </Dialog.Actions>
         </Dialog>
       </Portal>
+      
+      {showAddForm ? (
+        <JobForm
+          clients={clients}
+          onSubmit={handleAddJob}
+          onCancel={() => setShowAddForm(false)}
+        />
+      ) : selectedJob ? (
+        <></>
+      ) : (
+        <></>
+      )}
       
       <Snackbar
         visible={snackbarVisible}
@@ -763,6 +871,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
     overflow: 'hidden',
+    width: '100%'
   },
   dropdownItem: {
     padding: 12,
@@ -772,6 +881,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     cursor: 'pointer',
     transition: 'all 0.2s ease',
+    width: '100%',
+    display: 'flex',
+    justifyContent: 'flex-start'
   },
   dropdownItemText: {
     fontSize: 16,
