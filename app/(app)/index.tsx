@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Dimensions, TouchableOpacity } from 'react-native';
-import { Text, Card, Title, Paragraph, Button, List, ActivityIndicator, Menu, Divider, Portal, Modal } from 'react-native-paper';
+import { Text, Card, Title, Paragraph, Button, List, ActivityIndicator, Menu, Divider, Portal, Modal, IconButton, Snackbar } from 'react-native-paper';
 import { supabase } from '../../lib/supabase';
 import { styles as globalStyles } from '../../styles';
 
@@ -75,6 +75,8 @@ export default function DashboardScreen() {
     invoices: any[];
     position: { x: number, y: number };
   } | null>(null);
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
 
   useEffect(() => {
     console.log("Dashboard component mounted");
@@ -760,15 +762,46 @@ export default function DashboardScreen() {
     }
   };
 
+  const showSnackbar = (message: string) => {
+    setSnackbarMessage(message);
+    setSnackbarVisible(true);
+  };
+
   return (
     <ScrollView style={styles.container}>
-      <Text style={{
-        fontFamily: 'System',
-        fontSize: 26,
-        fontWeight: '600',
-        marginBottom: 16,
-        color: '#333333',
-      }}>Dashboard</Text>
+      <View style={{ 
+        flexDirection: 'row', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        marginBottom: 16 
+      }}>
+        <Text style={{
+          fontFamily: 'System',
+          fontSize: 26,
+          fontWeight: '600',
+          color: '#333333',
+        }}>Dashboard</Text>
+        <IconButton
+          icon="refresh"
+          size={24}
+          onPress={() => {
+            setLoading(true);
+            Promise.all([
+              fetchDashboardData(),
+              fetchRecentActivity(),
+              fetchSalesData()
+              // Add any other data fetching functions here
+            ]).then(() => {
+              setLoading(false);
+              showSnackbar('Dashboard refreshed');
+            }).catch(error => {
+              console.error('Error refreshing dashboard:', error);
+              setLoading(false);
+              showSnackbar('Error refreshing dashboard');
+            });
+          }}
+        />
+      </View>
       
       {loading ? (
         <View style={styles.loadingContainer}>
@@ -982,6 +1015,13 @@ export default function DashboardScreen() {
           </Card>
         </>
       )}
+      <Snackbar
+        visible={snackbarVisible}
+        onDismiss={() => setSnackbarVisible(false)}
+        duration={3000}
+      >
+        {snackbarMessage}
+      </Snackbar>
     </ScrollView>
   );
 }
