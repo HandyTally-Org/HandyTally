@@ -1,21 +1,32 @@
 import { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, Button, TextInput, Card, DataTable, IconButton, Dialog, Portal, Snackbar } from 'react-native-paper';
-import { supabase } from '../lib/api';
+import { Text, Button, TextInput, Card, DataTable, IconButton, Dialog, Portal, Snackbar, Chip } from 'react-native-paper';
+import { supabase } from '../../../lib/supabase';
 
 type User = {
-  uid: string;
+  id: string;
   email: string;
-  name: string;
-  role: 'admin' | 'user';
+  phone?: string;
+  user_metadata: {
+    name?: string;
+    role?: 'admin' | 'user';
+  };
   created_at: string;
-  last_sign_in?: string;
+  last_sign_in_at?: string;
+  confirmed_at?: string;
+  app_metadata?: {
+    provider?: string;
+    providers?: string[];
+  };
 };
 
 export default function UsersScreen() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserFirstName, setNewUserFirstName] = useState('');
+  const [newUserLastName, setNewUserLastName] = useState('');
+  const [newUserPhone, setNewUserPhone] = useState('');
   const [newUserRole, setNewUserRole] = useState<'admin' | 'user'>('user');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -38,31 +49,50 @@ export default function UsersScreen() {
   });
 
   useEffect(() => {
-    checkUsersTable().then(tableExists => {
-      if (tableExists) {
-        fetchUsers();
-      }
-    });
+    fetchUsers();
   }, []);
 
   async function fetchUsers() {
     try {
       setLoading(true);
       
-      // Use a standard query to fetch users from a users table
+      // Query the profiles table directly instead of auth.users
       const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .from('profiles')
+        .select('*');
       
       if (error) {
         throw error;
       } else if (data) {
-        setUsers(data);
+        // Transform the data to match our User type
+        // Use first_name and last_name fields, default role to 'user'
+        const formattedUsers = data.map((profile: any) => {
+          // Combine first_name and last_name for display
+          const firstName = profile.first_name || '';
+          const lastName = profile.last_name || '';
+          const fullName = [firstName, lastName].filter(Boolean).join(' ');
+          
+          return {
+            id: profile.id,
+            email: profile.email || '',
+            phone: profile.phone || '',
+            user_metadata: { 
+              name: fullName, 
+              role: 'user' // Default role since it doesn't exist in the schema
+            },
+            app_metadata: {},
+            // Use current date as fallback for timestamps that might not exist
+            created_at: new Date().toISOString(),
+            last_sign_in_at: undefined,
+            confirmed_at: undefined
+          };
+        });
+        
+        setUsers(formattedUsers);
       }
     } catch (error) {
       console.error('Error fetching users:', error);
-      showSnackbar('Error loading users');
+      showSnackbar('Error loading users from profiles table.');
     } finally {
       setLoading(false);
     }
@@ -90,73 +120,61 @@ export default function UsersScreen() {
       // Generate a temporary password
       const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
       
-      // Use signUp with explicit email confirmation
-      const { data, error } = await supabase.auth.signUp({
+      // Use the standard signUp method instead of admin.createUser
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: newUserEmail,
         password: tempPassword,
         options: {
-          emailRedirectTo: `${window.location.origin}/login`,
           data: {
-            role: newUserRole,
-            name: ''
+            first_name: newUserFirstName,
+            last_name: newUserLastName,
+            phone: newUserPhone,
+            role: newUserRole
           }
         }
       });
       
-      if (error) throw error;
-      
-      if (data.user) {
-        // Add the user to our custom users table
-        const { error: insertError } = await supabase
-          .from('users')
-          .insert([{
-            uid: data.user.id,
-            email: data.user.email,
-            name: '',
-            role: newUserRole,
-            created_at: new Date().toISOString()
-          }]);
-        
-        if (insertError) {
-          console.error('Error inserting user into users table:', insertError);
-        }
-        
-        // Add the new user to our list
-        const newUser: User = {
-          uid: data.user.id,
-          email: data.user.email,
-          name: '',
-          role: newUserRole,
-          created_at: new Date().toISOString(),
-        };
-        
-        setUsers([newUser, ...users]);
-        
-        // Set invitation details for display
-        const inviteLink = `${window.location.origin}/login`;
-        setInviteDetails({
-          email: newUserEmail,
-          password: tempPassword,
-          link: inviteLink,
-          userId: data.user.id
-        });
-        
-        // Show the invitation details dialog
-        setShowInviteInfo(true);
-        
-        // Close the add user dialog
-        setShowAddDialog(false);
-        setNewUserEmail('');
-        setNewUserRole('user');
-        setError('');
+      if (authError) {
+        throw new Error(`Error creating user: ${authError.message}`);
       }
-    } catch (error) {
-      console.error('Error inviting user:', error);
       
-      if (error.message.includes('User already registered')) {
+      if (!authData.user) {
+        throw new Error('Failed to create user');
+      }
+      
+      // The profile should be created automatically by a Supabase trigger
+      // But we'll show the invitation details
+      const inviteLink = `${window.location.origin}/login`;
+      setInviteDetails({
+        email: newUserEmail,
+        password: tempPassword,
+        link: inviteLink,
+        userId: authData.user.id
+      });
+      
+      // Show the invitation details dialog
+      setShowInviteInfo(true);
+      
+      // Close the add user dialog
+      setShowAddDialog(false);
+      setNewUserEmail('');
+      setNewUserFirstName('');
+      setNewUserLastName('');
+      setNewUserPhone('');
+      setNewUserRole('user');
+      setError('');
+      
+      // Refresh the users list
+      fetchUsers();
+      
+      showSnackbar('User invited successfully');
+    } catch (error: any) {
+      console.error('Error adding user:', error);
+      
+      if (error.message.includes('duplicate key value violates unique constraint')) {
         setError('This email is already registered. Please use a different email.');
       } else {
-        setError(error.message || 'Error inviting user');
+        setError(error.message || 'Error adding user');
       }
     }
   };
@@ -166,61 +184,60 @@ export default function UsersScreen() {
     // This is a placeholder - you would implement this with your own email sending service
     // For example, using a serverless function or a service like SendGrid, Mailgun, etc.
     console.log(`Would send invitation email to ${email} with password ${password}`);
-    
-    // If you have a server endpoint for sending emails, you could call it like this:
-    // const response = await fetch('/api/send-invitation', {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({ email, password, role: newUserRole })
-    // });
-    // 
-    // if (!response.ok) {
-    //   throw new Error('Failed to send invitation email');
-    // }
   };
 
   const handleDeleteUser = async () => {
     if (!selectedUser) return;
     
     try {
-      // Delete from users table
-      const { error } = await supabase
-        .from('users')
-        .delete()
-        .eq('uid', selectedUser.uid);
+      // Delete user using admin API
+      const { error } = await supabase.rpc('admin_delete_user', {
+        user_id: selectedUser.id
+      });
       
       if (error) throw error;
       
       // Remove the user from our list
-      setUsers(users.filter(user => user.uid !== selectedUser.uid));
+      setUsers(users.filter(user => user.id !== selectedUser.id));
       showSnackbar('User deleted successfully');
       setShowDeleteDialog(false);
       setSelectedUser(null);
     } catch (error) {
       console.error('Error deleting user:', error);
-      showSnackbar('Error deleting user');
+      showSnackbar('Error deleting user. You may not have admin privileges.');
     }
   };
 
   const handleUpdateUserRole = async (user: User, newRole: 'admin' | 'user') => {
     try {
-      // Update the user's role in the users table
-      const { error } = await supabase
-        .from('users')
-        .update({ role: newRole })
-        .eq('uid', user.uid);
+      // Update the user's metadata
+      const { error } = await supabase.rpc('admin_update_user_metadata', {
+        user_id: user.id,
+        metadata: {
+          ...user.user_metadata,
+          role: newRole
+        }
+      });
       
       if (error) throw error;
       
       // Update the user in our list
       setUsers(users.map(u => 
-        u.uid === user.uid ? { ...u, role: newRole } : u
+        u.id === user.id 
+          ? { 
+              ...u, 
+              user_metadata: { 
+                ...u.user_metadata, 
+                role: newRole 
+              } 
+            } 
+          : u
       ));
       
       showSnackbar('User role updated successfully');
     } catch (error) {
       console.error('Error updating user role:', error);
-      showSnackbar('Error updating user role');
+      showSnackbar('Error updating user role. You may not have admin privileges.');
     }
   };
 
@@ -229,30 +246,9 @@ export default function UsersScreen() {
     return new Date(dateString).toLocaleString();
   };
 
-  async function checkUsersTable() {
-    try {
-      // Just check if the users table exists
-      const { data, error } = await supabase
-        .from('users')
-        .select('uid')
-        .limit(1);
-      
-      // If there's an error, log it but don't show a snackbar
-      if (error) {
-        console.error('Users table may not exist:', error);
-        return false;
-      }
-      
-      return true;
-    } catch (error) {
-      console.error('Error checking users table:', error);
-      return false;
-    }
-  }
-
   const handleEditUser = (user: User) => {
     setEditingUser(user);
-    setEditName(user.name || '');
+    setEditName(user.user_metadata?.name || '');
     setEditEmail(user.email);
     setEditPassword('');
     setChangePassword(false);
@@ -272,97 +268,110 @@ export default function UsersScreen() {
         }
       }
       
-      // Update user in the users table
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({
-          name: editName,
-          email: editEmail,
-        })
-        .eq('uid', editingUser.uid);
+      // Update user metadata
+      const { error: updateMetadataError } = await supabase.rpc('admin_update_user_metadata', {
+        user_id: editingUser.id,
+        metadata: {
+          ...editingUser.user_metadata,
+          name: editName
+        }
+      });
       
-      if (updateError) throw updateError;
+      if (updateMetadataError) throw updateMetadataError;
+      
+      // If email is changed, update it
+      if (editEmail !== editingUser.email) {
+        const { error: updateEmailError } = await supabase.rpc('admin_update_user_email', {
+          user_id: editingUser.id,
+          email: editEmail
+        });
+        
+        if (updateEmailError) throw updateEmailError;
+      }
       
       // If password is being changed, update it
       if (changePassword && editPassword) {
-        // In a real app, you'd use an admin API to update the password
-        // Since we don't have that access, we'll just show a message
-        showSnackbar('Password change functionality requires admin API access');
+        const { error: updatePasswordError } = await supabase.rpc('admin_update_user_password', {
+          user_id: editingUser.id,
+          password: editPassword
+        });
         
-        // If you have admin API access, you would do something like:
-        // const { error } = await supabase.auth.admin.updateUserById(
-        //   editingUser.uid,
-        //   { password: editPassword }
-        // );
-        // if (error) throw error;
+        if (updatePasswordError) throw updatePasswordError;
       }
       
       // Update the user in our list
       setUsers(users.map(u => 
-        u.uid === editingUser.uid 
-          ? { ...u, name: editName, email: editEmail } 
+        u.id === editingUser.id 
+          ? { 
+              ...u, 
+              email: editEmail,
+              user_metadata: { 
+                ...u.user_metadata, 
+                name: editName 
+              } 
+            } 
           : u
       ));
       
       showSnackbar('User updated successfully');
       setShowEditDialog(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating user:', error);
       setError(error.message || 'Error updating user');
     }
   };
 
-  // Add this function to check if a user exists in Auth
-  const checkUserInAuth = async (email: string) => {
-    try {
-      // This requires admin privileges
-      const { data, error } = await supabase.rpc('get_user_by_email', {
-        email_address: email
-      });
-      
-      if (error) {
-        console.error('Error checking user in auth:', error);
-        return false;
-      }
-      
-      return !!data;
-    } catch (error) {
-      console.error('Error checking user in auth:', error);
-      return false;
-    }
-  };
-
-  // Add this function to manually confirm a user
+  // Update the confirmUser function to handle permission issues
   const confirmUser = async (userId: string) => {
     try {
-      // This requires admin privileges
-      const { error } = await supabase.rpc('admin_confirm_user', {
-        user_id: userId
-      });
+      // Note: This might not work due to RLS policies
+      const { error } = await supabase
+        .from('profiles')
+        .update({ email_confirmed_at: new Date().toISOString() })
+        .eq('id', userId);
       
       if (error) {
         console.error('Error confirming user:', error);
-        showSnackbar('Error confirming user. You may not have admin privileges.');
+        
+        // Show a more helpful message
+        showSnackbar(
+          'Unable to automatically confirm the user. ' +
+          'The user will need to confirm their email by clicking the link sent to their email address. ' +
+          'Alternatively, you may need admin privileges to confirm users.'
+        );
         return false;
       }
       
       showSnackbar('User confirmed successfully');
+      fetchUsers(); // Refresh the list
       return true;
     } catch (error) {
       console.error('Error confirming user:', error);
-      showSnackbar('Error confirming user');
+      showSnackbar('Error confirming user. The user will need to confirm their email by clicking the link sent to their email.');
       return false;
     }
+  };
+
+  // Add this helper function to get provider information
+  const getProviderInfo = (user: User) => {
+    const providers = user.app_metadata?.providers || [];
+    const primaryProvider = user.app_metadata?.provider || '';
+    
+    return {
+      providers: providers.length > 0 ? providers.join(', ') : 'email',
+      providerType: primaryProvider || 'email'
+    };
   };
 
   return (
     <View style={styles.container}>
       <Text style={{
-        fontSize: 28,
-        fontWeight: 'bold',
+        fontFamily: 'System',
+        fontSize: 26,
+        fontWeight: '600',
         marginBottom: 16,
-        color: '#000000',
-      }}>User Management</Text>
+        color: '#333333',
+      }}>Users</Text>
       
       <Button
         mode="contained"
@@ -376,11 +385,13 @@ export default function UsersScreen() {
       <Card style={styles.tableCard}>
         <DataTable>
           <DataTable.Header>
-            <DataTable.Title>Name</DataTable.Title>
+            <DataTable.Title>Display name</DataTable.Title>
             <DataTable.Title>Email</DataTable.Title>
-            <DataTable.Title>Role</DataTable.Title>
-            <DataTable.Title>Created</DataTable.Title>
-            <DataTable.Title>Last Sign In</DataTable.Title>
+            <DataTable.Title>Phone</DataTable.Title>
+            <DataTable.Title>Providers</DataTable.Title>
+            <DataTable.Title>Provider type</DataTable.Title>
+            <DataTable.Title>Created at</DataTable.Title>
+            <DataTable.Title>Last sign in at</DataTable.Title>
             <DataTable.Title>Actions</DataTable.Title>
           </DataTable.Header>
           
@@ -393,43 +404,37 @@ export default function UsersScreen() {
               <DataTable.Cell>No users found</DataTable.Cell>
             </DataTable.Row>
           ) : (
-            users.map(user => (
-              <DataTable.Row key={user.uid}>
-                <DataTable.Cell>{user.name || '(No name)'}</DataTable.Cell>
-                <DataTable.Cell>{user.email}</DataTable.Cell>
-                <DataTable.Cell>
-                  <Button
-                    mode="text"
-                    compact
-                    onPress={() => handleUpdateUserRole(
-                      user, 
-                      user.role === 'admin' ? 'user' : 'admin'
-                    )}
-                  >
-                    {user.role === 'admin' ? 'Admin' : 'User'}
-                  </Button>
-                </DataTable.Cell>
-                <DataTable.Cell>{formatDate(user.created_at)}</DataTable.Cell>
-                <DataTable.Cell>{formatDate(user.last_sign_in)}</DataTable.Cell>
-                <DataTable.Cell>
-                  <View style={{ flexDirection: 'row' }}>
-                    <IconButton
-                      icon="pencil"
-                      size={20}
-                      onPress={() => handleEditUser(user)}
-                    />
-                    <IconButton
-                      icon="delete"
-                      size={20}
-                      onPress={() => {
-                        setSelectedUser(user);
-                        setShowDeleteDialog(true);
-                      }}
-                    />
-                  </View>
-                </DataTable.Cell>
-              </DataTable.Row>
-            ))
+            users.map(user => {
+              const { providers, providerType } = getProviderInfo(user);
+              return (
+                <DataTable.Row key={user.id}>
+                  <DataTable.Cell>{user.user_metadata?.name || '(No name)'}</DataTable.Cell>
+                  <DataTable.Cell>{user.email}</DataTable.Cell>
+                  <DataTable.Cell>{user.phone || '-'}</DataTable.Cell>
+                  <DataTable.Cell>{providers}</DataTable.Cell>
+                  <DataTable.Cell>{providerType}</DataTable.Cell>
+                  <DataTable.Cell>{formatDate(user.created_at)}</DataTable.Cell>
+                  <DataTable.Cell>{formatDate(user.last_sign_in_at)}</DataTable.Cell>
+                  <DataTable.Cell>
+                    <View style={{ flexDirection: 'row' }}>
+                      <IconButton
+                        icon="pencil"
+                        size={20}
+                        onPress={() => handleEditUser(user)}
+                      />
+                      <IconButton
+                        icon="delete"
+                        size={20}
+                        onPress={() => {
+                          setSelectedUser(user);
+                          setShowDeleteDialog(true);
+                        }}
+                      />
+                    </View>
+                  </DataTable.Cell>
+                </DataTable.Row>
+              );
+            })
           )}
         </DataTable>
       </Card>
@@ -439,6 +444,22 @@ export default function UsersScreen() {
         <Dialog visible={showAddDialog} onDismiss={() => setShowAddDialog(false)}>
           <Dialog.Title>Invite New User</Dialog.Title>
           <Dialog.Content>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <TextInput
+                label="First Name"
+                value={newUserFirstName}
+                onChangeText={setNewUserFirstName}
+                style={[styles.input, { flex: 1, marginRight: 8 }]}
+              />
+              
+              <TextInput
+                label="Last Name"
+                value={newUserLastName}
+                onChangeText={setNewUserLastName}
+                style={[styles.input, { flex: 1 }]}
+              />
+            </View>
+            
             <TextInput
               label="Email"
               value={newUserEmail}
@@ -446,6 +467,14 @@ export default function UsersScreen() {
               style={styles.input}
               keyboardType="email-address"
               autoCapitalize="none"
+            />
+            
+            <TextInput
+              label="Phone"
+              value={newUserPhone}
+              onChangeText={setNewUserPhone}
+              style={styles.input}
+              keyboardType="phone-pad"
             />
             
             <View style={styles.roleSelector}>
@@ -640,5 +669,8 @@ const styles = StyleSheet.create({
     borderColor: '#e0e0e0',
     borderRadius: 4,
     marginTop: 4,
+  },
+  idCell: {
+    maxWidth: 200,
   },
 }); 

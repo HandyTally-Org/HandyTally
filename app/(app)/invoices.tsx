@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, Button, Searchbar, Snackbar, Card, List, Chip } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { Text, Button, Searchbar, Snackbar, Card, List, Chip, IconButton, Dialog, Portal, TextInput, DataTable } from 'react-native-paper';
 import { supabase } from '../../lib/supabase';
 import { InvoiceForm } from '../../components/InvoiceForm';
 import { InvoiceDetails } from '../../components/InvoiceDetails';
@@ -79,7 +79,11 @@ export default function InvoicesScreen() {
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
-  const [statusFilters, setStatusFilters] = useState<string[]>([]);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [sortColumn, setSortColumn] = useState<string>('invoice_number');
+  const [sortDirection, setSortDirection] = useState<'ascending' | 'descending'>('descending');
 
   useEffect(() => {
     fetchInvoices();
@@ -115,41 +119,29 @@ export default function InvoicesScreen() {
     try {
       setLoading(true);
       
-      console.log('Fetching invoices...');
-      
-      // Use a simpler query that doesn't specify column names
+      // Fetch invoices with client names
       const { data, error } = await supabase
         .from('invoices')
         .select(`
           *,
-          jobs (*),
-          clients (*)
+          clients:client_id (name)
         `)
-        .order('issue_date', { ascending: false });
-
-      console.log('Invoices query result:', data);
+        .order('created_at', { ascending: false });
       
-      if (error) {
-        throw error;
-      }
-
+      if (error) throw error;
+      
       if (data) {
-        // Transform the data to match our expected structure
+        // Transform the data to include client_name
         const transformedData = data.map(invoice => ({
           ...invoice,
-          job: invoice.jobs,
-          client: invoice.clients
+          client_name: invoice.clients?.name || 'Unknown Client'
         }));
         
-        console.log(`Found ${transformedData.length} invoices`);
         setInvoices(transformedData);
-      } else {
-        console.log('No invoice data returned');
-        setInvoices([]);
       }
     } catch (error) {
       console.error('Error fetching invoices:', error);
-      showSnackbar(`Error loading invoices: ${error.message || 'Unknown error'}`);
+      showSnackbar('Error loading invoices');
     } finally {
       setLoading(false);
     }
@@ -286,12 +278,13 @@ export default function InvoicesScreen() {
       console.log('Creating new invoice...');
       
       // Get the current user ID
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError) throw userError;
-      if (!userData.user) throw new Error('User not authenticated');
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      let metadata = user.user_metadata
       
       // Convert UUID to a numeric value for user_id
-      const userId = parseInt(userData.user.id.replace(/-/g, '').substring(0, 15), 16);
+      const userId = parseInt(user.id.replace(/-/g, '').substring(0, 15), 16);
       
       // Similarly convert client_id and job_id
       let clientId = invoice.client_id;
@@ -449,67 +442,24 @@ export default function InvoicesScreen() {
     }
   };
 
-  const handleDeleteInvoice = async (invoiceId: string | number) => {
+  const handleDeleteInvoice = async () => {
+    if (!selectedInvoice) return;
+    
     try {
-      console.log('Attempting to delete invoice with ID:', invoiceId);
-      console.log('ID type:', typeof invoiceId);
-      
-      if (!invoiceId) {
-        console.error('Invalid invoice ID for deletion:', invoiceId);
-        showSnackbar('Failed to delete invoice: Invalid invoice ID');
-        return;
-      }
-      
-      // First, try to delete invoice items
-      console.log('Deleting invoice items first...');
-      const { error: itemsError } = await supabase
-        .from('invoice_items')
-        .delete()
-        .eq('invoice_id', invoiceId);
-      
-      if (itemsError) {
-        console.log('Note: Could not delete invoice items:', itemsError.message);
-        // Continue anyway, as the items might be stored differently
-      }
-      
-      // Now delete the invoice
-      console.log('Deleting invoice with ID:', invoiceId);
-      const { error: invoiceError } = await supabase
+      const { error } = await supabase
         .from('invoices')
         .delete()
-        .eq('uid', invoiceId);
+        .eq('uid', selectedInvoice.uid);
       
-      if (invoiceError) {
-        console.error('Error deleting invoice with uid:', invoiceError);
-        
-        // Try with a different column name
-        console.log('Trying to delete with id column instead...');
-        const { error: secondAttemptError } = await supabase
-          .from('invoices')
-          .delete()
-          .eq('id', invoiceId);
-        
-        if (secondAttemptError) {
-          console.error('Error deleting invoice with id:', secondAttemptError);
-          throw new Error(`Could not delete invoice: ${invoiceError.message}`);
-        }
-      }
+      if (error) throw error;
       
-      // If we got here, deletion was successful
-      console.log('Successfully deleted invoice');
-      
-      // Update the UI
-      setInvoices(invoices.filter(invoice => invoice.uid !== invoiceId && invoice.id !== invoiceId));
-      setSelectedInvoice(null);
-      
+      setInvoices(invoices.filter(invoice => invoice.uid !== selectedInvoice.uid));
       showSnackbar('Invoice deleted successfully');
-      
-      // Refresh the invoices list to be sure
-      await fetchInvoices();
-      
+      setShowDeleteDialog(false);
+      setSelectedInvoice(null);
     } catch (error) {
       console.error('Error deleting invoice:', error);
-      showSnackbar(`Failed to delete invoice: ${error.message}`);
+      showSnackbar('Error deleting invoice');
     }
   };
 
@@ -557,35 +507,75 @@ export default function InvoicesScreen() {
     }
   };
 
-  const getFilteredInvoices = () => {
-    return invoices.filter(invoice => {
-      // If no status filters are selected, show all
-      const statusMatch = statusFilters.length === 0 || statusFilters.includes(invoice.status);
-      
-      // Filter by search query if present
-      const searchMatch = !searchQuery || 
-        invoice.invoice_number.toString().includes(searchQuery) ||
-        (invoice.client?.name || '').toLowerCase().includes(searchQuery.toLowerCase());
-      
-      return statusMatch && searchMatch;
-    });
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'ascending' ? 'descending' : 'ascending');
+    } else {
+      setSortColumn(column);
+      setSortDirection('ascending');
+    }
   };
 
-  // Get the last invoice number
+  const getFilteredInvoices = () => {
+    let filtered = [...invoices];
+    
+    // Apply existing filters
+    if (searchQuery) {
+      filtered = filtered.filter(invoice => 
+        invoice.invoice_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (invoice.client_name || '').toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    if (selectedStatuses.length > 0) {
+      filtered = filtered.filter(invoice => selectedStatuses.includes(invoice.status));
+    }
+    
+    // Apply sorting based on current sort column and direction
+    filtered.sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortColumn) {
+        case 'invoice_number':
+          comparison = a.invoice_number.localeCompare(b.invoice_number);
+          break;
+        case 'client_name':
+          comparison = (a.client_name || '').localeCompare(b.client_name || '');
+          break;
+        case 'issue_date':
+          comparison = new Date(a.issue_date).getTime() - new Date(b.issue_date).getTime();
+          break;
+        case 'due_date':
+          comparison = new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+          break;
+        case 'total':
+          comparison = a.total - b.total;
+          break;
+        case 'status':
+          comparison = a.status.localeCompare(b.status);
+          break;
+        default:
+          comparison = 0;
+      }
+      
+      return sortDirection === 'ascending' ? comparison : -comparison;
+    });
+    
+    return filtered;
+  };
+
   const getLastInvoiceNumber = () => {
     if (invoices.length === 0) {
       return '';
     }
     
     try {
-      // Sort invoices by invoice number (assuming they're numeric or can be compared as strings)
       const sortedInvoices = [...invoices].sort((a, b) => {
         const aNum = a.invoice_number?.toString() || '';
         const bNum = b.invoice_number?.toString() || '';
         return aNum.localeCompare(bNum, undefined, { numeric: true });
       });
       
-      // Return the highest invoice number
       const lastInvoice = sortedInvoices[sortedInvoices.length - 1];
       return lastInvoice?.invoice_number?.toString() || '';
     } catch (error) {
@@ -600,7 +590,6 @@ export default function InvoicesScreen() {
     try {
       console.log('Checking database structure...');
       
-      // 1. Check if invoices table exists
       const { data: tableExists, error: tableError } = await supabase.rpc('execute_sql', {
         sql_query: `
           SELECT EXISTS (
@@ -618,7 +607,6 @@ export default function InvoicesScreen() {
         return;
       }
       
-      // 2. If table doesn't exist, create it
       if (!tableExists[0].exists) {
         console.log('Creating invoices table...');
         
@@ -666,17 +654,14 @@ export default function InvoicesScreen() {
         console.log('Invoices table created successfully');
       }
       
-      // 3. Try a direct SQL insert
       console.log('Attempting direct SQL insert...');
       
-      // Get the current user ID
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         console.error('No authenticated user');
         return;
       }
       
-      // Get a client ID
       const { data: clients } = await supabase.from('clients').select('uid').limit(1);
       if (!clients || clients.length === 0) {
         console.error('No clients found');
@@ -717,7 +702,6 @@ export default function InvoicesScreen() {
         console.error('Direct SQL insert failed:', insertError);
       } else {
         console.log('Direct SQL insert succeeded');
-        // Refresh the invoices list
         await fetchInvoices();
       }
       
@@ -730,7 +714,6 @@ export default function InvoicesScreen() {
     try {
       console.log('Checking database schema...');
       
-      // Check invoices table
       const { data: invoicesSchema, error: invoicesError } = await supabase.rpc('execute_sql', {
         sql_query: `
           SELECT column_name, data_type 
@@ -746,7 +729,6 @@ export default function InvoicesScreen() {
         console.log('Invoices table schema:', invoicesSchema);
       }
       
-      // Check invoice_items table
       const { data: itemsSchema, error: itemsError } = await supabase.rpc('execute_sql', {
         sql_query: `
           SELECT column_name, data_type 
@@ -766,30 +748,25 @@ export default function InvoicesScreen() {
     }
   }
 
-  // Add this helper function to check if an invoice is editable
   const isInvoiceEditable = (invoice: Invoice): boolean => {
     return invoice.status === 'draft';
   };
 
-  // Update the handleEditInvoice function
   const handleEditInvoice = async (invoice: Invoice) => {
     console.log('Editing invoice:', invoice);
     
     try {
-      // Fetch items for this invoice
       const items = await fetchInvoiceItems(invoice.uid);
       
-      // Make sure we have the complete invoice with job and client info
       setEditingInvoice({
         ...invoice,
-        // Ensure job_id and client_id are set correctly for the form
         job_id: invoice.job?.id || invoice.job_id,
         client_id: invoice.client?.id || invoice.client_id
       });
       
       // Set the items for the form
       setInvoiceItems(items);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error preparing invoice for editing:', error);
       showSnackbar(`Error: ${error.message}`);
     }
@@ -1089,30 +1066,35 @@ export default function InvoicesScreen() {
   
   // Toggle a status filter
   const toggleStatusFilter = (status: string) => {
-    if (statusFilters.includes(status)) {
-      setStatusFilters(statusFilters.filter(s => s !== status));
+    if (selectedStatuses.includes(status)) {
+      setSelectedStatuses(selectedStatuses.filter(s => s !== status));
     } else {
-      setStatusFilters([...statusFilters, status]);
+      setSelectedStatuses([...selectedStatuses, status]);
     }
   };
   
   // Clear all filters
   const clearFilters = () => {
-    setStatusFilters([]);
+    setSelectedStatuses([]);
   };
 
   return (
     <View style={styles.container}>
-      <PageHeader title="Invoices" />
+      <Text style={{
+        fontFamily: 'System',
+        fontSize: 26,
+        fontWeight: '600',
+        marginBottom: 16,
+        color: '#333333',
+      }}>Invoices</Text>
       
-      <Searchbar
-        placeholder="Search invoices..."
-        value={searchQuery}
-        onChangeText={setSearchQuery}
-        style={styles.searchBar}
-      />
-      
-      <View style={styles.actionsContainer}>
+      <View style={styles.searchContainer}>
+        <Searchbar
+          placeholder="Search invoices..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          style={styles.searchBar}
+        />
         <Button 
           mode="contained" 
           onPress={() => setShowAddForm(true)}
@@ -1120,31 +1102,31 @@ export default function InvoicesScreen() {
         >
           Create New Invoice
         </Button>
+      </View>
+      
+      <View style={styles.filtersContainer}>
+        <Chip 
+          selected={selectedStatuses.length === 0}
+          onPress={clearFilters}
+          style={styles.filterChip}
+        >
+          All
+        </Chip>
         
-        <View style={styles.filtersContainer}>
-          <Chip 
-            selected={statusFilters.length === 0}
-            onPress={clearFilters}
-            style={styles.filterChip}
+        {allStatuses.map(status => (
+          <Chip
+            key={status}
+            selected={selectedStatuses.includes(status)}
+            onPress={() => toggleStatusFilter(status)}
+            style={[
+              styles.filterChip,
+              selectedStatuses.includes(status) ? { backgroundColor: getStatusChipColor(status) } : null
+            ]}
+            textStyle={selectedStatuses.includes(status) ? { color: 'white' } : null}
           >
-            All
+            {status.charAt(0).toUpperCase() + status.slice(1)}
           </Chip>
-          
-          {allStatuses.map(status => (
-            <Chip
-              key={status}
-              selected={statusFilters.includes(status)}
-              onPress={() => toggleStatusFilter(status)}
-              style={[
-                styles.filterChip,
-                statusFilters.includes(status) ? { backgroundColor: getStatusChipColor(status) } : null
-              ]}
-              textStyle={statusFilters.includes(status) ? { color: 'white' } : null}
-            >
-              {status.charAt(0).toUpperCase() + status.slice(1)}
-            </Chip>
-          ))}
-        </View>
+        ))}
       </View>
 
       {selectedInvoice && !editingInvoice && !showAddForm ? (
@@ -1153,7 +1135,10 @@ export default function InvoicesScreen() {
           items={invoiceItems}
           onClose={() => setSelectedInvoice(null)}
           onEdit={handleEditInvoice}
-          onDelete={handleDeleteInvoice}
+          onDelete={() => {
+            setSelectedInvoice(selectedInvoice);
+            setShowDeleteDialog(true);
+          }}
           onStatusChange={(status) => handleUpdateInvoiceStatus(selectedInvoice.uid, status)}
           isEditable={isInvoiceEditable(selectedInvoice)}
           isEditing={false}
@@ -1177,89 +1162,136 @@ export default function InvoicesScreen() {
           onSubmit={handleSubmitInvoice}
           onCancel={() => setShowAddForm(false)}
         />
-      ) : (
-        <Button
-          mode="contained"
-          onPress={() => setShowAddForm(true)}
-          style={styles.addButton}
-        >
-          Create New Invoice
-        </Button>
-      )}
+      ) : null}
 
       {!selectedInvoice && !showAddForm && !editingInvoice && (
-        <Card style={styles.listCard}>
-          <ScrollView>
-            {loading ? (
-              <Text style={styles.emptyText}>Loading invoices...</Text>
-            ) : getFilteredInvoices().length === 0 ? (
-              <Text style={styles.emptyText}>No invoices found</Text>
-            ) : (
-              getFilteredInvoices().map((invoice) => (
-                <List.Item
-                  key={invoice.uid}
-                  title={`Invoice #${invoice.invoice_number}`}
-                  description={`${invoice.client?.name || 'Unknown Client'} - ${formatDate(invoice.issue_date)}`}
-                  onPress={() => handleSelectInvoice(invoice)}
-                  right={props => (
-                    <View style={styles.invoiceItemRight}>
-                      <Text style={styles.invoiceAmount}>{formatCurrency(invoice.total)}</Text>
-                      <Chip 
-                        mode="outlined" 
-                        style={{ backgroundColor: getStatusChipColor(invoice.status) }}
-                      >
-                        {invoice.status.toUpperCase()}
-                      </Chip>
-                      {isInvoiceEditable(invoice) && (
-                        <View style={{ flexDirection: 'row', gap: 8, marginLeft: 8 }}>
-                          <Button 
-                            mode="text" 
-                            compact 
-                            onPress={() => setSelectedInvoice(invoice)}
-                            textColor="blue"
-                            style={{ marginVertical: 0, paddingVertical: 0 }}
-                          >
-                            EDIT
-                          </Button>
-                          <Button 
-                            mode="text" 
-                            compact 
+        <Card style={{flex: 1, width: '100%', maxWidth: '100%'}}>
+          <View style={{width: '100%', flex: 1}}>
+            <DataTable style={{width: '100%', flex: 1}}>
+              <DataTable.Header style={styles.tableHeader}>
+                <DataTable.Title 
+                  style={styles.columnInvoice}
+                  onPress={() => handleSort('invoice_number')}
+                  sortDirection={sortColumn === 'invoice_number' ? sortDirection : undefined}
+                >
+                  Invoice #
+                </DataTable.Title>
+                <DataTable.Title 
+                  style={styles.columnClient}
+                  onPress={() => handleSort('client')}
+                  sortDirection={sortColumn === 'client' ? sortDirection : undefined}
+                >
+                  Client
+                </DataTable.Title>
+                <DataTable.Title 
+                  style={styles.columnDate}
+                  onPress={() => handleSort('issue_date')}
+                  sortDirection={sortColumn === 'issue_date' ? sortDirection : undefined}
+                >
+                  Issue Date
+                </DataTable.Title>
+                <DataTable.Title 
+                  style={styles.columnDate}
+                  onPress={() => handleSort('due_date')}
+                  sortDirection={sortColumn === 'due_date' ? sortDirection : undefined}
+                >
+                  Due Date
+                </DataTable.Title>
+                <DataTable.Title 
+                  style={styles.columnTotal}
+                  onPress={() => handleSort('total')}
+                  sortDirection={sortColumn === 'total' ? sortDirection : undefined}
+                >
+                  Total
+                </DataTable.Title>
+                <DataTable.Title 
+                  style={styles.columnStatus}
+                  onPress={() => handleSort('status')}
+                  sortDirection={sortColumn === 'status' ? sortDirection : undefined}
+                >
+                  Status
+                </DataTable.Title>
+                <DataTable.Title style={styles.columnActions}>
+                  Actions
+                </DataTable.Title>
+              </DataTable.Header>
+
+              <ScrollView horizontal={false} style={{width: '100%'}}>
+                {loading ? (
+                  <DataTable.Row style={{width: '100%'}}>
+                    <DataTable.Cell style={{flex: 10, justifyContent: 'center', alignItems: 'center', paddingVertical: 20}}>
+                      <Text style={{padding: 16, textAlign: 'center'}}>Loading invoices...</Text>
+                    </DataTable.Cell>
+                  </DataTable.Row>
+                ) : getFilteredInvoices().length === 0 ? (
+                  <DataTable.Row style={{width: '100%'}}>
+                    <DataTable.Cell style={{flex: 10, justifyContent: 'center', alignItems: 'center', paddingVertical: 20}}>
+                      <Text style={{padding: 16, textAlign: 'center'}}>No invoices found</Text>
+                    </DataTable.Cell>
+                  </DataTable.Row>
+                ) : (
+                  getFilteredInvoices().map((invoice) => (
+                    <DataTable.Row 
+                      key={invoice.uid} 
+                      onPress={() => handleSelectInvoice(invoice)}
+                      style={{width: '100%', borderBottomWidth: 1, borderBottomColor: '#e0e0e0', minHeight: 48}}
+                    >
+                      <DataTable.Cell style={{flex: 1, minWidth: 100, paddingHorizontal: 8}}>{invoice.invoice_number}</DataTable.Cell>
+                      <DataTable.Cell style={{flex: 2, minWidth: 180, paddingHorizontal: 8}}>{invoice.client_name || 'Unknown Client'}</DataTable.Cell>
+                      <DataTable.Cell style={{flex: 1.5, minWidth: 120, paddingHorizontal: 8}}>{formatDate(invoice.issue_date)}</DataTable.Cell>
+                      <DataTable.Cell style={{flex: 1.5, minWidth: 120, paddingHorizontal: 8}}>{formatDate(invoice.due_date)}</DataTable.Cell>
+                      <DataTable.Cell style={{flex: 1, minWidth: 120, paddingHorizontal: 8}}>{formatCurrency(invoice.total)}</DataTable.Cell>
+                      <DataTable.Cell style={styles.columnStatus}>
+                        <Chip 
+                          mode="outlined" 
+                          style={{ backgroundColor: getStatusChipColor(invoice.status) }}
+                          textStyle={{ color: 'white', fontSize: 12 }}
+                        >
+                          {invoice.status.toUpperCase()}
+                        </Chip>
+                      </DataTable.Cell>
+                      <DataTable.Cell style={styles.columnActions}>
+                        <View style={styles.actionButtons}>
+                          <IconButton
+                            icon="pencil"
+                            size={20}
+                            onPress={() => handleEditInvoice(invoice)}
+                          />
+                          <IconButton
+                            icon="delete"
+                            size={20}
                             onPress={() => {
-                              // Log the entire invoice object to see what we're working with
-                              console.log('Invoice object for deletion:', JSON.stringify(invoice, null, 2));
-                              
-                              // Check if we have a valid ID
-                              if (confirm(`Delete invoice #${invoice.invoice_number}?`)) {
-                                // Try different ID properties
-                                const idToUse = invoice.uid || invoice.id || invoice.invoice_id;
-                                console.log('ID to use for deletion:', idToUse);
-                                
-                                if (!idToUse) {
-                                  console.error('Missing invoice ID in list item:', invoice);
-                                  showSnackbar('Cannot delete: Invalid invoice ID');
-                                  return;
-                                }
-                                
-                                handleDeleteInvoice(idToUse);
-                              }
+                              setSelectedInvoice(invoice);
+                              setShowDeleteDialog(true);
                             }}
-                            textColor="red"
-                            style={{ marginVertical: 0, paddingVertical: 0 }}
-                          >
-                            DELETE
-                          </Button>
+                            iconColor="red"
+                          />
                         </View>
-                      )}
-                    </View>
-                  )}
-                  style={styles.listItem}
-                />
-              ))
-            )}
-          </ScrollView>
+                      </DataTable.Cell>
+                    </DataTable.Row>
+                  ))
+                )}
+              </ScrollView>
+            </DataTable>
+          </View>
         </Card>
       )}
 
+      {/* Delete Invoice Dialog */}
+      <Portal>
+        <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)}>
+          <Dialog.Title>Delete Invoice</Dialog.Title>
+          <Dialog.Content>
+            <Text>Are you sure you want to delete invoice #{selectedInvoice?.invoice_number}?</Text>
+            <Text>This action cannot be undone.</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setShowDeleteDialog(false)}>Cancel</Button>
+            <Button onPress={handleDeleteInvoice} textColor="red">Delete</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+      
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
@@ -1275,15 +1307,88 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
+    width: '100%',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 10,
+    width: '100%',
   },
   searchBar: {
-    marginBottom: 16,
+    flex: 1,
+  },
+  createButton: {
+    marginLeft: 8,
   },
   addButton: {
     marginBottom: 16,
   },
   listCard: {
     flex: 1,
+    width: '100%',
+  },
+  table: {
+    width: '100%',
+    minWidth: '100%',
+  },
+  tableHeader: {
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 8,
+    width: '100%',
+  },
+  tableRow: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    minHeight: 48,
+    width: '100%',
+  },
+  columnInvoice: {
+    flex: 1,
+    minWidth: 100,
+    paddingHorizontal: 8,
+  },
+  columnClient: {
+    flex: 2,
+    minWidth: 180,
+    paddingHorizontal: 8,
+  },
+  columnDate: {
+    flex: 1.5,
+    minWidth: 120,
+    paddingHorizontal: 8,
+  },
+  columnTotal: {
+    flex: 1,
+    minWidth: 100,
+    paddingHorizontal: 8,
+  },
+  columnStatus: {
+    flex: 1.5,
+    minWidth: 120,
+    paddingHorizontal: 8,
+  },
+  columnActions: {
+    flex: 2,
+    minWidth: 180,
+    paddingHorizontal: 8,
+  },
+  actionsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionButton: {
+    marginVertical: 0,
+    paddingVertical: 0,
+  },
+  loadingCell: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 20,
   },
   listItem: {
     borderBottomWidth: 1,
@@ -1304,23 +1409,19 @@ const styles = StyleSheet.create({
     padding: 16,
     textAlign: 'center',
   },
-  actionsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-    flexWrap: 'wrap',
-  },
-  createButton: {
-    marginBottom: 8,
-  },
   filtersContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginBottom: 8,
+    marginBottom: 16,
   },
   filterChip: {
     marginRight: 8,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    gap: 8,
   },
 });

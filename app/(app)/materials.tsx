@@ -31,6 +31,9 @@ export default function MaterialsScreen() {
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [sortColumn, setSortColumn] = useState<string>('name');
+  const [sortDirection, setSortDirection] = useState<'ascending' | 'descending'>('ascending');
 
   useEffect(() => {
     fetchMaterials();
@@ -205,12 +208,54 @@ export default function MaterialsScreen() {
     setSnackbarVisible(true);
   };
 
-  const filteredMaterials = materials.filter((material) =>
-    material.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    material.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    material.category?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    material.supplier?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'ascending' ? 'descending' : 'ascending');
+    } else {
+      setSortColumn(column);
+      setSortDirection('ascending');
+    }
+  };
+
+  const getFilteredMaterials = () => {
+    let filtered = [...materials];
+    
+    if (searchQuery) {
+      filtered = filtered.filter(material => 
+        material.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        material.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        material.supplier?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    filtered.sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortColumn) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case 'description':
+          comparison = (a.description || '').localeCompare(b.description || '');
+          break;
+        case 'cost':
+          comparison = (a.cost || 0) - (b.cost || 0);
+          break;
+        case 'supplier':
+          comparison = (a.supplier || '').localeCompare(b.supplier || '');
+          break;
+        case 'category':
+          comparison = (a.category || '').localeCompare(b.category || '');
+          break;
+        default:
+          comparison = 0;
+      }
+      
+      return sortDirection === 'ascending' ? comparison : -comparison;
+    });
+    
+    return filtered;
+  };
 
   const getStockStatus = (material: Material) => {
     if (material.quantity <= 0) {
@@ -555,7 +600,13 @@ export default function MaterialsScreen() {
 
   return (
     <View style={styles.container}>
-      <Text variant="headlineLarge" style={styles.title}>Inventory</Text>
+      <Text style={{
+        fontFamily: 'System',
+        fontSize: 26,
+        fontWeight: '600',
+        marginBottom: 16,
+        color: '#333333',
+      }}>Inventory</Text>
       
       <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
         <Searchbar
@@ -564,6 +615,14 @@ export default function MaterialsScreen() {
           onChangeText={setSearchQuery}
           value={searchQuery}
         />
+        
+        <Button
+          mode="contained"
+          onPress={() => setShowAddForm(true)}
+          style={{ marginRight: 8 }}
+        >
+          Add New Material
+        </Button>
         
         <IconButton
           icon="file-export"
@@ -616,81 +675,84 @@ export default function MaterialsScreen() {
           }}
           submitting={submitting}
         />
-      ) : (
-        <Button
-          mode="contained"
-          onPress={() => setShowAddForm(true)}
-          style={styles.addButton}
-        >
-          Add New Material
-        </Button>
-      )}
+      ) : null}
 
       <Card style={styles.tableCard}>
         <DataTable>
           <DataTable.Header style={styles.tableHeader}>
-            <DataTable.Title style={styles.column}>Name</DataTable.Title>
-            <DataTable.Title style={styles.column}>Price/Unit</DataTable.Title>
-            <DataTable.Title style={styles.column}>Status</DataTable.Title>
-            <DataTable.Title style={styles.column}>Actions</DataTable.Title>
+            <DataTable.Title 
+              style={styles.columnName}
+              onPress={() => handleSort('name')}
+              sortDirection={sortColumn === 'name' ? sortDirection : undefined}
+            >
+              Name
+            </DataTable.Title>
+            <DataTable.Title 
+              style={styles.columnDescription}
+              onPress={() => handleSort('description')}
+              sortDirection={sortColumn === 'description' ? sortDirection : undefined}
+            >
+              Description
+            </DataTable.Title>
+            <DataTable.Title 
+              style={styles.columnCost}
+              onPress={() => handleSort('cost')}
+              sortDirection={sortColumn === 'cost' ? sortDirection : undefined}
+            >
+              Cost
+            </DataTable.Title>
+            <DataTable.Title 
+              style={styles.columnSupplier}
+              onPress={() => handleSort('supplier')}
+              sortDirection={sortColumn === 'supplier' ? sortDirection : undefined}
+            >
+              Supplier
+            </DataTable.Title>
+            <DataTable.Title 
+              style={styles.columnCategory}
+              onPress={() => handleSort('category')}
+              sortDirection={sortColumn === 'category' ? sortDirection : undefined}
+            >
+              Category
+            </DataTable.Title>
+            <DataTable.Title style={styles.columnActions}>
+              Actions
+            </DataTable.Title>
           </DataTable.Header>
 
           {loading ? (
             <DataTable.Row>
-              <DataTable.Cell>Loading materials...</DataTable.Cell>
+              <DataTable.Cell style={{ flex: 6 }}>Loading materials...</DataTable.Cell>
             </DataTable.Row>
-          ) : filteredMaterials.length === 0 ? (
+          ) : getFilteredMaterials().length === 0 ? (
             <DataTable.Row>
-              <DataTable.Cell>No materials found</DataTable.Cell>
+              <DataTable.Cell style={{ flex: 6 }}>No materials found</DataTable.Cell>
             </DataTable.Row>
           ) : (
-            filteredMaterials.map((material) => {
-              const stockStatus = getStockStatus(material);
-              return (
-                <DataTable.Row key={material.uid} style={styles.tableRow}>
-                  <DataTable.Cell style={styles.column}>
-                    <View style={styles.cellContent}>
-                      {material.name}
-                    </View>
-                  </DataTable.Cell>
-                  <DataTable.Cell style={styles.column}>
-                    <View style={styles.cellContent}>
-                      ${material.cost.toFixed(2)}/{material.unit}
-                    </View>
-                  </DataTable.Cell>
-                  <DataTable.Cell style={styles.column}>
-                    <View style={styles.cellContent}>
-                      <Chip
-                        style={{ backgroundColor: stockStatus.color }}
-                        textStyle={{ color: 'white' }}
-                      >
-                        {stockStatus.label}
-                      </Chip>
-                    </View>
-                  </DataTable.Cell>
-                  <DataTable.Cell style={styles.column}>
-                    <View style={styles.cellContent}>
-                      <View style={styles.actionButtons}>
-                        <Button 
-                          mode="text" 
-                          compact 
-                          onPress={() => setEditingMaterial(material)}
-                        >
-                          Edit
-                        </Button>
-                        <Button 
-                          mode="text" 
-                          compact 
-                          onPress={() => handleDeleteMaterial(material.uid)}
-                        >
-                          Delete
-                        </Button>
-                      </View>
-                    </View>
-                  </DataTable.Cell>
-                </DataTable.Row>
-              );
-            })
+            getFilteredMaterials().map((material) => (
+              <DataTable.Row key={material.uid} style={styles.tableRow}>
+                <DataTable.Cell style={styles.columnName}>{material.name}</DataTable.Cell>
+                <DataTable.Cell style={styles.columnDescription}>{material.description}</DataTable.Cell>
+                <DataTable.Cell style={styles.columnCost}>${material.cost.toFixed(2)}</DataTable.Cell>
+                <DataTable.Cell style={styles.columnSupplier}>{material.supplier}</DataTable.Cell>
+                <DataTable.Cell style={styles.columnCategory}>{material.category}</DataTable.Cell>
+                <DataTable.Cell style={styles.columnActions}>
+                  <View style={styles.actionButtons}>
+                    <IconButton
+                      icon="pencil"
+                      size={20}
+                      onPress={() => setEditingMaterial(material)}
+                    />
+                    <IconButton
+                      icon="delete"
+                      size={20}
+                      onPress={() => handleDeleteMaterial(material.uid)}
+                      iconColor="red"
+                    />
+                  </View>
+                </DataTable.Cell>
+              </DataTable.Row>
+            ))
           )}
         </DataTable>
       </Card>
@@ -734,18 +796,33 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
-  column: {
+  columnName: {
+    flex: 2,
+    justifyContent: 'flex-start',
+  },
+  columnDescription: {
+    flex: 3,
+    justifyContent: 'flex-start',
+  },
+  columnCost: {
     flex: 1,
-    borderRightWidth: 1,
-    borderRightColor: '#e0e0e0',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  columnSupplier: {
+    flex: 2,
+    justifyContent: 'flex-start',
+  },
+  columnCategory: {
+    flex: 2,
+    justifyContent: 'flex-start',
+  },
+  columnActions: {
+    flex: 2,
+    justifyContent: 'flex-start',
   },
   actionButtons: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     alignItems: 'center',
   },
   cellContent: {

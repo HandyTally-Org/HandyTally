@@ -245,7 +245,13 @@ export default function AdminPage() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.contentWrapper}>
-        <Text variant="headlineMedium" style={styles.title}>Company Settings</Text>
+        <Text style={{
+          fontFamily: 'System',
+          fontSize: 26,
+          fontWeight: '600',
+          marginBottom: 16,
+          color: '#333333',
+        }}>Company</Text>
         
         <Card style={styles.card}>
           <Card.Content>

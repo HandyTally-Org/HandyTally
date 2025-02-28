@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, ScrollView, Platform } from 'react-native';
-import { Text, Button, Searchbar, Snackbar, Card, DataTable, Chip, IconButton } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, Platform, TouchableOpacity } from 'react-native';
+import { Text, Button, Searchbar, Snackbar, Card, Chip, IconButton } from 'react-native-paper';
 import { supabase } from '../../lib/supabase';
 import { ServiceForm } from '../../components/ServiceForm';
 import { styles as globalStyles } from '../../styles';
@@ -21,12 +21,15 @@ export default function ServicesScreen() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
-  const [editingService, setEditingService] = useState<Service | null>(null);
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [editingService, setEditingService] = useState<Service | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [sortColumn, setSortColumn] = useState<string>('name');
+  const [sortDirection, setSortDirection] = useState<'ascending' | 'descending'>('ascending');
   const [submitting, setSubmitting] = useState(false);
 
-  // Add the file input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -53,7 +56,6 @@ export default function ServicesScreen() {
       }
 
       if (data) {
-        // Ensure all services have valid rate values
         const normalizedServices = data.map(service => ({
           ...service,
           rate: service.rate != null ? service.rate : 0
@@ -110,12 +112,10 @@ export default function ServicesScreen() {
         throw new Error(error.message);
       }
       
-      // Update the local state
       setServices(services.map(service => 
         service.uid === uid ? { ...service, ...updates } : service
       ));
       
-      // Close the editing form
       setEditingService(null);
       
       showSnackbar('Service updated successfully');
@@ -157,16 +157,53 @@ export default function ServicesScreen() {
     setSnackbarVisible(true);
   };
 
-  const filteredServices = services.filter((service) =>
-    service.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    service.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    service.category?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'ascending' ? 'descending' : 'ascending');
+    } else {
+      setSortColumn(column);
+      setSortDirection('ascending');
+    }
+  };
 
-  // Add these functions to your component
+  const getFilteredServices = () => {
+    let filtered = [...services];
+    
+    if (searchQuery) {
+      filtered = filtered.filter(service => 
+        service.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        service.description?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    filtered.sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortColumn) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case 'description':
+          comparison = (a.description || '').localeCompare(b.description || '');
+          break;
+        case 'rate':
+          comparison = (a.rate || 0) - (b.rate || 0);
+          break;
+        case 'unit':
+          comparison = (a.unit || '').localeCompare(b.unit || '');
+          break;
+        default:
+          comparison = 0;
+      }
+      
+      return sortDirection === 'ascending' ? comparison : -comparison;
+    });
+    
+    return filtered;
+  };
+
   const handleExport = async () => {
     try {
-      // Prepare data for export - include all important fields
       const exportData = services.map(service => ({
         uid: service.uid,
         name: service.name,
@@ -175,35 +212,30 @@ export default function ServicesScreen() {
         unit: service.unit || '',
         category: service.category || '',
         is_active: service.rate > 0 ? 'Yes' : 'No',
-        delete: 'n'  // Default to 'n' (don't delete)
+        delete: 'n'
       }));
       
       console.log('Exporting services data:', exportData);
       
-      // Create worksheet from the data
       const worksheet = XLSX.utils.json_to_sheet(exportData);
       
-      // Set column widths for better readability
       if (!worksheet['!cols']) worksheet['!cols'] = [];
       worksheet['!cols'] = [
-        { wch: 36 }, // uid
-        { wch: 25 }, // name
-        { wch: 30 }, // description
-        { wch: 10 }, // rate
-        { wch: 10 }, // unit
-        { wch: 15 }, // category
-        { wch: 10 }, // is_active
-        { wch: 10 }  // delete
+        { wch: 36 },
+        { wch: 25 },
+        { wch: 30 },
+        { wch: 10 },
+        { wch: 10 },
+        { wch: 15 },
+        { wch: 10 },
+        { wch: 10 }
       ];
       
-      // Create workbook and add the worksheet
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Services');
       
-      // Generate Excel file
       const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
       
-      // For web, create a download link
       const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -222,18 +254,15 @@ export default function ServicesScreen() {
   const handleImportClick = () => {
     console.log('Import button clicked');
     
-    // For debugging, check if we're on web platform
     if (Platform.OS !== 'web') {
       alert('File import is only available on web platform');
       return;
     }
     
-    // Reset the file input value to ensure onChange fires even if selecting the same file
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
     
-    // Trigger the file input click
     if (fileInputRef.current) {
       console.log('Triggering file input click');
       fileInputRef.current.click();
@@ -254,7 +283,6 @@ export default function ServicesScreen() {
         return;
       }
       
-      // Read the Excel file
       const reader = new FileReader();
       
       reader.onload = async (e) => {
@@ -262,7 +290,6 @@ export default function ServicesScreen() {
         try {
           console.log('FileReader result:', e.target.result);
           
-          // Check if result is valid
           if (!e.target.result) {
             console.error('FileReader result is empty');
             alert('Could not read the file. Please try again.');
@@ -272,17 +299,14 @@ export default function ServicesScreen() {
           const data = new Uint8Array(e.target.result);
           console.log('Data array created, length:', data.length);
           
-          // Try parsing the Excel file
           console.log('Attempting to parse Excel file...');
           const workbook = XLSX.read(data, { type: 'array' });
           console.log('Workbook parsed:', workbook);
           
-          // Get the first sheet
           console.log('Sheet names:', workbook.SheetNames);
           const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
           console.log('First sheet:', firstSheet);
           
-          // Convert to JSON
           const jsonData = XLSX.utils.sheet_to_json(firstSheet);
           console.log('JSON data extracted:', jsonData);
           
@@ -291,7 +315,6 @@ export default function ServicesScreen() {
             return;
           }
           
-          // Check if the data has the required fields
           const firstItem = jsonData[0];
           console.log('First item in data:', firstItem);
           
@@ -300,7 +323,6 @@ export default function ServicesScreen() {
             return;
           }
           
-          // Confirm import
           if (confirm(`Are you sure you want to import ${jsonData.length} services?`)) {
             await importServices(jsonData);
           }
@@ -329,18 +351,14 @@ export default function ServicesScreen() {
     try {
       console.log('Raw import data:', data);
       
-      // First, log a sample row to see the exact field names
       if (data.length > 0) {
         console.log('Sample row from import:', data[0]);
       }
       
-      // Track services to delete
       const servicesToDelete = [];
       
-      // Normalize field names and identify services to delete
       const servicesToInsert = [];
       
-      // First, log the table structure to understand what fields are available
       let columnNames = [];
       try {
         const { data: columns, error: columnsError } = await supabase.rpc('execute_sql', {
@@ -356,7 +374,6 @@ export default function ServicesScreen() {
           console.error('Error checking table structure:', columnsError);
         } else {
           console.log('Services table structure:', columns);
-          // Extract column names for reference
           columnNames = columns.map(col => col.column_name);
           console.log('Available columns:', columnNames);
         }
@@ -364,7 +381,6 @@ export default function ServicesScreen() {
         console.error('Error checking table structure:', structError);
       }
       
-      // Also fetch a sample service to see the exact field structure
       try {
         const { data: sampleService, error: sampleError } = await supabase
           .from('services')
@@ -381,15 +397,12 @@ export default function ServicesScreen() {
         console.error('Error fetching sample service:', sampleError);
       }
       
-      // Process each item in the imported data
       for (const item of data) {
         try {
-          // Check if this item should be deleted
           let shouldDelete = false;
           let serviceName = '';
           let serviceUid = null;
           
-          // Look for delete indicator, name, and uid fields
           for (const key of Object.keys(item)) {
             const lowerKey = key.toLowerCase();
             
@@ -403,42 +416,35 @@ export default function ServicesScreen() {
             }
           }
           
-          // Skip empty rows
           if (!serviceName && !serviceUid) {
             console.log('Skipping row with no name or uid:', item);
             continue;
           }
           
           if (shouldDelete) {
-            // Add to delete list - if we have a UID, use that for more precise deletion
             if (serviceUid) {
               servicesToDelete.push({ name: serviceName, uid: serviceUid });
             } else {
               servicesToDelete.push({ name: serviceName });
             }
           } else {
-            // Create a normalized item with only the essential fields
             const normalizedItem: any = {
               name: serviceName
             };
             
-            // If we have a UID, include it for matching
             if (serviceUid) {
               normalizedItem.uid = serviceUid;
             }
             
-            // Process all fields from the imported data
             for (const key of Object.keys(item)) {
               const value = item[key];
               const lowerKey = key.toLowerCase();
               
-              // Skip name, uid, and delete as we've already processed them
               if (lowerKey === 'name' || lowerKey === 'uid' || lowerKey === 'id' || 
                   lowerKey === 'delete' || lowerKey === 'remove') {
                 continue;
               }
               
-              // Handle rate field
               if ((lowerKey === 'rate' || lowerKey === 'price') && value !== undefined) {
                 try {
                   const numValue = typeof value === 'number' 
@@ -451,22 +457,18 @@ export default function ServicesScreen() {
                 }
               }
               
-              // Handle description field
               else if (lowerKey === 'description' || lowerKey === 'desc') {
                 normalizedItem.description = String(value || '');
               }
               
-              // Handle unit field
               else if (lowerKey === 'unit') {
                 normalizedItem.unit = String(value || '');
               }
               
-              // Handle category field
               else if (lowerKey === 'category') {
                 normalizedItem.category = String(value || '');
               }
               
-              // Handle any other fields that might be in the database
               else if (columnNames.includes(lowerKey)) {
                 normalizedItem[lowerKey] = value;
               }
@@ -483,7 +485,6 @@ export default function ServicesScreen() {
       console.log('Services to delete:', servicesToDelete);
       console.log('Normalized services to insert/update:', servicesToInsert);
       
-      // Confirm the operation
       const message = [];
       if (servicesToInsert.length > 0) {
         message.push(`Import/update ${servicesToInsert.length} services`);
@@ -496,7 +497,6 @@ export default function ServicesScreen() {
         return;
       }
       
-      // Process deletions
       let deleteCount = 0;
       let deleteErrorCount = 0;
       
@@ -506,14 +506,12 @@ export default function ServicesScreen() {
           
           let query = supabase.from('services').select('*');
           
-          // If we have a UID, use that for more precise matching
           if (serviceInfo.uid) {
             query = query.eq('uid', serviceInfo.uid);
           } else {
             query = query.eq('name', serviceInfo.name);
           }
           
-          // Find the service
           const { data: existingService, error: findError } = await query.maybeSingle();
           
           if (findError) {
@@ -524,13 +522,11 @@ export default function ServicesScreen() {
           console.log(`Find result:`, existingService);
           
           if (existingService) {
-            // Determine the ID field (could be 'id' or 'uid')
             const idField = existingService.id ? 'id' : 'uid';
             const idValue = existingService[idField];
             
             console.log(`Using ID field: ${idField}, value: ${idValue}`);
             
-            // Delete the service
             const { error: deleteError } = await supabase
               .from('services')
               .delete()
@@ -552,7 +548,6 @@ export default function ServicesScreen() {
         }
       }
       
-      // Process insertions/updates
       let successCount = 0;
       let errorCount = 0;
       let errorDetails = [];
@@ -561,7 +556,6 @@ export default function ServicesScreen() {
         try {
           console.log(`Processing service:`, service);
           
-          // If we have a UID, try to update directly by UID first
           if (service.uid) {
             console.log(`Checking if service with UID ${service.uid} exists`);
             
@@ -576,7 +570,6 @@ export default function ServicesScreen() {
             } else if (existingService) {
               console.log(`Found existing service by UID:`, existingService);
               
-              // Update existing service by UID
               console.log(`Updating existing service by UID:`, service);
               
               const { error: updateError } = await supabase
@@ -592,11 +585,10 @@ export default function ServicesScreen() {
               
               console.log(`Successfully updated service by UID`);
               successCount++;
-              continue; // Skip to next service
+              continue;
             }
           }
           
-          // If no UID or service with UID not found, check by name
           console.log(`Checking if service with name "${service.name}" exists`);
           
           const { data: existingService, error: checkError } = await supabase
@@ -613,16 +605,13 @@ export default function ServicesScreen() {
           console.log(`Check result for name "${service.name}":`, existingService);
           
           if (existingService) {
-            // Determine the ID field (could be 'id' or 'uid')
             const idField = existingService.id ? 'id' : 'uid';
             const idValue = existingService[idField];
             
             console.log(`Using ID field: ${idField}, value: ${idValue}`);
             
-            // Update existing service
             console.log(`Updating existing service by name:`, service);
             
-            // Remove the uid field if it doesn't match the existing service
             if (service.uid && service.uid !== existingService.uid) {
               console.log(`UID in import (${service.uid}) doesn't match existing service (${existingService.uid}), removing it`);
               delete service.uid;
@@ -641,7 +630,6 @@ export default function ServicesScreen() {
             
             console.log(`Successfully updated service by name`);
           } else {
-            // Insert new service
             console.log(`Inserting new service:`, service);
             
             const { error: insertError } = await supabase
@@ -664,7 +652,6 @@ export default function ServicesScreen() {
         }
       }
       
-      // Build result message
       const resultMessages = [];
       if (successCount > 0) {
         resultMessages.push(`${successCount} services imported/updated successfully`);
@@ -684,7 +671,6 @@ export default function ServicesScreen() {
       
       alert(resultMessages.join('\n'));
       
-      // Refresh the services list
       fetchServices();
     } catch (error) {
       console.error('Error importing services:', error);
@@ -694,15 +680,29 @@ export default function ServicesScreen() {
 
   return (
     <View style={styles.container}>
-      <ExactHeader title="Services" />
+      <Text style={{
+        fontFamily: 'System',
+        fontSize: 26,
+        fontWeight: '600',
+        marginBottom: 16,
+        color: '#333333',
+      }}>Labor</Text>
       
       <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
         <Searchbar
-          placeholder="Search services..."
+          placeholder="Search labor..."
           style={{ flex: 1, marginRight: 8 }}
           onChangeText={setSearchQuery}
           value={searchQuery}
         />
+        
+        <Button
+          mode="contained"
+          onPress={() => setShowAddForm(true)}
+          style={{ marginRight: 8 }}
+        >
+          Add New Labor Code
+        </Button>
         
         <IconButton
           icon="file-export"
@@ -723,7 +723,6 @@ export default function ServicesScreen() {
           style={{ marginLeft: 8 }}
         />
         
-        {/* Hidden file input for import */}
         {Platform.OS === 'web' && (
           <input
             type="file"
@@ -752,71 +751,109 @@ export default function ServicesScreen() {
           }}
           submitting={submitting}
         />
-      ) : (
-        <Button
-          mode="contained"
-          onPress={() => setShowAddForm(true)}
-          style={styles.addButton}
-        >
-          Add New Service
-        </Button>
-      )}
+      ) : null}
 
-      <Card style={styles.tableCard}>
-        <DataTable>
-          <DataTable.Header>
-            <DataTable.Title style={styles.centeredCell}>Name</DataTable.Title>
-            <DataTable.Title style={styles.centeredCell} numeric>Rate</DataTable.Title>
-            <DataTable.Title style={styles.centeredCell}>Unit</DataTable.Title>
-            <DataTable.Title style={styles.centeredCell}>Actions</DataTable.Title>
-          </DataTable.Header>
+      {!selectedService && !showAddForm && !editingService && (
+        <Card style={{flex: 1, width: '100%', maxWidth: '100%'}}>
+          <View style={styles.tableContainer}>
+            <View style={styles.tableHeader}>
+              <TouchableOpacity 
+                style={styles.columnName} 
+                onPress={() => handleSort('name')}
+              >
+                <View style={styles.headerContent}>
+                  <Text style={styles.headerText}>Name</Text>
+                  {sortColumn === 'name' && (
+                    <Text style={styles.sortIcon}>
+                      {sortDirection === 'ascending' ? '↓' : '↑'}
+                    </Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.columnDescription} 
+                onPress={() => handleSort('description')}
+              >
+                <View style={styles.headerContent}>
+                  <Text style={styles.headerText}>Description</Text>
+                  {sortColumn === 'description' && (
+                    <Text style={styles.sortIcon}>
+                      {sortDirection === 'ascending' ? '↓' : '↑'}
+                    </Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.columnRate} 
+                onPress={() => handleSort('rate')}
+              >
+                <View style={styles.headerContent}>
+                  <Text style={styles.headerText}>Rate</Text>
+                  {sortColumn === 'rate' && (
+                    <Text style={styles.sortIcon}>
+                      {sortDirection === 'ascending' ? '↓' : '↑'}
+                    </Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.columnUnit} 
+                onPress={() => handleSort('unit')}
+              >
+                <View style={styles.headerContent}>
+                  <Text style={styles.headerText}>Unit</Text>
+                  {sortColumn === 'unit' && (
+                    <Text style={styles.sortIcon}>
+                      {sortDirection === 'ascending' ? '↓' : '↑'}
+                    </Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+              
+              <View style={styles.columnActions}>
+                <Text style={styles.headerText}>Actions</Text>
+              </View>
+            </View>
 
-          {loading ? (
-            <DataTable.Row>
-              <DataTable.Cell style={styles.centeredCell}>Loading services...</DataTable.Cell>
-            </DataTable.Row>
-          ) : filteredServices.length === 0 ? (
-            <DataTable.Row>
-              <DataTable.Cell style={styles.centeredCell}>No services found</DataTable.Cell>
-            </DataTable.Row>
-          ) : (
-            filteredServices.map((service) => (
-              <DataTable.Row key={service.uid}>
-                <DataTable.Cell style={styles.centeredCell}>{service.name}</DataTable.Cell>
-                <DataTable.Cell style={styles.centeredCell} numeric>${service.rate}</DataTable.Cell>
-                <DataTable.Cell style={styles.centeredCell}>{service.unit}</DataTable.Cell>
-                <DataTable.Cell style={styles.centeredCell}>
-                  <View style={styles.actionButtons}>
-                    <Button 
-                      mode="text" 
-                      compact 
-                      onPress={() => setEditingService(service)} 
-                      disabled={submitting}
-                      labelStyle={styles.actionButtonLabel}
-                      style={styles.actionButton}
-                      contentStyle={styles.actionButtonContent}
-                    >
-                      Edit
-                    </Button>
-                    <Text style={styles.actionSeparator}>|</Text>
-                    <Button 
-                      mode="text" 
-                      compact 
-                      onPress={() => handleDeleteService(service.uid)} 
-                      disabled={submitting}
-                      labelStyle={styles.actionButtonLabel}
-                      style={styles.actionButton}
-                      contentStyle={styles.actionButtonContent}
-                    >
-                      Delete
-                    </Button>
+            {loading ? (
+              <View style={styles.tableRow}>
+                <Text style={styles.loadingText}>Loading services...</Text>
+              </View>
+            ) : getFilteredServices().length === 0 ? (
+              <View style={styles.tableRow}>
+                <Text style={styles.loadingText}>No services found</Text>
+              </View>
+            ) : (
+              getFilteredServices().map((service) => (
+                <View key={service.uid} style={styles.tableRow}>
+                  <Text style={styles.columnName}>{service.name}</Text>
+                  <Text style={styles.columnDescription}>{service.description}</Text>
+                  <Text style={styles.columnRate}>${service.rate}</Text>
+                  <Text style={styles.columnUnit}>{service.unit}</Text>
+                  <View style={styles.columnActions}>
+                    <View style={styles.actionButtons}>
+                      <IconButton
+                        icon="pencil"
+                        size={20}
+                        onPress={() => setEditingService(service)}
+                      />
+                      <IconButton
+                        icon="delete"
+                        size={20}
+                        onPress={() => handleDeleteService(service.uid)}
+                        iconColor="red"
+                      />
+                    </View>
                   </View>
-                </DataTable.Cell>
-              </DataTable.Row>
-            ))
-          )}
-        </DataTable>
-      </Card>
+                </View>
+              ))
+            )}
+          </View>
+        </Card>
+      )}
 
       <Snackbar
         visible={snackbarVisible}
@@ -852,52 +889,61 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
   },
+  tableContainer: {
+    width: '100%',
+    marginVertical: 16,
+    padding: 16,
+  },
   tableHeader: {
     flexDirection: 'row',
-    backgroundColor: '#f5f5f5',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
-    paddingVertical: 12,
+    paddingBottom: 12,
+    marginBottom: 8,
   },
-  headerCell: {
-    flex: 1,
-    fontWeight: '500',
-    color: '#757575',
-    paddingHorizontal: 12,
-    borderRightWidth: 1,
-    borderRightColor: '#e0e0e0',
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerText: {
+    fontWeight: 'bold',
+    fontSize: 14,
     textAlign: 'left',
+  },
+  sortIcon: {
+    marginLeft: 4,
+    fontSize: 14,
   },
   tableRow: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    paddingVertical: 10,
+    borderBottomColor: '#f0f0f0',
+    paddingVertical: 12,
+    alignItems: 'center',
   },
-  cell: {
-    flex: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRightWidth: 1,
-    borderRightColor: '#e0e0e0',
-    justifyContent: 'center',
-  },
-  nameColumn: {
-    flex: 2,
-  },
-  rateColumn: {
+  loadingText: {
     flex: 1,
     textAlign: 'left',
+    paddingVertical: 8,
   },
-  unitColumn: {
-    flex: 1,
-  },
-  categoryColumn: {
+  columnName: {
     flex: 2,
+    paddingRight: 8,
   },
-  actionsColumn: {
+  columnDescription: {
+    flex: 2,
+    paddingRight: 8,
+  },
+  columnRate: {
     flex: 1,
-    borderRightWidth: 0,
+    paddingRight: 8,
+  },
+  columnUnit: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  columnActions: {
+    flex: 1,
   },
   actionButtons: {
     flexDirection: 'row',
@@ -921,8 +967,5 @@ const styles = StyleSheet.create({
   actionButtonContent: {
     height: 24,
     paddingHorizontal: 0,
-  },
-  centeredCell: {
-    justifyContent: 'center',
   },
 }); 

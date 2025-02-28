@@ -238,7 +238,7 @@ export function Sidebar() {
                     styles.navLabel, 
                     pathname === '/admin/company' && styles.activeNavLabel
                   ]}>
-                    Company Settings
+                    Company
                   </Text>
                 </Pressable>
                 
@@ -260,7 +260,7 @@ export function Sidebar() {
                     styles.navLabel, 
                     isActive('/admin/users') && styles.activeNavLabel
                   ]}>
-                    User Management
+                    Users
                   </Text>
                 </Pressable>
               </View>
