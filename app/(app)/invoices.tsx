@@ -442,24 +442,73 @@ export default function InvoicesScreen() {
     }
   };
 
-  const handleDeleteInvoice = async () => {
-    if (!selectedInvoice) return;
-    
+  const handleDeleteInvoice = async (invoiceId: string) => {
     try {
-      const { error } = await supabase
+      setLoading(true);
+      
+      // Skip checking for payments since the table doesn't exist
+      // Instead, just check for related invoice items
+      
+      const { data: invoiceItems, error: itemsError } = await supabase
+        .from('invoice_items')
+        .select('uid')  // Use uid instead of id
+        .eq('invoice_id', invoiceId)
+        .limit(1);
+      
+      if (itemsError) {
+        console.error('Error checking for related invoice items:', itemsError);
+        throw new Error(`Error checking for related invoice items: ${itemsError.message}`);
+      }
+      
+      // For invoice items, we can delete them along with the invoice
+      if (invoiceItems && invoiceItems.length > 0) {
+        // Delete all related invoice items first
+        const { error: deleteItemsError } = await supabase
+          .from('invoice_items')
+          .delete()
+          .eq('invoice_id', invoiceId);
+        
+        if (deleteItemsError) {
+          console.error('Error deleting invoice items:', deleteItemsError);
+          throw new Error(`Error deleting invoice items: ${deleteItemsError.message}`);
+        }
+      }
+      
+      // Now delete the invoice
+      const { error: deleteError } = await supabase
         .from('invoices')
         .delete()
-        .eq('uid', selectedInvoice.uid);
+        .eq('uid', invoiceId);  // Use uid instead of id
       
-      if (error) throw error;
+      if (deleteError) {
+        console.error('Error deleting invoice:', deleteError);
+        
+        // Check for specific error types
+        if (deleteError.message.includes('foreign key constraint')) {
+          throw new Error('This invoice cannot be deleted because it is referenced by other records.');
+        } else if (deleteError.message.includes('permission denied')) {
+          throw new Error('You do not have permission to delete this invoice.');
+        } else {
+          throw deleteError;
+        }
+      }
       
-      setInvoices(invoices.filter(invoice => invoice.uid !== selectedInvoice.uid));
-      showSnackbar('Invoice deleted successfully');
-      setShowDeleteDialog(false);
+      // Update the invoices list
+      setInvoices(invoices.filter(invoice => invoice.uid !== invoiceId));
+      
+      // Reset selectedInvoice to return to the main invoice list screen
       setSelectedInvoice(null);
-    } catch (error) {
-      console.error('Error deleting invoice:', error);
-      showSnackbar('Error deleting invoice');
+      
+      // Close the delete dialog
+      setShowDeleteDialog(false);
+      
+      showSnackbar('Invoice deleted successfully');
+      
+    } catch (error: any) {
+      console.error('Error in handleDeleteInvoice:', error);
+      showSnackbar(error.message || 'Error deleting invoice');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1287,7 +1336,7 @@ export default function InvoicesScreen() {
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setShowDeleteDialog(false)}>Cancel</Button>
-            <Button onPress={handleDeleteInvoice} textColor="red">Delete</Button>
+            <Button onPress={() => handleDeleteInvoice(selectedInvoice?.uid || '')} textColor="red">Delete</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
