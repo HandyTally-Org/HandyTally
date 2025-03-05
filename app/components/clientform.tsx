@@ -1,12 +1,19 @@
-import { useState, useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ScrollView } from 'react-native';
 import { TextInput, Button, Card, Text, ActivityIndicator } from 'react-native-paper';
-import { styles } from '../styles';
-import { Client } from '../app/(app)/clients';
+
+type Client = {
+  uid: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  notes?: string;
+};
 
 type ClientFormProps = {
   client?: Client | null;
-  onSubmit: (client: Omit<Client, 'id'>) => void;
+  onSubmit: (client: Omit<Client, 'uid'>) => void;
   onCancel: () => void;
   submitting?: boolean;
 };
@@ -24,7 +31,7 @@ export function ClientForm({ client, onSubmit, onCancel, submitting = false }: C
   useEffect(() => {
     if (client) {
       setFormData({
-        name: client.name,
+        name: client.name || '',
         email: client.email || '',
         phone: client.phone || '',
         address: client.address || '',
@@ -73,7 +80,7 @@ export function ClientForm({ client, onSubmit, onCancel, submitting = false }: C
   };
 
   return (
-    <Card style={[styles.card, { backgroundColor: '#ffffff' }]}>
+    <Card style={{ backgroundColor: '#ffffff' }}>
       <Card.Title title={client ? "Edit Client" : "Add New Client"} />
       <Card.Content style={{ backgroundColor: '#ffffff' }}>
         <TextInput
@@ -124,8 +131,13 @@ export function ClientForm({ client, onSubmit, onCancel, submitting = false }: C
           disabled={submitting}
         />
         
-        <View style={[styles.row, { justifyContent: 'flex-end', gap: 8, marginTop: 16 }]}>
-          <Button mode="outlined" onPress={onCancel} disabled={submitting}>
+        <View style={styles.buttonContainer}>
+          <Button 
+            mode="outlined" 
+            onPress={onCancel} 
+            disabled={submitting}
+            style={styles.button}
+          >
             Cancel
           </Button>
           <Button 
@@ -133,6 +145,7 @@ export function ClientForm({ client, onSubmit, onCancel, submitting = false }: C
             onPress={handleSubmit} 
             disabled={submitting}
             loading={submitting}
+            style={styles.button}
           >
             Save
           </Button>
@@ -147,4 +160,37 @@ export function ClientForm({ client, onSubmit, onCancel, submitting = false }: C
       </Card.Content>
     </Card>
   );
-} 
+}
+
+const styles = StyleSheet.create({
+  input: {
+    marginBottom: 16,
+    backgroundColor: '#ffffff',
+  },
+  error: {
+    color: 'red',
+    marginTop: -12,
+    marginBottom: 8,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 16,
+  },
+  button: {
+    minWidth: 100,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+  },
+  loadingText: {
+    marginLeft: 8,
+  },
+  row: {
+    flexDirection: 'row',
+  }
+}); 

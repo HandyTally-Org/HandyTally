@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, ScrollView, Platform, TouchableOpacity } from 'react-native';
-import { Text, Button, Searchbar, Snackbar, Card, Chip, IconButton } from 'react-native-paper';
+import { Text, Button, Searchbar, Snackbar, Card, Chip, IconButton, DataTable, ActivityIndicator, Dialog, Portal, TextInput } from 'react-native-paper';
 import { supabase } from '../../lib/supabase';
 import { ServiceForm } from '../../components/ServiceForm';
 import { styles as globalStyles } from '../../styles';
@@ -171,7 +171,7 @@ export default function ServicesScreen() {
     
     if (searchQuery) {
       filtered = filtered.filter(service => 
-        service.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    service.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         service.description?.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
@@ -679,7 +679,11 @@ export default function ServicesScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={{
+      flex: 1,
+      padding: 16,
+      backgroundColor: '#ffffff',
+    }}>
       <Text style={{
         fontFamily: 'System',
         fontSize: 26,
@@ -688,173 +692,258 @@ export default function ServicesScreen() {
         color: '#333333',
       }}>Labor</Text>
       
-      <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+      <View style={styles.searchAndAddContainer}>
         <Searchbar
-          placeholder="Search labor..."
-          style={{ flex: 1, marginRight: 8 }}
+          placeholder="Search labor codes..."
           onChangeText={setSearchQuery}
           value={searchQuery}
+          style={[styles.searchBar, { backgroundColor: '#f5f5f5' }]}
         />
         
-        <Button
-          mode="contained"
-          onPress={() => setShowAddForm(true)}
-          style={{ marginRight: 8 }}
-        >
-          Add New Labor Code
-        </Button>
-        
-        <IconButton
-          icon="file-export"
-          mode="contained"
-          onPress={handleExport}
-          iconColor="#fff"
-          containerColor="#4CAF50"
-          size={20}
-        />
-        
-        <IconButton
-          icon="file-import"
-          mode="contained"
-          onPress={handleImportClick}
-          iconColor="#fff"
-          containerColor="#2196F3"
-          size={20}
-          style={{ marginLeft: 8 }}
-        />
-        
-        {Platform.OS === 'web' && (
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={(e) => {
-              console.log('File input change event triggered', e);
-              handleFileSelected(e);
-            }}
-            accept=".xlsx,.xls"
-            style={{ display: 'none' }}
-            id="service-import-input"
-          />
-        )}
-      </View>
-
-      {showAddForm || editingService ? (
-        <ServiceForm
-          service={editingService}
-          onSubmit={editingService 
-            ? (updates) => handleUpdateService(editingService.uid, updates) 
-            : handleAddService
-          }
-          onCancel={() => {
-            setShowAddForm(false);
-            setEditingService(null);
-          }}
-          submitting={submitting}
-        />
-      ) : null}
-
-      {!selectedService && !showAddForm && !editingService && (
-        <Card style={{flex: 1, width: '100%', maxWidth: '100%'}}>
-          <View style={styles.tableContainer}>
-            <View style={styles.tableHeader}>
-              <TouchableOpacity 
-                style={styles.columnName} 
-                onPress={() => handleSort('name')}
+        <View style={{ 
+          flexDirection: 'row', 
+          alignItems: 'center',
+          height: 40 // Set a fixed height to ensure vertical alignment
+        }}>
+          <Button
+            mode="contained"
+            onPress={() => setShowAddForm(true)}
+            style={[styles.addButton, { marginLeft: 16 }]}
+          >
+            Add New Labor Code
+          </Button>
+          
+          <View 
+            style={{ marginLeft: 8 }}
+            accessibilityLabel="Export"
+          >
+            <IconButton
+              icon="file-export"
+              mode="contained"
+              onPress={handleExport}
+              iconColor="#fff"
+              containerColor="#4CAF50"
+              size={20}
+              aria-label="Export"
+            />
+            {Platform.OS === 'web' && (
+              <div 
+                style={{ 
+                  position: 'absolute', 
+                  bottom: -30, 
+                  left: 0, 
+                  backgroundColor: '#333', 
+                  color: 'white', 
+                  padding: '4px 8px', 
+                  borderRadius: 4, 
+                  fontSize: 12,
+                  whiteSpace: 'nowrap',
+                  opacity: 0,
+                  transition: 'opacity 0.2s',
+                  pointerEvents: 'none'
+                }}
+                className="tooltip"
               >
-                <View style={styles.headerContent}>
-                  <Text style={styles.headerText}>Name</Text>
-                  {sortColumn === 'name' && (
-                    <Text style={styles.sortIcon}>
-                      {sortDirection === 'ascending' ? '↓' : '↑'}
-                    </Text>
-                  )}
-                </View>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.columnDescription} 
-                onPress={() => handleSort('description')}
-              >
-                <View style={styles.headerContent}>
-                  <Text style={styles.headerText}>Description</Text>
-                  {sortColumn === 'description' && (
-                    <Text style={styles.sortIcon}>
-                      {sortDirection === 'ascending' ? '↓' : '↑'}
-                    </Text>
-                  )}
-                </View>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.columnRate} 
-                onPress={() => handleSort('rate')}
-              >
-                <View style={styles.headerContent}>
-                  <Text style={styles.headerText}>Rate</Text>
-                  {sortColumn === 'rate' && (
-                    <Text style={styles.sortIcon}>
-                      {sortDirection === 'ascending' ? '↓' : '↑'}
-                    </Text>
-                  )}
-                </View>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.columnUnit} 
-                onPress={() => handleSort('unit')}
-              >
-                <View style={styles.headerContent}>
-                  <Text style={styles.headerText}>Unit</Text>
-                  {sortColumn === 'unit' && (
-                    <Text style={styles.sortIcon}>
-                      {sortDirection === 'ascending' ? '↓' : '↑'}
-                    </Text>
-                  )}
-                </View>
-              </TouchableOpacity>
-              
-              <View style={styles.columnActions}>
-                <Text style={styles.headerText}>Actions</Text>
-              </View>
-            </View>
-
-            {loading ? (
-              <View style={styles.tableRow}>
-                <Text style={styles.loadingText}>Loading services...</Text>
-              </View>
-            ) : getFilteredServices().length === 0 ? (
-              <View style={styles.tableRow}>
-                <Text style={styles.loadingText}>No services found</Text>
-              </View>
-            ) : (
-              getFilteredServices().map((service) => (
-                <View key={service.uid} style={styles.tableRow}>
-                  <Text style={styles.columnName}>{service.name}</Text>
-                  <Text style={styles.columnDescription}>{service.description}</Text>
-                  <Text style={styles.columnRate}>${service.rate}</Text>
-                  <Text style={styles.columnUnit}>{service.unit}</Text>
-                  <View style={styles.columnActions}>
-                    <View style={styles.actionButtons}>
-                      <IconButton
-                        icon="pencil"
-                        size={20}
-                        onPress={() => setEditingService(service)}
-                      />
-                      <IconButton
-                        icon="delete"
-                        size={20}
-                        onPress={() => handleDeleteService(service.uid)}
-                        iconColor="red"
-                      />
-                    </View>
-                  </View>
-                </View>
-              ))
+                Export
+              </div>
             )}
           </View>
-        </Card>
-      )}
-
+          
+          <View 
+            style={{ marginLeft: 8 }}
+            accessibilityLabel="Import"
+          >
+            <IconButton
+              icon="file-import"
+              mode="contained"
+              onPress={handleImportClick}
+              iconColor="#fff"
+              containerColor="#2196F3"
+              size={20}
+              aria-label="Import"
+            />
+            {Platform.OS === 'web' && (
+              <div 
+                style={{ 
+                  position: 'absolute', 
+                  bottom: -30, 
+                  left: 0, 
+                  backgroundColor: '#333', 
+                  color: 'white', 
+                  padding: '4px 8px', 
+                  borderRadius: 4, 
+                  fontSize: 12,
+                  whiteSpace: 'nowrap',
+                  opacity: 0,
+                  transition: 'opacity 0.2s',
+                  pointerEvents: 'none'
+                }}
+                className="tooltip"
+              >
+                Import
+              </div>
+            )}
+          </View>
+        </View>
+        
+        {/* Hidden file input for import */}
+        {Platform.OS === 'web' && (
+          <>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileSelected}
+              accept=".xlsx,.xls"
+              style={{ display: 'none' }}
+              id="labor-import-input"
+            />
+            <style>
+              {`
+                View:hover .tooltip {
+                  opacity: 1;
+                }
+              `}
+            </style>
+          </>
+        )}
+      </View>
+      
+      <Card style={{
+        flex: 1,
+        marginBottom: 16,
+        backgroundColor: '#ffffff',
+        borderRadius: 8,
+        elevation: 2,
+        shadowColor: 'rgba(0,0,0,0.1)',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.8,
+        shadowRadius: 1,
+      }}>
+        <DataTable style={{ backgroundColor: '#ffffff' }}>
+          <DataTable.Header style={{ backgroundColor: '#ffffff' }}>
+            <DataTable.Title 
+              style={{ backgroundColor: '#ffffff' }}
+              sortDirection={sortColumn === 'name' ? sortDirection : undefined}
+              onPress={() => handleSort('name')}
+            >
+              Name
+            </DataTable.Title>
+            <DataTable.Title 
+              style={{ backgroundColor: '#ffffff' }}
+              sortDirection={sortColumn === 'description' ? sortDirection : undefined}
+              onPress={() => handleSort('description')}
+            >
+              Description
+            </DataTable.Title>
+            <DataTable.Title 
+              style={{ backgroundColor: '#ffffff' }}
+              sortDirection={sortColumn === 'rate' ? sortDirection : undefined}
+              onPress={() => handleSort('rate')}
+            >
+              Rate
+            </DataTable.Title>
+            <DataTable.Title 
+              style={{ backgroundColor: '#ffffff' }}
+              sortDirection={sortColumn === 'unit' ? sortDirection : undefined}
+              onPress={() => handleSort('unit')}
+            >
+              Unit
+            </DataTable.Title>
+            <DataTable.Title style={{ backgroundColor: '#ffffff' }}>Actions</DataTable.Title>
+          </DataTable.Header>
+          
+          {loading ? (
+            <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
+              <DataTable.Cell style={{ flex: 5, backgroundColor: '#ffffff' }}>
+                <ActivityIndicator size="small" style={{ marginRight: 8 }} />
+                Loading services...
+              </DataTable.Cell>
+            </DataTable.Row>
+          ) : getFilteredServices().length === 0 ? (
+            <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
+              <DataTable.Cell style={{ flex: 5, backgroundColor: '#ffffff' }}>No services found</DataTable.Cell>
+            </DataTable.Row>
+          ) : (
+            getFilteredServices().map(service => (
+              <DataTable.Row key={service.uid} style={{ backgroundColor: '#ffffff' }}>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{service.name}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{service.description}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>${service.rate.toFixed(2)}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{service.unit || 'hour'}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
+                  <View style={{ flexDirection: 'row' }}>
+                    <IconButton
+                      icon="pencil"
+                      size={20}
+                      onPress={() => setEditingService(service)}
+                    />
+                    <IconButton
+                      icon="delete"
+                      size={20}
+                      iconColor="red"
+                      onPress={() => setShowDeleteDialog(true)}
+                    />
+                  </View>
+                </DataTable.Cell>
+              </DataTable.Row>
+            ))
+          )}
+        </DataTable>
+      </Card>
+      
+      {/* Add Service Dialog */}
+      <Portal>
+        <Dialog visible={showAddForm} onDismiss={() => setShowAddForm(false)} style={{ backgroundColor: '#ffffff' }}>
+          <Dialog.Title>Add New Service</Dialog.Title>
+          <Dialog.Content>
+            <TextInput
+              label="Name"
+              value={editingService?.name || ''}
+              onChangeText={(text) => setEditingService({ ...(editingService || {}), name: text })}
+              style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
+            />
+            <TextInput
+              label="Description"
+              value={editingService?.description || ''}
+              onChangeText={(text) => setEditingService({ ...(editingService || {}), description: text })}
+              style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
+            />
+            <TextInput
+              label="Rate"
+              value={editingService?.rate?.toString() || ''}
+              onChangeText={(text) => setEditingService({ ...(editingService || {}), rate: parseFloat(text) })}
+              keyboardType="numeric"
+              style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
+            />
+            <TextInput
+              label="Unit"
+              value={editingService?.unit || ''}
+              onChangeText={(text) => setEditingService({ ...(editingService || {}), unit: text })}
+              style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
+            />
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setShowAddForm(false)}>Cancel</Button>
+            <Button onPress={() => handleAddService(editingService || {} as Omit<Service, 'uid'>)}>Add</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+      
+      {/* Delete Service Dialog */}
+      <Portal>
+        <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)} style={{ backgroundColor: '#ffffff' }}>
+          <Dialog.Title>Delete Service</Dialog.Title>
+          <Dialog.Content>
+            <Text>Are you sure you want to delete {selectedService?.name}?</Text>
+            <Text>This action cannot be undone.</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setShowDeleteDialog(false)}>Cancel</Button>
+            <Button onPress={() => handleDeleteService(selectedService?.uid || '')} textColor="red">Delete</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+      
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
@@ -868,104 +957,32 @@ export default function ServicesScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    ...globalStyles.container,
+    flex: 1,
+    padding: 16,
+    backgroundColor: '#ffffff',
   },
-  title: {
-    ...globalStyles.title,
-    fontFamily: 'System',
-    fontWeight: '600',
-    fontSize: 24,
+  searchAndAddContainer: {
+    flexDirection: 'row',
     marginBottom: 16,
+    alignItems: 'center',
   },
   searchBar: {
-    marginBottom: 16,
+    flex: 1,
+    marginRight: 16,
+    backgroundColor: '#ffffff',
   },
   addButton: {
-    marginBottom: 16,
+    minWidth: 150,
   },
   tableCard: {
     flex: 1,
     marginBottom: 16,
+    backgroundColor: '#ffffff',
     borderRadius: 8,
-    overflow: 'hidden',
-  },
-  tableContainer: {
-    width: '100%',
-    marginVertical: 16,
-    padding: 16,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    paddingBottom: 12,
-    marginBottom: 8,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerText: {
-    fontWeight: 'bold',
-    fontSize: 14,
-    textAlign: 'left',
-  },
-  sortIcon: {
-    marginLeft: 4,
-    fontSize: 14,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  loadingText: {
-    flex: 1,
-    textAlign: 'left',
-    paddingVertical: 8,
-  },
-  columnName: {
-    flex: 2,
-    paddingRight: 8,
-  },
-  columnDescription: {
-    flex: 2,
-    paddingRight: 8,
-  },
-  columnRate: {
-    flex: 1,
-    paddingRight: 8,
-  },
-  columnUnit: {
-    flex: 1,
-    paddingRight: 8,
-  },
-  columnActions: {
-    flex: 1,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-  },
-  actionButtonLabel: {
-    color: '#007bff',
-    fontSize: 14,
-    fontWeight: '500',
-    marginVertical: 0,
-  },
-  actionSeparator: {
-    marginHorizontal: 8,
-    color: '#aaaaaa',
-  },
-  actionButton: {
-    margin: 0,
-    minWidth: 40,
-  },
-  actionButtonContent: {
-    height: 24,
-    paddingHorizontal: 0,
+    elevation: 2,
+    shadowColor: 'rgba(0,0,0,0.1)',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.8,
+    shadowRadius: 1,
   },
 }); 

@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { Text, Button, TextInput, Card, DataTable, IconButton, Dialog, Portal, Snackbar, Chip } from 'react-native-paper';
 import { supabase } from '../../../lib/supabase';
+import { useRouter } from 'expo-router';
 
 type User = {
   id: string;
@@ -47,9 +48,10 @@ export default function UsersScreen() {
     link: '',
     userId: ''
   });
+  const router = useRouter();
 
   useEffect(() => {
-    fetchUsers();
+        fetchUsers();
   }, []);
 
   async function fetchUsers() {
@@ -78,7 +80,7 @@ export default function UsersScreen() {
             phone: profile.phone || '',
             user_metadata: { 
               name: fullName, 
-              role: 'user' // Default role since it doesn't exist in the schema
+              role: 'user' as 'admin' | 'user' // Cast to fix type issue
             },
             app_metadata: {},
             // Use current date as fallback for timestamps that might not exist
@@ -88,7 +90,7 @@ export default function UsersScreen() {
           };
         });
         
-        setUsers(formattedUsers);
+        setUsers(formattedUsers as User[]);
       }
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -144,25 +146,25 @@ export default function UsersScreen() {
       
       // The profile should be created automatically by a Supabase trigger
       // But we'll show the invitation details
-      const inviteLink = `${window.location.origin}/login`;
-      setInviteDetails({
-        email: newUserEmail,
-        password: tempPassword,
-        link: inviteLink,
+        const inviteLink = `${window.location.origin}/login`;
+        setInviteDetails({
+          email: newUserEmail,
+          password: tempPassword,
+          link: inviteLink,
         userId: authData.user.id
-      });
-      
-      // Show the invitation details dialog
-      setShowInviteInfo(true);
-      
-      // Close the add user dialog
-      setShowAddDialog(false);
-      setNewUserEmail('');
+        });
+        
+        // Show the invitation details dialog
+        setShowInviteInfo(true);
+        
+        // Close the add user dialog
+        setShowAddDialog(false);
+        setNewUserEmail('');
       setNewUserFirstName('');
       setNewUserLastName('');
       setNewUserPhone('');
-      setNewUserRole('user');
-      setError('');
+        setNewUserRole('user');
+        setError('');
       
       // Refresh the users list
       fetchUsers();
@@ -364,99 +366,128 @@ export default function UsersScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+      <ScrollView style={{ flex: 1, backgroundColor: '#ffffff' }}>
+        <View style={{ 
+          flex: 1, 
+          backgroundColor: '#ffffff',
+          padding: 16,
+        }}>
+          <View style={{ 
+            flexDirection: 'row', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            marginBottom: 16,
+            backgroundColor: '#ffffff',
+          }}>
       <Text style={{
-        fontFamily: 'System',
-        fontSize: 26,
-        fontWeight: '600',
-        marginBottom: 16,
-        color: '#333333',
-      }}>Users</Text>
+              fontFamily: 'System',
+              fontSize: 26,
+              fontWeight: '600',
+              color: '#333333',
+              backgroundColor: '#ffffff',
+            }}>Users</Text>
       
       <Button
         mode="contained"
         onPress={() => setShowAddDialog(true)}
-        style={styles.addButton}
         icon="account-plus"
       >
         Invite New User
       </Button>
-      
-      <Card style={styles.tableCard}>
-        <DataTable>
-          <DataTable.Header>
-            <DataTable.Title>Display name</DataTable.Title>
-            <DataTable.Title>Email</DataTable.Title>
-            <DataTable.Title>Phone</DataTable.Title>
-            <DataTable.Title>Providers</DataTable.Title>
-            <DataTable.Title>Provider type</DataTable.Title>
-            <DataTable.Title>Created at</DataTable.Title>
-            <DataTable.Title>Last sign in at</DataTable.Title>
-            <DataTable.Title>Actions</DataTable.Title>
+          </View>
+          
+          <Card style={{ 
+            marginBottom: 16,
+            backgroundColor: '#ffffff',
+            borderRadius: 8,
+            elevation: 2,
+            shadowColor: 'rgba(0,0,0,0.1)',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.8,
+            shadowRadius: 1,
+          }}>
+            <Card.Content style={{ backgroundColor: '#ffffff', padding: 0 }}>
+              <DataTable style={{ backgroundColor: '#ffffff' }}>
+                <DataTable.Header style={{ backgroundColor: '#ffffff' }}>
+                  <DataTable.Title style={{ backgroundColor: '#ffffff' }}>Display name</DataTable.Title>
+                  <DataTable.Title style={{ backgroundColor: '#ffffff' }}>Email</DataTable.Title>
+                  <DataTable.Title style={{ backgroundColor: '#ffffff' }}>Phone</DataTable.Title>
+                  <DataTable.Title style={{ backgroundColor: '#ffffff' }}>Providers</DataTable.Title>
+                  <DataTable.Title style={{ backgroundColor: '#ffffff' }}>Provider type</DataTable.Title>
+                  <DataTable.Title style={{ backgroundColor: '#ffffff' }}>Created at</DataTable.Title>
+                  <DataTable.Title style={{ backgroundColor: '#ffffff' }}>Last sign in at</DataTable.Title>
+                  <DataTable.Title style={{ backgroundColor: '#ffffff' }}>Actions</DataTable.Title>
           </DataTable.Header>
           
           {loading ? (
-            <DataTable.Row>
-              <DataTable.Cell>Loading users...</DataTable.Cell>
+                  <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
+                    <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>Loading users...</DataTable.Cell>
             </DataTable.Row>
           ) : users.length === 0 ? (
-            <DataTable.Row>
-              <DataTable.Cell>No users found</DataTable.Cell>
+                  <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
+                    <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>No users found</DataTable.Cell>
             </DataTable.Row>
           ) : (
-            users.map(user => {
-              const { providers, providerType } = getProviderInfo(user);
-              return (
-                <DataTable.Row key={user.id}>
-                  <DataTable.Cell>{user.user_metadata?.name || '(No name)'}</DataTable.Cell>
-                  <DataTable.Cell>{user.email}</DataTable.Cell>
-                  <DataTable.Cell>{user.phone || '-'}</DataTable.Cell>
-                  <DataTable.Cell>{providers}</DataTable.Cell>
-                  <DataTable.Cell>{providerType}</DataTable.Cell>
-                  <DataTable.Cell>{formatDate(user.created_at)}</DataTable.Cell>
-                  <DataTable.Cell>{formatDate(user.last_sign_in_at)}</DataTable.Cell>
-                  <DataTable.Cell>
-                    <View style={{ flexDirection: 'row' }}>
-                      <IconButton
-                        icon="pencil"
-                        size={20}
-                        onPress={() => handleEditUser(user)}
-                      />
-                      <IconButton
-                        icon="delete"
-                        size={20}
-                        onPress={() => {
-                          setSelectedUser(user);
-                          setShowDeleteDialog(true);
-                        }}
-                      />
-                    </View>
-                  </DataTable.Cell>
-                </DataTable.Row>
-              );
-            })
+                  users.map(user => {
+                    const { providers, providerType } = getProviderInfo(user);
+                    return (
+                      <DataTable.Row key={user.id} style={{ backgroundColor: '#ffffff' }}>
+                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{user.user_metadata?.name || '(No name)'}</DataTable.Cell>
+                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{user.email}</DataTable.Cell>
+                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{user.phone || '-'}</DataTable.Cell>
+                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{providers}</DataTable.Cell>
+                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{providerType}</DataTable.Cell>
+                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(user.created_at)}</DataTable.Cell>
+                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(user.last_sign_in_at)}</DataTable.Cell>
+                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
+                          <View style={{ flexDirection: 'row', backgroundColor: '#ffffff' }}>
+                    <IconButton
+                      icon="pencil"
+                      size={20}
+                      onPress={() => handleEditUser(user)}
+                              style={{ backgroundColor: '#ffffff' }}
+                    />
+                    <IconButton
+                      icon="delete"
+                      size={20}
+                              iconColor="red"
+                      onPress={() => {
+                        setSelectedUser(user);
+                        setShowDeleteDialog(true);
+                      }}
+                              style={{ backgroundColor: '#ffffff' }}
+                    />
+                  </View>
+                </DataTable.Cell>
+              </DataTable.Row>
+                    );
+                  })
           )}
         </DataTable>
+            </Card.Content>
       </Card>
+        </View>
+      </ScrollView>
       
       {/* Add User Dialog */}
       <Portal>
-        <Dialog visible={showAddDialog} onDismiss={() => setShowAddDialog(false)}>
-          <Dialog.Title>Invite New User</Dialog.Title>
-          <Dialog.Content>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Dialog visible={showAddDialog} onDismiss={() => setShowAddDialog(false)} style={{ backgroundColor: '#ffffff' }}>
+          <Dialog.Title style={{ backgroundColor: '#ffffff' }}>Invite New User</Dialog.Title>
+          <Dialog.Content style={{ backgroundColor: '#ffffff' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#ffffff' }}>
               <TextInput
                 label="First Name"
                 value={newUserFirstName}
                 onChangeText={setNewUserFirstName}
-                style={[styles.input, { flex: 1, marginRight: 8 }]}
+                style={[styles.input, { flex: 1, marginRight: 8, backgroundColor: '#ffffff' }]}
               />
               
               <TextInput
                 label="Last Name"
                 value={newUserLastName}
                 onChangeText={setNewUserLastName}
-                style={[styles.input, { flex: 1 }]}
+                style={[styles.input, { flex: 1, backgroundColor: '#ffffff' }]}
               />
             </View>
             
@@ -464,7 +495,7 @@ export default function UsersScreen() {
               label="Email"
               value={newUserEmail}
               onChangeText={setNewUserEmail}
-              style={styles.input}
+              style={[styles.input, { backgroundColor: '#ffffff' }]}
               keyboardType="email-address"
               autoCapitalize="none"
             />
@@ -473,12 +504,12 @@ export default function UsersScreen() {
               label="Phone"
               value={newUserPhone}
               onChangeText={setNewUserPhone}
-              style={styles.input}
+              style={[styles.input, { backgroundColor: '#ffffff' }]}
               keyboardType="phone-pad"
             />
             
-            <View style={styles.roleSelector}>
-              <Text>Role:</Text>
+            <View style={[styles.roleSelector, { backgroundColor: '#ffffff' }]}>
+              <Text style={{ backgroundColor: '#ffffff' }}>Role:</Text>
               <Button
                 mode={newUserRole === 'user' ? 'contained' : 'outlined'}
                 onPress={() => setNewUserRole('user')}
@@ -495,9 +526,9 @@ export default function UsersScreen() {
               </Button>
             </View>
             
-            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ? <Text style={[styles.error, { backgroundColor: '#ffffff' }]}>{error}</Text> : null}
           </Dialog.Content>
-          <Dialog.Actions>
+          <Dialog.Actions style={{ backgroundColor: '#ffffff' }}>
             <Button onPress={() => setShowAddDialog(false)}>Cancel</Button>
             <Button onPress={handleAddUser}>Send Invitation</Button>
           </Dialog.Actions>
@@ -506,13 +537,13 @@ export default function UsersScreen() {
       
       {/* Delete User Dialog */}
       <Portal>
-        <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)}>
-          <Dialog.Title>Delete User</Dialog.Title>
-          <Dialog.Content>
-            <Text>Are you sure you want to delete {selectedUser?.email}?</Text>
-            <Text>This action cannot be undone.</Text>
+        <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)} style={{ backgroundColor: '#ffffff' }}>
+          <Dialog.Title style={{ backgroundColor: '#ffffff' }}>Delete User</Dialog.Title>
+          <Dialog.Content style={{ backgroundColor: '#ffffff' }}>
+            <Text style={{ backgroundColor: '#ffffff' }}>Are you sure you want to delete {selectedUser?.email}?</Text>
+            <Text style={{ backgroundColor: '#ffffff' }}>This action cannot be undone.</Text>
           </Dialog.Content>
-          <Dialog.Actions>
+          <Dialog.Actions style={{ backgroundColor: '#ffffff' }}>
             <Button onPress={() => setShowDeleteDialog(false)}>Cancel</Button>
             <Button onPress={handleDeleteUser} textColor="red">Delete</Button>
           </Dialog.Actions>
@@ -521,28 +552,28 @@ export default function UsersScreen() {
       
       {/* Edit User Dialog */}
       <Portal>
-        <Dialog visible={showEditDialog} onDismiss={() => setShowEditDialog(false)}>
-          <Dialog.Title>Edit User</Dialog.Title>
-          <Dialog.Content>
+        <Dialog visible={showEditDialog} onDismiss={() => setShowEditDialog(false)} style={{ backgroundColor: '#ffffff' }}>
+          <Dialog.Title style={{ backgroundColor: '#ffffff' }}>Edit User</Dialog.Title>
+          <Dialog.Content style={{ backgroundColor: '#ffffff' }}>
             <TextInput
               label="Name"
               value={editName}
               onChangeText={setEditName}
-              style={styles.input}
+              style={[styles.input, { backgroundColor: '#ffffff' }]}
             />
             
             <TextInput
               label="Email"
               value={editEmail}
               onChangeText={setEditEmail}
-              style={styles.input}
+              style={[styles.input, { backgroundColor: '#ffffff' }]}
               keyboardType="email-address"
               autoCapitalize="none"
             />
             
-            <View style={styles.passwordSection}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                <Text>Change Password:</Text>
+            <View style={[styles.passwordSection, { backgroundColor: '#ffffff' }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, backgroundColor: '#ffffff' }}>
+                <Text style={{ backgroundColor: '#ffffff' }}>Change Password:</Text>
                 <Button
                   mode={changePassword ? 'contained' : 'outlined'}
                   onPress={() => setChangePassword(!changePassword)}
@@ -558,14 +589,14 @@ export default function UsersScreen() {
                   value={editPassword}
                   onChangeText={setEditPassword}
                   secureTextEntry
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: '#ffffff' }]}
                 />
               )}
             </View>
             
-            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ? <Text style={[styles.error, { backgroundColor: '#ffffff' }]}>{error}</Text> : null}
           </Dialog.Content>
-          <Dialog.Actions>
+          <Dialog.Actions style={{ backgroundColor: '#ffffff' }}>
             <Button onPress={() => setShowEditDialog(false)}>Cancel</Button>
             <Button onPress={handleSaveUserEdit}>Save</Button>
           </Dialog.Actions>
@@ -574,23 +605,23 @@ export default function UsersScreen() {
       
       {/* Invitation Details Dialog */}
       <Portal>
-        <Dialog visible={showInviteInfo} onDismiss={() => setShowInviteInfo(false)}>
-          <Dialog.Title>User Invitation Details</Dialog.Title>
-          <Dialog.Content>
-            <Text style={{ marginBottom: 8 }}>The user has been created. Please provide them with the following details:</Text>
+        <Dialog visible={showInviteInfo} onDismiss={() => setShowInviteInfo(false)} style={{ backgroundColor: '#ffffff' }}>
+          <Dialog.Title style={{ backgroundColor: '#ffffff' }}>User Invitation Details</Dialog.Title>
+          <Dialog.Content style={{ backgroundColor: '#ffffff' }}>
+            <Text style={{ marginBottom: 8, backgroundColor: '#ffffff' }}>The user has been created. Please provide them with the following details:</Text>
             
-            <View style={styles.inviteDetails}>
-              <Text style={styles.inviteLabel}>Email:</Text>
+            <View style={[styles.inviteDetails, { backgroundColor: '#f5f5f5' }]}>
+              <Text style={[styles.inviteLabel, { backgroundColor: '#f5f5f5' }]}>Email:</Text>
               <Text selectable={true} style={styles.inviteValue}>{inviteDetails.email}</Text>
               
-              <Text style={styles.inviteLabel}>Temporary Password:</Text>
+              <Text style={[styles.inviteLabel, { backgroundColor: '#f5f5f5' }]}>Temporary Password:</Text>
               <Text selectable={true} style={styles.inviteValue}>{inviteDetails.password}</Text>
               
-              <Text style={styles.inviteLabel}>Login Link:</Text>
+              <Text style={[styles.inviteLabel, { backgroundColor: '#f5f5f5' }]}>Login Link:</Text>
               <Text selectable={true} style={styles.inviteValue}>{inviteDetails.link}</Text>
             </View>
             
-            <Text style={{ marginTop: 16 }}>
+            <Text style={{ marginTop: 16, backgroundColor: '#ffffff' }}>
               You can copy these details and send them to the user via your preferred communication method.
             </Text>
             
@@ -602,7 +633,7 @@ export default function UsersScreen() {
               Manually Confirm User
             </Button>
           </Dialog.Content>
-          <Dialog.Actions>
+          <Dialog.Actions style={{ backgroundColor: '#ffffff' }}>
             <Button onPress={() => setShowInviteInfo(false)}>Close</Button>
           </Dialog.Actions>
         </Dialog>
@@ -623,6 +654,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
+    backgroundColor: '#ffffff',
   },
   addButton: {
     marginBottom: 16,
@@ -631,6 +663,7 @@ const styles = StyleSheet.create({
   tableCard: {
     flex: 1,
     marginBottom: 16,
+    backgroundColor: '#ffffff',
   },
   input: {
     marginBottom: 16,
@@ -652,7 +685,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   inviteDetails: {
-    backgroundColor: '#f5f5f5',
     padding: 16,
     borderRadius: 4,
     marginVertical: 8,

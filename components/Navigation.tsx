@@ -10,7 +10,7 @@ export function Navigation() {
   };
 
   return (
-    <View>
+    <View style={{ backgroundColor: '#ffffff' }}>
       {links.map((link) => (
         <Link 
           key={link}

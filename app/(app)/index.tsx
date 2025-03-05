@@ -628,8 +628,8 @@ export default function DashboardScreen() {
       position: chartHeight * (1 - ratio),
       value: maxValue * ratio
     }));
-    
-    return (
+
+  return (
       <View style={styles.chartOuterContainer}>
         {/* Y-axis labels */}
         <View style={styles.yAxisContainer}>
@@ -767,591 +767,625 @@ export default function DashboardScreen() {
     setSnackbarVisible(true);
   };
 
+  // Define the styles object
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      padding: 16,
+      backgroundColor: '#ffffff',
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+      minHeight: 300,
+    },
+    errorContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+      minHeight: 300,
+    },
+    errorText: {
+      color: 'red',
+      marginBottom: 16,
+      textAlign: 'center',
+    },
+    retryButton: {
+      marginTop: 16,
+    },
+    statsContainer: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 16,
+    },
+    statsCard: {
+      width: '48%',
+      backgroundColor: '#ffffff',
+      elevation: 0,
+      shadowOpacity: 0,
+      borderWidth: 0,
+      borderColor: 'transparent',
+      borderRadius: 12,
+      shadowColor: 'transparent',
+      shadowOffset: { width: 0, height: 0 },
+      shadowRadius: 0,
+    },
+    chartCard: {
+      marginBottom: 16,
+      backgroundColor: '#ffffff',
+      elevation: 0,
+      shadowOpacity: 0,
+      borderWidth: 0,
+      borderColor: 'transparent',
+      borderRadius: 0,
+      shadowColor: 'transparent',
+      shadowOffset: { width: 0, height: 0 },
+      shadowRadius: 0,
+    },
+    chartHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    sectionTitle: {
+      marginBottom: 0,
+    },
+    chartOuterContainer: {
+      flexDirection: 'row',
+      width: '100%',
+      height: 280,
+      marginTop: 10,
+    },
+    yAxisContainer: {
+      width: 50,
+      height: 220,
+      position: 'relative',
+    },
+    yAxisLabel: {
+      fontSize: 10,
+      color: '#666',
+      position: 'absolute',
+      right: 8,
+      textAlign: 'right',
+    },
+    chartMainArea: {
+      flex: 1,
+      height: 220,
+      position: 'relative',
+    },
+    gridLine: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      height: 1,
+      backgroundColor: '#e0e0e0',
+    },
+    barsArea: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      alignItems: 'flex-end',
+      height: '100%',
+      paddingTop: 10,
+    },
+    barAndLabelContainer: {
+      alignItems: 'center',
+      height: '100%',
+      justifyContent: 'flex-end',
+    },
+    barContainer: {
+      justifyContent: 'flex-end',
+    },
+    barContent: {
+      flexDirection: 'column-reverse',
+    },
+    emptyBar: {
+      height: 0,
+    },
+    monthLabel: {
+      fontSize: 10,
+      color: '#666',
+      marginTop: 8,
+      textAlign: 'center',
+    },
+    calloutContainer: {
+      position: 'absolute',
+      width: 200,
+      backgroundColor: 'white',
+      borderRadius: 8,
+      padding: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 3.84,
+      elevation: 5,
+      zIndex: 1000,
+      borderWidth: 1,
+      borderColor: '#e0e0e0',
+    },
+    calloutHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    calloutTitle: {
+      fontWeight: 'bold',
+      fontSize: 14,
+    },
+    calloutClose: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: '#666',
+    },
+    calloutContent: {
+      marginTop: 4,
+    },
+    calloutInvoice: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 4,
+      borderBottomWidth: 1,
+      borderBottomColor: '#f0f0f0',
+    },
+    calloutInvoiceNumber: {
+      fontSize: 12,
+    },
+    calloutInvoiceAmount: {
+      fontSize: 12,
+      fontWeight: 'bold',
+    },
+    calloutMoreText: {
+      fontSize: 12,
+      color: '#666',
+      textAlign: 'center',
+      marginTop: 4,
+    },
+  });
+
   return (
-    <ScrollView style={styles.container}>
-      <View style={{ 
-        flexDirection: 'row', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        marginBottom: 16 
-      }}>
-        <Text style={{
-          fontFamily: 'System',
-          fontSize: 26,
-          fontWeight: '600',
-          color: '#333333',
-        }}>Dashboard</Text>
-        <IconButton
-          icon="refresh"
-          size={24}
-          onPress={() => {
-            setLoading(true);
-            Promise.all([
-              fetchDashboardData(),
-              fetchRecentActivity(),
-              fetchSalesData()
-              // Add any other data fetching functions here
-            ]).then(() => {
-              setLoading(false);
-              showSnackbar('Dashboard refreshed');
-            }).catch(error => {
-              console.error('Error refreshing dashboard:', error);
-              setLoading(false);
-              showSnackbar('Error refreshing dashboard');
-            });
-          }}
-        />
+    <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+      <ScrollView style={[styles.container, { backgroundColor: '#ffffff' }]}>
+        <View style={{ 
+          flexDirection: 'row', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          marginBottom: 16 
+        }}>
+          <Text style={{
+            fontFamily: 'System',
+            fontSize: 26,
+            fontWeight: '600',
+            color: '#333333',
+          }}>Dashboard</Text>
+          <IconButton
+            icon="refresh"
+            size={24}
+            onPress={() => {
+              setLoading(true);
+              Promise.all([
+                fetchDashboardData(),
+                fetchRecentActivity(),
+                fetchSalesData()
+                // Add any other data fetching functions here
+              ]).then(() => {
+                setLoading(false);
+                showSnackbar('Dashboard refreshed');
+              }).catch(error => {
+                console.error('Error refreshing dashboard:', error);
+                setLoading(false);
+                showSnackbar('Error refreshing dashboard');
+              });
+            }}
+          />
+        </View>
+        
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" />
+            <Text>Loading dashboard data...</Text>
+            <Button 
+              mode="text" 
+              onPress={forceRender} 
+              style={{ marginTop: 20 }}
+            >
+              Show Data Anyway
+            </Button>
+          </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+            <Button mode="contained" onPress={handleRetry} style={styles.retryButton}>
+              Retry
+            </Button>
+          </View>
+        ) : (
+          <>
+      <View style={styles.statsContainer}>
+              <Card style={[styles.statsCard, { 
+                backgroundColor: '#E0F7FA', // Light teal for Clients
+                elevation: 0, 
+                shadowOpacity: 0, 
+                borderWidth: 0, 
+                borderColor: 'transparent',
+                borderRadius: 12,
+                shadowColor: 'transparent',
+                shadowOffset: { width: 0, height: 0 },
+                shadowRadius: 0,
+                margin: 0,
+                padding: 0,
+                overflow: 'hidden'
+              }]}>
+                <Card.Content style={{ 
+                  backgroundColor: '#E0F7FA', // Light teal
+                  borderWidth: 0, 
+                  borderColor: 'transparent',
+                  borderTopWidth: 0,
+                  borderBottomWidth: 0,
+                  borderLeftWidth: 0,
+                  borderRightWidth: 0
+                }}>
+            <Text variant="titleLarge">Clients</Text>
+            {stats.loading ? (
+              <ActivityIndicator size="small" />
+            ) : (
+              <Text variant="displayMedium">{stats.clientCount}</Text>
+            )}
+          </Card.Content>
+                <Card.Actions style={{ 
+                  borderTopWidth: 0, 
+                  borderWidth: 0,
+                  borderColor: 'transparent',
+                  borderBottomWidth: 0,
+                  borderLeftWidth: 0,
+                  borderRightWidth: 0,
+                  backgroundColor: '#E0F7FA', // Light teal
+                }}>
+                  <Button onPress={() => window.location.href = '/clients'}>View All</Button>
+          </Card.Actions>
+        </Card>
+        
+              <Card style={[styles.statsCard, { 
+                backgroundColor: '#E8F5E9', // Light green for Active Jobs
+                elevation: 0, 
+                shadowOpacity: 0, 
+                borderWidth: 0, 
+                borderRadius: 12,
+                borderColor: 'transparent',
+                shadowColor: 'transparent',
+                shadowOffset: { width: 0, height: 0 },
+                shadowRadius: 0,
+                margin: 0,
+                padding: 0,
+                overflow: 'hidden'
+              }]}>
+                <Card.Content style={{ 
+                  backgroundColor: '#E8F5E9', // Light green
+                  borderWidth: 0, 
+                  borderColor: 'transparent',
+                  borderTopWidth: 0,
+                  borderBottomWidth: 0,
+                  borderLeftWidth: 0,
+                  borderRightWidth: 0
+                }}>
+            <Text variant="titleLarge">Active Jobs</Text>
+            {stats.loading ? (
+              <ActivityIndicator size="small" />
+            ) : (
+              <Text variant="displayMedium">{stats.activeJobsCount}</Text>
+            )}
+          </Card.Content>
+                <Card.Actions style={{ 
+                  borderTopWidth: 0, 
+                  borderWidth: 0,
+                  borderColor: 'transparent',
+                  borderBottomWidth: 0,
+                  borderLeftWidth: 0,
+                  borderRightWidth: 0,
+                  backgroundColor: '#E8F5E9', // Light green
+                }}>
+                  <Button onPress={() => window.location.href = '/jobs'}>View All</Button>
+          </Card.Actions>
+        </Card>
       </View>
       
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" />
-          <Text>Loading dashboard data...</Text>
-          <Button 
-            mode="text" 
-            onPress={forceRender} 
-            style={{ marginTop: 20 }}
-          >
-            Show Data Anyway
-          </Button>
-        </View>
-      ) : error ? (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-          <Button mode="contained" onPress={handleRetry} style={styles.retryButton}>
-            Retry
-          </Button>
-        </View>
-      ) : (
-        <>
-          <View style={styles.statsContainer}>
-            <Card style={styles.statsCard}>
-              <Card.Content>
-                <Text variant="titleLarge">Clients</Text>
-                {stats.loading ? (
-                  <ActivityIndicator size="small" />
-                ) : (
-                  <Text variant="displayMedium">{stats.clientCount}</Text>
-                )}
-              </Card.Content>
-              <Card.Actions>
-                <Button onPress={() => window.location.href = '/clients'}>View All</Button>
-              </Card.Actions>
-            </Card>
-            
-            <Card style={styles.statsCard}>
-              <Card.Content>
-                <Text variant="titleLarge">Active Jobs</Text>
-                {stats.loading ? (
-                  <ActivityIndicator size="small" />
-                ) : (
-                  <Text variant="displayMedium">{stats.activeJobsCount}</Text>
-                )}
-              </Card.Content>
-              <Card.Actions>
-                <Button onPress={() => window.location.href = '/jobs'}>View All</Button>
-              </Card.Actions>
-            </Card>
-          </View>
-          
-          <View style={styles.statsContainer}>
-            <Card style={styles.statsCard}>
-              <Card.Content>
-                <Text variant="titleLarge">Pending Invoices</Text>
-                {stats.loading ? (
-                  <ActivityIndicator size="small" />
-                ) : (
-                  <Text variant="displayMedium">{stats.pendingInvoicesCount}</Text>
-                )}
-              </Card.Content>
-              <Card.Actions>
-                <Button onPress={() => window.location.href = '/invoices'}>View All</Button>
-              </Card.Actions>
-            </Card>
-            
-            <Card style={styles.statsCard}>
-              <Card.Content>
-                <Text variant="titleLarge">Low Stock Items</Text>
-                {stats.loading ? (
-                  <ActivityIndicator size="small" />
-                ) : (
-                  <Text variant="displayMedium">{stats.lowStockItemsCount}</Text>
-                )}
-              </Card.Content>
-              <Card.Actions>
-                <Button onPress={() => window.location.href = '/inventory'}>View All</Button>
-              </Card.Actions>
-            </Card>
-          </View>
-          
-          <Card style={styles.chartCard}>
-            <Card.Content>
-              <View style={styles.chartHeader}>
-                <Text variant="titleLarge" style={styles.sectionTitle}>Sales By Time</Text>
-                <Menu
-                  visible={timeRangeMenuVisible}
-                  onDismiss={() => setTimeRangeMenuVisible(false)}
-                  anchor={
-                    <Button 
-                      mode="outlined" 
-                      onPress={() => setTimeRangeMenuVisible(true)}
-                      icon="calendar-range"
-                      contentStyle={{ flexDirection: 'row-reverse' }}
+      <View style={styles.statsContainer}>
+              <Card style={[styles.statsCard, { 
+                backgroundColor: '#FFF9C4', // Light yellow for Pending Invoices
+                elevation: 0, 
+                shadowOpacity: 0, 
+                borderWidth: 0, 
+                borderRadius: 12,
+                borderColor: 'transparent',
+                shadowColor: 'transparent',
+                shadowOffset: { width: 0, height: 0 },
+                shadowRadius: 0,
+                margin: 0,
+                padding: 0,
+                overflow: 'hidden'
+              }]}>
+                <Card.Content style={{ 
+                  backgroundColor: '#FFF9C4', // Light yellow
+                  borderWidth: 0, 
+                  borderColor: 'transparent',
+                  borderTopWidth: 0,
+                  borderBottomWidth: 0,
+                  borderLeftWidth: 0,
+                  borderRightWidth: 0
+                }}>
+            <Text variant="titleLarge">Pending Invoices</Text>
+            {stats.loading ? (
+              <ActivityIndicator size="small" />
+            ) : (
+              <Text variant="displayMedium">{stats.pendingInvoicesCount}</Text>
+            )}
+          </Card.Content>
+                <Card.Actions style={{ 
+                  borderTopWidth: 0, 
+                  borderWidth: 0,
+                  borderColor: 'transparent',
+                  borderBottomWidth: 0,
+                  borderLeftWidth: 0,
+                  borderRightWidth: 0,
+                  backgroundColor: '#FFF9C4', // Light yellow
+                }}>
+                  <Button onPress={() => window.location.href = '/invoices'}>View All</Button>
+          </Card.Actions>
+        </Card>
+        
+              <Card style={[styles.statsCard, { 
+                backgroundColor: '#E1BEE7', // Light purple for Low Stock Items
+                elevation: 0, 
+                shadowOpacity: 0, 
+                borderWidth: 0, 
+                borderRadius: 12,
+                borderColor: 'transparent',
+                shadowColor: 'transparent',
+                shadowOffset: { width: 0, height: 0 },
+                shadowRadius: 0,
+                margin: 0,
+                padding: 0,
+                overflow: 'hidden'
+              }]}>
+                <Card.Content style={{ 
+                  backgroundColor: '#E1BEE7', // Light purple
+                  borderWidth: 0, 
+                  borderColor: 'transparent',
+                  borderTopWidth: 0,
+                  borderBottomWidth: 0,
+                  borderLeftWidth: 0,
+                  borderRightWidth: 0
+                }}>
+            <Text variant="titleLarge">Low Stock Items</Text>
+            {stats.loading ? (
+              <ActivityIndicator size="small" />
+            ) : (
+              <Text variant="displayMedium">{stats.lowStockItemsCount}</Text>
+            )}
+          </Card.Content>
+                <Card.Actions style={{ 
+                  borderTopWidth: 0, 
+                  borderWidth: 0,
+                  borderColor: 'transparent',
+                  borderBottomWidth: 0,
+                  borderLeftWidth: 0,
+                  borderRightWidth: 0,
+                  backgroundColor: '#E1BEE7', // Light purple
+                }}>
+                  <Button onPress={() => window.location.href = '/inventory'}>View All</Button>
+          </Card.Actions>
+        </Card>
+      </View>
+      
+            <Card style={[styles.chartCard, { 
+              backgroundColor: '#ffffff', 
+              elevation: 0, 
+              shadowOpacity: 0, 
+              borderWidth: 0,
+              borderRadius: 0, 
+              borderColor: 'transparent',
+              shadowColor: 'transparent',
+              shadowOffset: { width: 0, height: 0 },
+              shadowRadius: 0,
+              margin: 0,
+              padding: 0
+            }]}>
+              <Card.Content style={{ 
+                backgroundColor: '#ffffff',
+                borderWidth: 0, 
+                borderColor: 'transparent',
+                borderTopWidth: 0,
+                borderBottomWidth: 0,
+                borderLeftWidth: 0,
+                borderRightWidth: 0
+              }}>
+                <View style={[styles.chartHeader, { backgroundColor: '#ffffff' }]}>
+                  <Text variant="titleLarge" style={styles.sectionTitle}>Sales By Time</Text>
+                  <Menu
+                    visible={timeRangeMenuVisible}
+                    onDismiss={() => setTimeRangeMenuVisible(false)}
+                    anchor={
+                      <Button 
+                        mode="outlined" 
+                        onPress={() => setTimeRangeMenuVisible(true)}
+                        icon="calendar-range"
+                        contentStyle={{ flexDirection: 'row-reverse' }}
+                      >
+                        {getTimeRangeLabel(timeRange)}
+                      </Button>
+                    }
+                  >
+                    <Menu.Item 
+                      onPress={() => handleTimeRangeChange('year_to_date')} 
+                      title="This year to date" 
+                    />
+                    <Menu.Item 
+                      onPress={() => handleTimeRangeChange('last_6_months')} 
+                      title="Last 6 months" 
+                    />
+                    <Menu.Item 
+                      onPress={() => handleTimeRangeChange('last_12_months')} 
+                      title="Last 12 months" 
+                    />
+                    <Menu.Item 
+                      onPress={() => handleTimeRangeChange('all_time')} 
+                      title="All time" 
+                    />
+                  </Menu>
+                </View>
+                
+                <View style={{ marginTop: 16 }}>
+                  <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 8 }}>
+                    {formatCurrency(totalSales)}
+                  </Text>
+                  <Text style={{ color: '#666' }}>
+                    Total Sales ({getTimeRangeLabel(timeRange)})
+                  </Text>
+                </View>
+                
+                {/* Add status filter buttons */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 16, marginBottom: 8 }}>
+                  {['all', 'paid', 'draft', 'sent', 'overdue'].map(status => (
+                    <TouchableOpacity
+                      key={status}
+                      style={{
+                        backgroundColor: statusFilter === status ? getStatusColor(status) : '#ffffff',
+                        borderWidth: 0,
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        marginRight: 8,
+                        marginBottom: 8,
+                        borderRadius: 4,
+                      }}
+                      onPress={() => handleStatusFilterChange(status as InvoiceStatus)}
                     >
-                      {getTimeRangeLabel(timeRange)}
-                    </Button>
-                  }
-                >
-                  <Menu.Item 
-                    onPress={() => handleTimeRangeChange('year_to_date')} 
-                    title="This year to date" 
-                  />
-                  <Menu.Item 
-                    onPress={() => handleTimeRangeChange('last_6_months')} 
-                    title="Last 6 months" 
-                  />
-                  <Menu.Item 
-                    onPress={() => handleTimeRangeChange('last_12_months')} 
-                    title="Last 12 months" 
-                  />
-                  <Menu.Item 
-                    onPress={() => handleTimeRangeChange('all_time')} 
-                    title="All time" 
-                  />
-                </Menu>
-              </View>
-              
-              <View style={styles.statusFilterContainer}>
-                <Button 
-                  mode={statusFilter === 'all' ? 'contained' : 'outlined'}
-                  onPress={() => handleStatusFilterChange('all')}
-                  style={[styles.statusFilterButton, statusFilter === 'all' && styles.statusFilterButtonActive]}
-                  labelStyle={statusFilter === 'all' ? styles.statusFilterLabelActive : styles.statusFilterLabel}
-                  icon={statusFilter === 'all' ? 'check' : undefined}
-                >
-                  All
-                </Button>
-                <Button 
-                  mode={statusFilter === 'draft' ? 'contained' : 'outlined'}
-                  onPress={() => handleStatusFilterChange('draft')}
-                  style={[styles.statusFilterButton, statusFilter === 'draft' && styles.statusFilterButtonActive]}
-                  labelStyle={statusFilter === 'draft' ? styles.statusFilterLabelActive : styles.statusFilterLabel}
-                >
-                  Draft
-                </Button>
-                <Button 
-                  mode={statusFilter === 'sent' ? 'contained' : 'outlined'}
-                  onPress={() => handleStatusFilterChange('sent')}
-                  style={[styles.statusFilterButton, statusFilter === 'sent' && styles.statusFilterButtonActive]}
-                  labelStyle={statusFilter === 'sent' ? styles.statusFilterLabelActive : styles.statusFilterLabel}
-                >
-                  Sent
-                </Button>
-                <Button 
-                  mode={statusFilter === 'paid' ? 'contained' : 'outlined'}
-                  onPress={() => handleStatusFilterChange('paid')}
-                  style={[styles.statusFilterButton, statusFilter === 'paid' && styles.statusFilterButtonActive]}
-                  labelStyle={statusFilter === 'paid' ? styles.statusFilterLabelActive : styles.statusFilterLabel}
-                >
-                  Paid
-                </Button>
-                <Button 
-                  mode={statusFilter === 'overdue' ? 'contained' : 'outlined'}
-                  onPress={() => handleStatusFilterChange('overdue')}
-                  style={[styles.statusFilterButton, statusFilter === 'overdue' && styles.statusFilterButtonActive]}
-                  labelStyle={statusFilter === 'overdue' ? styles.statusFilterLabelActive : styles.statusFilterLabel}
-                >
-                  Overdue
-                </Button>
-              </View>
-              
-              <Divider style={styles.divider} />
-              
-              <View style={styles.totalContainer}>
-                <Text variant="bodyLarge" style={styles.totalLabel}>Total sales</Text>
-                <Text variant="headlineMedium" style={styles.totalAmount}>
-                  {formatCurrency(totalSales)}
-                </Text>
-              </View>
-              
-              {salesLoading ? (
-                <ActivityIndicator size="large" style={{ marginVertical: 40 }} />
-              ) : (
-                <View style={styles.salesContainer}>
-                  {chartData.labels.length > 0 ? (
-                    <View style={styles.chartContainer}>
-                      {renderStackedBarChart()}
-                      <Text style={styles.chartInstructions}>Tap on a bar segment to see invoice details</Text>
+                      <Text style={{ 
+                        color: statusFilter === status ? '#ffffff' : getStatusColor(status),
+                        fontWeight: 'bold',
+                      }}>
+                        {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                
+                <View style={{ marginTop: 16, marginBottom: 8 }}>
+                  {salesLoading ? (
+                    <View style={{ alignItems: 'center', padding: 40 }}>
+                      <ActivityIndicator size="large" />
+                      <Text style={{ marginTop: 16 }}>Loading sales data...</Text>
                     </View>
+                  ) : chartData.datasets.length === 0 ? (
+                    <Text style={{ textAlign: 'center', marginVertical: 40, fontSize: 16, color: '#666' }}>
+                      No sales data available for the selected time period.
+                    </Text>
                   ) : (
-                    <Text style={styles.noDataText}>No invoice data available for chart</Text>
+                    <>
+                      {renderStackedBarChart()}
+                      <Text style={{ textAlign: 'center', fontSize: 12, color: '#666', marginTop: 8 }}>
+                        Tap on a bar segment to see invoice details
+                      </Text>
+                    </>
                   )}
                 </View>
-              )}
-            </Card.Content>
-          </Card>
+              </Card.Content>
+            </Card>
+            
+            {/* Recent Activity Section */}
+            <Card style={[styles.chartCard, { 
+              backgroundColor: '#ffffff', 
+              elevation: 0, 
+              shadowOpacity: 0, 
+              borderWidth: 0,
+              borderRadius: 0, 
+              borderColor: 'transparent',
+              shadowColor: 'transparent',
+              shadowOffset: { width: 0, height: 0 },
+              shadowRadius: 0,
+              margin: 0,
+              padding: 0,
+              marginTop: 16
+            }]}>
+              <Card.Content style={{ 
+                backgroundColor: '#ffffff',
+                borderWidth: 0, 
+                borderColor: 'transparent',
+                borderTopWidth: 0,
+                borderBottomWidth: 0,
+                borderLeftWidth: 0,
+                borderRightWidth: 0
+              }}>
+                <View style={[styles.chartHeader, { backgroundColor: '#ffffff' }]}>
+          <Text variant="titleLarge" style={styles.sectionTitle}>Recent Activity</Text>
+                </View>
           
-          <Card style={styles.activityCard}>
-            <Card.Content>
-              <Text variant="titleLarge" style={styles.sectionTitle}>Recent Activity</Text>
-              
-              {activityLoading ? (
-                <ActivityIndicator size="large" style={{ marginTop: 20 }} />
-              ) : recentActivity.length === 0 ? (
-                <Text style={styles.emptyText}>No recent activity</Text>
-              ) : (
-                recentActivity.map((activity) => (
-                  <List.Item
-                    key={activity.id}
-                    title={activity.title}
-                    description={activity.subtitle}
-                    left={props => <List.Icon {...props} icon={getActivityIcon(activity.type)} />}
-                    right={props => <Text {...props} style={styles.activityDate}>{formatDate(activity.date)}</Text>}
-                    style={styles.activityItem}
-                  />
-                ))
-              )}
-            </Card.Content>
-          </Card>
-        </>
-      )}
-      <Snackbar
-        visible={snackbarVisible}
-        onDismiss={() => setSnackbarVisible(false)}
-        duration={3000}
-      >
-        {snackbarMessage}
-      </Snackbar>
+          {activityLoading ? (
+                  <View style={{ alignItems: 'center', padding: 40 }}>
+                    <ActivityIndicator size="large" />
+                    <Text style={{ marginTop: 16 }}>Loading activity data...</Text>
+                  </View>
+          ) : recentActivity.length === 0 ? (
+                  <Text style={{ textAlign: 'center', marginVertical: 40, fontSize: 16, color: '#666' }}>
+                    No recent activity to display.
+                  </Text>
+          ) : (
+                  <View style={{ marginTop: 8 }}>
+                    {recentActivity.map((activity) => (
+                      <View 
+                key={activity.id}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          paddingVertical: 12,
+                          borderBottomWidth: 1,
+                          borderBottomColor: '#f0f0f0',
+                        }}
+                      >
+                        <View style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 20,
+                          backgroundColor: '#f0f0f0',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          marginRight: 12,
+                        }}>
+                          <IconButton
+                            icon={getActivityIcon(activity.type)}
+                            size={20}
+                            style={{ margin: 0 }}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontWeight: 'bold', fontSize: 14 }}>{activity.title}</Text>
+                          <Text style={{ fontSize: 14 }}>{activity.subtitle}</Text>
+                          <Text style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                            {formatDate(activity.date)}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+          )}
+        </Card.Content>
+              <Card.Actions style={{ 
+                borderTopWidth: 0, 
+                borderWidth: 0,
+                borderColor: 'transparent',
+                borderBottomWidth: 0,
+                borderLeftWidth: 0,
+                borderRightWidth: 0
+              }}>
+                <Button onPress={() => window.location.href = '/activity'}>View All Activity</Button>
+              </Card.Actions>
+      </Card>
+          </>
+        )}
     </ScrollView>
+    </View>
   );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-    backgroundColor: '#f5f5f5',
-  },
-  title: {
-    marginBottom: 16,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    minHeight: 300,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    minHeight: 300,
-  },
-  errorText: {
-    color: 'red',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  retryButton: {
-    marginTop: 16,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  statsCard: {
-    width: '48%',
-  },
-  chartCard: {
-    marginBottom: 16,
-  },
-  chartHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  statusFilterContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 12,
-    marginBottom: 8,
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-  },
-  statusFilterButton: {
-    marginRight: 8,
-    marginBottom: 8,
-    borderRadius: 20,
-    backgroundColor: '#f0f0f0',
-    borderColor: '#e0e0e0',
-  },
-  statusFilterButtonActive: {
-    backgroundColor: '#6200ee',
-    borderColor: '#6200ee',
-  },
-  statusFilterLabel: {
-    fontSize: 12,
-    color: '#666',
-  },
-  statusFilterLabelActive: {
-    fontSize: 12,
-    color: 'white',
-  },
-  filterContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  filterButton: {
-    marginLeft: 8,
-  },
-  divider: {
-    marginVertical: 12,
-  },
-  totalContainer: {
-    marginBottom: 24,
-  },
-  totalLabel: {
-    color: '#666',
-    marginBottom: 4,
-  },
-  totalAmount: {
-    fontWeight: 'bold',
-  },
-  salesContainer: {
-    width: '100%',
-  },
-  chartContainer: {
-    width: '100%',
-    alignItems: 'center',
-  },
-  noDataText: {
-    textAlign: 'center',
-    marginVertical: 40,
-    fontSize: 16,
-    color: '#666',
-  },
-  sectionTitle: {
-    marginBottom: 0,
-  },
-  activityCard: {
-    marginBottom: 16,
-  },
-  activityItem: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  activityDate: {
-    fontSize: 12,
-    color: '#666',
-  },
-  emptyText: {
-    textAlign: 'center',
-    marginTop: 20,
-    marginBottom: 20,
-  },
-  stackedChartContainer: {
-    flexDirection: 'row',
-    height: 250,
-    marginTop: 20,
-    marginBottom: 10,
-  },
-  yAxisContainer: {
-    width: 50,
-    height: 220,
-    position: 'relative',
-  },
-  yAxisLabel: {
-    fontSize: 10,
-    color: '#666',
-    position: 'absolute',
-    right: 8,
-    textAlign: 'right',
-  },
-  chartMainArea: {
-    flex: 1,
-    height: 220,
-    position: 'relative',
-  },
-  gridLine: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: '#e0e0e0',
-  },
-  barsArea: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'flex-end',
-    height: '100%',
-    paddingTop: 10,
-  },
-  barAndLabelContainer: {
-    alignItems: 'center',
-    height: '100%',
-    justifyContent: 'flex-end',
-  },
-  barTouchable: {
-    height: '100%',
-    justifyContent: 'flex-end',
-  },
-  barContainer: {
-    justifyContent: 'flex-end',
-  },
-  barContent: {
-    flexDirection: 'column-reverse', // Stack from bottom to top
-  },
-  emptyBar: {
-    height: 0,
-  },
-  monthLabel: {
-    fontSize: 10,
-    color: '#666',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  chartOuterContainer: {
-    flexDirection: 'row',
-    width: '100%',
-    height: 280,
-    marginTop: 10,
-  },
-  chartInstructions: {
-    textAlign: 'center',
-    fontSize: 12,
-    color: '#666',
-    marginTop: 8,
-  },
-  modalContainer: {
-    backgroundColor: 'white',
-    margin: 20,
-    borderRadius: 8,
-    padding: 16,
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  modalContent: {
-    flex: 1,
-  },
-  invoiceItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  invoiceDetails: {
-    flex: 1,
-  },
-  invoiceNumber: {
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  invoiceDate: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-    marginTop: 4,
-  },
-  statusText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  invoiceAmount: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  legendContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 16,
-    marginBottom: 8,
-  },
-  legendColor: {
-    width: 12,
-    height: 12,
-    borderRadius: 2,
-    marginRight: 4,
-  },
-  legendText: {
-    fontSize: 12,
-    color: '#666',
-  },
-  calloutContainer: {
-    position: 'absolute',
-    width: 200,
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-    zIndex: 1000,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  calloutHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  calloutTitle: {
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  calloutClose: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#666',
-  },
-  calloutContent: {
-    marginTop: 4,
-  },
-  calloutInvoice: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  calloutInvoiceNumber: {
-    fontSize: 12,
-  },
-  calloutInvoiceAmount: {
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  calloutMoreText: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
-    marginTop: 4,
-  },
-}); 
+} 

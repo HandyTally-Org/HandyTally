@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { Text, Button, Searchbar, Card, DataTable, Chip, IconButton, Dialog, Portal, Snackbar, TextInput, RadioButton } from 'react-native-paper';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { Text, Button, Searchbar, Card, DataTable, Chip, IconButton, Dialog, Portal, Snackbar, TextInput, RadioButton, ActivityIndicator, Tooltip } from 'react-native-paper';
 import { supabase } from '../../lib/api';
 import { styles as globalStyles } from '../../styles';
 import { JobForm } from '../../components/JobForm';
+import { useRouter } from 'expo-router';
+import * as XLSX from 'xlsx';
 
 type Job = {
   uid: string;
@@ -15,6 +17,14 @@ type Job = {
   end_date: string;
   status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
   created_at: string;
+};
+
+type Client = {
+  uid: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
 };
 
 export default function JobsScreen() {
@@ -34,6 +44,8 @@ export default function JobsScreen() {
   const [sortColumn, setSortColumn] = useState<string>('name');
   const [sortDirection, setSortDirection] = useState<'ascending' | 'descending'>('ascending');
   const [showClientDropdown, setShowClientDropdown] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
 
   useEffect(() => {
     fetchJobs();
@@ -121,9 +133,8 @@ export default function JobsScreen() {
     }
   };
 
-  const handleEditJob = (job: Job) => {
-    setEditingJob({...job});
-    setShowEditDialog(true);
+  const handleEditJob = (job) => {
+    router.push(`/jobs/${job.uid}`);
   };
 
   const handleUpdateJob = async () => {
@@ -393,8 +404,266 @@ export default function JobsScreen() {
     return text;
   };
 
+  // Export functionality
+  const handleExport = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch jobs data
+      const { data: jobsData, error: jobsError } = await supabase
+        .from('jobs')
+        .select(`
+          *,
+          clients:client_id (name)
+        `);
+      
+      if (jobsError) throw jobsError;
+      
+      // Fetch job_costs data
+      const { data: jobCostsData, error: jobCostsError } = await supabase
+        .from('job_costs')
+        .select('*');
+      
+      if (jobCostsError) throw jobCostsError;
+      
+      // Fetch job_attachments data
+      const { data: jobAttachmentsData, error: jobAttachmentsError } = await supabase
+        .from('job_attachments')
+        .select('*');
+      
+      if (jobAttachmentsError) throw jobAttachmentsError;
+      
+      // Transform jobs data for export
+      const jobsForExport = jobsData.map(job => ({
+        uid: job.uid,
+        title: job.title,
+        description: job.description || '',
+        client_id: job.client_id,
+        client_name: job.clients?.name || '',
+        start_date: job.start_date || '',
+        end_date: job.end_date || '',
+        status: job.status || '',
+        created_at: job.created_at || '',
+        delete: 'n'  // Default to 'n' (don't delete)
+      }));
+      
+      // Create a new workbook
+      const wb = XLSX.utils.book_new();
+      
+      // Add jobs sheet
+      const jobsWs = XLSX.utils.json_to_sheet(jobsForExport);
+      XLSX.utils.book_append_sheet(wb, jobsWs, "Jobs");
+      
+      // Set column widths for jobs sheet
+      const jobsCols = [
+        { wch: 36 }, // uid
+        { wch: 30 }, // title
+        { wch: 40 }, // description
+        { wch: 36 }, // client_id
+        { wch: 30 }, // client_name
+        { wch: 15 }, // start_date
+        { wch: 15 }, // end_date
+        { wch: 15 }, // status
+        { wch: 25 }, // created_at
+        { wch: 10 }  // delete
+      ];
+      jobsWs['!cols'] = jobsCols;
+      
+      // Add job_costs sheet
+      const jobCostsWs = XLSX.utils.json_to_sheet(jobCostsData || []);
+      XLSX.utils.book_append_sheet(wb, jobCostsWs, "Job Costs");
+      
+      // Set column widths for job_costs sheet
+      const jobCostsCols = [
+        { wch: 36 }, // uid
+        { wch: 36 }, // job_id
+        { wch: 25 }, // description
+        { wch: 15 }, // amount
+        { wch: 15 }, // date
+        { wch: 20 }, // category
+        { wch: 25 }  // created_at
+      ];
+      jobCostsWs['!cols'] = jobCostsCols;
+      
+      // Add job_attachments sheet
+      const jobAttachmentsWs = XLSX.utils.json_to_sheet(jobAttachmentsData || []);
+      XLSX.utils.book_append_sheet(wb, jobAttachmentsWs, "Job Attachments");
+      
+      // Set column widths for job_attachments sheet
+      const jobAttachmentsCols = [
+        { wch: 36 }, // uid
+        { wch: 36 }, // job_id
+        { wch: 40 }, // file_name
+        { wch: 50 }, // file_url
+        { wch: 20 }, // file_type
+        { wch: 15 }, // file_size
+        { wch: 25 }  // created_at
+      ];
+      jobAttachmentsWs['!cols'] = jobAttachmentsCols;
+      
+      // Generate Excel file
+      XLSX.writeFile(wb, "jobs.xlsx");
+      
+      showSnackbar('Jobs data exported successfully');
+    } catch (error) {
+      console.error('Error exporting jobs data:', error);
+      showSnackbar('Error exporting jobs data');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Import functionality
+  const handleImportClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+  
+  const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      const files = event.target.files;
+      if (!files || files.length === 0) return;
+      
+      const file = files[0];
+      const reader = new FileReader();
+      
+      reader.onload = async (e) => {
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: 'array' });
+          
+          // Process Jobs sheet
+          const jobsSheetName = workbook.SheetNames.find(name => 
+            name.toLowerCase() === 'jobs' || name.toLowerCase() === 'job'
+          );
+          
+          if (!jobsSheetName) {
+            showSnackbar('Error: Jobs sheet not found in the Excel file');
+            return;
+          }
+          
+          const jobsSheet = workbook.Sheets[jobsSheetName];
+          const jobsData = XLSX.utils.sheet_to_json(jobsSheet);
+          
+          if (jobsData.length === 0) {
+            showSnackbar('No job data found in the Excel file');
+            return;
+          }
+          
+          // Confirm import
+          if (confirm(`Are you sure you want to import ${jobsData.length} jobs? This will update existing jobs and may delete jobs marked for deletion.`)) {
+            await importJobs(jobsData);
+          }
+        } catch (error) {
+          console.error('Error processing Excel file:', error);
+          showSnackbar('Error processing Excel file');
+        }
+      };
+      
+      reader.readAsArrayBuffer(file);
+      
+      // Reset the file input
+      if (event.target) {
+        event.target.value = '';
+      }
+    } catch (error) {
+      console.error('Error selecting file:', error);
+      showSnackbar('Error selecting file');
+    }
+  };
+  
+  const importJobs = async (data: any[]) => {
+    try {
+      setLoading(true);
+      
+      let addedCount = 0;
+      let updatedCount = 0;
+      let deletedCount = 0;
+      let errorCount = 0;
+      
+      // Process each job
+      for (const job of data) {
+        try {
+          // Check if job should be deleted
+          if (job.delete && (job.delete.toString().toLowerCase() === 'y' || job.delete.toString().toLowerCase() === 'yes')) {
+            if (job.uid) {
+              const { error } = await supabase
+                .from('jobs')
+                .delete()
+                .eq('uid', job.uid);
+              
+              if (error) {
+                console.error('Error deleting job:', error);
+                errorCount++;
+              } else {
+                deletedCount++;
+              }
+            }
+            continue;
+          }
+          
+          // Prepare job data
+          const jobData = {
+            title: job.title || '',
+            description: job.description || '',
+            client_id: job.client_id || null,
+            start_date: job.start_date || null,
+            end_date: job.end_date || null,
+            status: job.status || 'pending'
+          };
+          
+          if (job.uid) {
+            // Update existing job
+            const { error } = await supabase
+              .from('jobs')
+              .update(jobData)
+              .eq('uid', job.uid);
+            
+            if (error) {
+              console.error('Error updating job:', error);
+              errorCount++;
+            } else {
+              updatedCount++;
+            }
+          } else {
+            // Add new job
+            const { error } = await supabase
+              .from('jobs')
+              .insert([jobData]);
+            
+            if (error) {
+              console.error('Error adding job:', error);
+              errorCount++;
+            } else {
+              addedCount++;
+            }
+          }
+        } catch (jobError) {
+          console.error('Error processing job:', jobError);
+          errorCount++;
+        }
+      }
+      
+      // Refresh jobs list
+      await fetchJobs();
+      
+      // Show results
+      showSnackbar(`Import complete: ${addedCount} added, ${updatedCount} updated, ${deletedCount} deleted, ${errorCount} errors`);
+    } catch (error) {
+      console.error('Error importing jobs:', error);
+      showSnackbar('Error importing jobs');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <View style={styles.container}>
+    <View style={{
+      flex: 1,
+      padding: 16,
+      backgroundColor: '#ffffff',
+    }}>
       <Text style={{
         fontFamily: 'System',
         fontSize: 26,
@@ -408,17 +677,113 @@ export default function JobsScreen() {
           placeholder="Search jobs..."
           onChangeText={setSearchQuery}
           value={searchQuery}
-          style={styles.searchBar}
+          style={[styles.searchBar, { backgroundColor: '#f5f5f5' }]}
         />
         
+        <View style={{ 
+          flexDirection: 'row', 
+          alignItems: 'center',
+          height: 40 // Set a fixed height to ensure vertical alignment
+        }}>
         <Button
           mode="contained"
-          onPress={() => setShowAddForm(true)}
-          style={styles.addButton}
+            onPress={() => setShowAddForm(true)}
+            style={[styles.addButton, { marginLeft: 16 }]}
         >
           Add New Job
         </Button>
+          
+          <View 
+            style={{ marginLeft: 8 }}
+            accessibilityLabel="Export"
+          >
+            <IconButton
+              icon="file-export"
+              mode="contained"
+              onPress={handleExport}
+              iconColor="#fff"
+              containerColor="#4CAF50"
+              size={20}
+              aria-label="Export"
+            />
+            {Platform.OS === 'web' && (
+              <div 
+                style={{ 
+                  position: 'absolute', 
+                  bottom: -30, 
+                  left: 0, 
+                  backgroundColor: '#333', 
+                  color: 'white', 
+                  padding: '4px 8px', 
+                  borderRadius: 4, 
+                  fontSize: 12,
+                  whiteSpace: 'nowrap',
+                  opacity: 0,
+                  transition: 'opacity 0.2s',
+                  pointerEvents: 'none'
+                }}
+                className="tooltip"
+              >
+                Export
+              </div>
+            )}
+          </View>
+          
+          <View 
+            style={{ marginLeft: 8 }}
+            accessibilityLabel="Import"
+          >
+            <IconButton
+              icon="file-import"
+              mode="contained"
+              onPress={() => {
+                // Explicitly trigger the file input click
+                if (fileInputRef.current) {
+                  fileInputRef.current.click();
+                } else {
+                  console.error("File input ref is null");
+                  alert("Could not open file selector. Please try again.");
+                }
+              }}
+              iconColor="#fff"
+              containerColor="#2196F3"
+              size={20}
+              aria-label="Import"
+            />
+            {Platform.OS === 'web' && (
+              <div 
+                style={{ 
+                  position: 'absolute', 
+                  bottom: -30, 
+                  left: 0, 
+                  backgroundColor: '#333', 
+                  color: 'white', 
+                  padding: '4px 8px', 
+                  borderRadius: 4, 
+                  fontSize: 12,
+                  whiteSpace: 'nowrap',
+                  opacity: 0,
+                  transition: 'opacity 0.2s',
+                  pointerEvents: 'none'
+                }}
+                className="tooltip"
+              >
+                Import
+              </div>
+            )}
+          </View>
+        </View>
       </View>
+      
+      {/* Hidden file input for Excel import */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileSelected}
+        accept=".xlsx,.xls"
+        style={{ display: 'none' }}
+        id="job-excel-import"
+      />
       
       <View style={styles.filtersContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll}>
@@ -470,8 +835,8 @@ export default function JobsScreen() {
       </View>
       
       <Card style={styles.tableCard}>
-        <DataTable>
-          <DataTable.Header>
+        <DataTable style={{ backgroundColor: '#ffffff' }}>
+          <DataTable.Header style={{ backgroundColor: '#ffffff' }}>
             <DataTable.Title 
               onPress={() => handleSort('title')}
               sortDirection={sortColumn === 'title' ? sortDirection : undefined}
@@ -506,22 +871,25 @@ export default function JobsScreen() {
           </DataTable.Header>
           
           {loading ? (
-            <DataTable.Row>
-              <DataTable.Cell style={{ flex: 6 }}>Loading jobs...</DataTable.Cell>
+            <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
+              <DataTable.Cell style={{ flex: 6 }}>
+                <ActivityIndicator size="small" style={{ marginRight: 8 }} />
+                Loading jobs...
+              </DataTable.Cell>
             </DataTable.Row>
           ) : getFilteredJobs().length === 0 ? (
-            <DataTable.Row>
+            <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
               <DataTable.Cell style={{ flex: 6 }}>No jobs found</DataTable.Cell>
             </DataTable.Row>
           ) : (
             getFilteredJobs().map(job => (
-              <DataTable.Row key={job.uid}>
-                <DataTable.Cell>{job.title}</DataTable.Cell>
-                <DataTable.Cell>{job.client_name}</DataTable.Cell>
-                <DataTable.Cell>{getStatusChip(job.status)}</DataTable.Cell>
-                <DataTable.Cell>{formatDate(job.start_date)}</DataTable.Cell>
-                <DataTable.Cell>{formatDate(job.end_date)}</DataTable.Cell>
-                <DataTable.Cell>
+              <DataTable.Row key={job.uid} style={{ backgroundColor: '#ffffff' }}>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{job.title}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{job.client_name}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{getStatusChip(job.status)}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(job.start_date)}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(job.end_date)}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
                   <View style={styles.actionButtons}>
                     <IconButton
                       icon="pencil"
@@ -780,6 +1148,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
+    backgroundColor: '#ffffff',
   },
   searchAndAddContainer: {
     flexDirection: 'row',
@@ -789,6 +1158,7 @@ const styles = StyleSheet.create({
   searchBar: {
     flex: 1,
     marginRight: 16,
+    backgroundColor: '#ffffff',
   },
   addButton: {
     marginLeft: 8,
@@ -805,6 +1175,13 @@ const styles = StyleSheet.create({
   },
   tableCard: {
     flex: 1,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    elevation: 2,
+    shadowColor: 'rgba(0,0,0,0.1)',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.8,
+    shadowRadius: 1,
   },
   actionButtons: {
     flexDirection: 'row',
@@ -903,5 +1280,8 @@ const styles = StyleSheet.create({
       default:
         return '#FFFFFF';
     }
+  },
+  jobName: {
+    color: 'black',
   },
 }); 

@@ -618,296 +618,354 @@ export default function MaterialsScreen() {
             fontWeight: '600',
             marginBottom: 16,
             color: '#333333',
-            backgroundColor: '#ffffff',
           }}>Inventory</Text>
           
           <View style={{
             flexDirection: 'row',
             marginBottom: 16,
             alignItems: 'center',
-            backgroundColor: '#ffffff',
           }}>
             <Searchbar
-              placeholder="Search materials..."
-              style={{
-                flex: 1,
-                marginRight: 16,
-                backgroundColor: '#ffffff',
-                borderWidth: 1,
-                borderColor: '#e0e0e0',
-              }}
-              inputStyle={{ backgroundColor: '#ffffff' }}
-              iconColor="#333333"
+              placeholder="Search inventory..."
               onChangeText={setSearchQuery}
               value={searchQuery}
+              style={[{
+                flex: 1,
+                marginRight: 16,
+                backgroundColor: '#f5f5f5'
+              }]}
             />
             
-            <Button
-              mode="contained"
-              onPress={() => setShowAddForm(true)}
-              style={{ minWidth: 150 }}
-            >
-              Add New Material
-            </Button>
-            
-            <IconButton
-              icon="file-export"
-              mode="contained"
-              onPress={handleExport}
-              iconColor="#fff"
-              containerColor="#4CAF50"
-              size={20}
-            />
-            
-            <IconButton
-              icon="file-import"
-              mode="contained"
-              onPress={handleImportClick}
-              iconColor="#fff"
-              containerColor="#2196F3"
-              size={20}
-              style={{ marginLeft: 8 }}
-            />
-            
-            {/* Hidden file input for import */}
-            {Platform.OS === 'web' && (
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileSelected}
-                accept=".xlsx,.xls"
-                style={{ display: 'none' }}
-                id="material-import-input"
-              />
-            )}
+            <View style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center',
+              height: 40 // Set a fixed height to ensure vertical alignment
+            }}>
+              <Button
+                mode="contained"
+                onPress={() => setShowAddForm(true)}
+                style={[{ marginLeft: 16, minWidth: 150 }]}
+              >
+                Add New Inventory
+              </Button>
+
+              <View 
+                style={{ marginLeft: 8 }}
+                accessibilityLabel="Export"
+              >
+                <IconButton
+                  icon="file-export"
+                  mode="contained"
+                  onPress={handleExport}
+                  iconColor="#fff"
+                  containerColor="#4CAF50"
+                  size={20}
+                  aria-label="Export"
+                />
+                {Platform.OS === 'web' && (
+                  <div 
+                    style={{ 
+                      position: 'absolute', 
+                      bottom: -30, 
+                      left: 0, 
+                      backgroundColor: '#333', 
+                      color: 'white', 
+                      padding: '4px 8px', 
+                      borderRadius: 4, 
+                      fontSize: 12,
+                      whiteSpace: 'nowrap',
+                      opacity: 0,
+                      transition: 'opacity 0.2s',
+                      pointerEvents: 'none'
+                    }}
+                    className="tooltip"
+                  >
+                    Export
+                  </div>
+                )}
+              </View>
+              
+              <View 
+                style={{ marginLeft: 8 }}
+                accessibilityLabel="Import"
+              >
+                <IconButton
+                  icon="file-import"
+                  mode="contained"
+                  onPress={() => {
+                    if (fileInputRef.current) {
+                      fileInputRef.current.click();
+                    } else {
+                      console.error("File input ref is null");
+                      alert("Could not open file selector. Please try again.");
+                    }
+                  }}
+                  iconColor="#fff"
+                  containerColor="#2196F3"
+                  size={20}
+                  aria-label="Import"
+                />
+                {Platform.OS === 'web' && (
+                  <div 
+                    style={{ 
+                      position: 'absolute', 
+                      bottom: -30, 
+                      left: 0, 
+                      backgroundColor: '#333', 
+                      color: 'white', 
+                      padding: '4px 8px', 
+                      borderRadius: 4, 
+                      fontSize: 12,
+                      whiteSpace: 'nowrap',
+                      opacity: 0,
+                      transition: 'opacity 0.2s',
+                      pointerEvents: 'none'
+                    }}
+                    className="tooltip"
+                  >
+                    Import
+                  </div>
+                )}
+              </View>
+            </View>
+          </View>
+          
+          {/* Hidden file input for Excel import */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileSelected}
+            accept=".xlsx,.xls"
+            style={{ display: 'none' }}
+            id="inventory-excel-import"
+          />
+          
+          <View style={{
+            flex: 1,
+            margin: 16,
+            marginTop: 0,
+            backgroundColor: '#ffffff',
+          }}>
+            <Card style={{
+              backgroundColor: '#ffffff',
+              borderRadius: 8,
+              elevation: 2,
+              shadowColor: 'rgba(0,0,0,0.1)',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.8,
+              shadowRadius: 1,
+            }}>
+              <Card.Content style={{ backgroundColor: '#ffffff', padding: 0 }}>
+                <DataTable style={{ backgroundColor: '#ffffff' }}>
+                  <DataTable.Header style={{ backgroundColor: '#ffffff' }}>
+                    <DataTable.Title 
+                      style={{ backgroundColor: '#ffffff' }}
+                      sortDirection={sortColumn === 'name' ? sortDirection : undefined}
+                      onPress={() => handleSort('name')}
+                    >
+                      <Text style={{ backgroundColor: '#ffffff' }}>Name</Text>
+                    </DataTable.Title>
+                    <DataTable.Title 
+                      style={{ backgroundColor: '#ffffff' }}
+                      sortDirection={sortColumn === 'description' ? sortDirection : undefined}
+                      onPress={() => handleSort('description')}
+                    >
+                      <Text style={{ backgroundColor: '#ffffff' }}>Description</Text>
+                    </DataTable.Title>
+                    <DataTable.Title 
+                      style={{ backgroundColor: '#ffffff' }}
+                      sortDirection={sortColumn === 'cost' ? sortDirection : undefined}
+                      onPress={() => handleSort('cost')}
+                    >
+                      <Text style={{ backgroundColor: '#ffffff' }}>Cost</Text>
+                    </DataTable.Title>
+                    <DataTable.Title 
+                      style={{ backgroundColor: '#ffffff' }}
+                      sortDirection={sortColumn === 'supplier' ? sortDirection : undefined}
+                      onPress={() => handleSort('supplier')}
+                    >
+                      <Text style={{ backgroundColor: '#ffffff' }}>Supplier</Text>
+                    </DataTable.Title>
+                    <DataTable.Title 
+                      style={{ backgroundColor: '#ffffff' }}
+                      sortDirection={sortColumn === 'category' ? sortDirection : undefined}
+                      onPress={() => handleSort('category')}
+                    >
+                      <Text style={{ backgroundColor: '#ffffff' }}>Category</Text>
+                    </DataTable.Title>
+                    <DataTable.Title style={{ backgroundColor: '#ffffff' }}>
+                      <Text style={{ backgroundColor: '#ffffff' }}>Actions</Text>
+                    </DataTable.Title>
+                  </DataTable.Header>
+
+                  {loading ? (
+                    <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
+                      <DataTable.Cell style={{ flex: 6, backgroundColor: '#ffffff' }}>
+                        <ActivityIndicator size="small" style={{ marginRight: 8 }} />
+                        <Text style={{ backgroundColor: '#ffffff' }}>Loading materials...</Text>
+                      </DataTable.Cell>
+                    </DataTable.Row>
+                  ) : getFilteredMaterials().length === 0 ? (
+                    <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
+                      <DataTable.Cell style={{ flex: 6, backgroundColor: '#ffffff' }}>
+                        <Text style={{ backgroundColor: '#ffffff' }}>No materials found</Text>
+                      </DataTable.Cell>
+                    </DataTable.Row>
+                  ) : (
+                    getFilteredMaterials().map(material => (
+                      <DataTable.Row key={material.uid} style={{ backgroundColor: '#ffffff' }}>
+                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
+                          <Text style={{ backgroundColor: '#ffffff' }}>{material.name}</Text>
+                        </DataTable.Cell>
+                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
+                          <Text style={{ backgroundColor: '#ffffff' }}>{material.description}</Text>
+                        </DataTable.Cell>
+                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
+                          <Text style={{ backgroundColor: '#ffffff' }}>${material.cost.toFixed(2)}</Text>
+                        </DataTable.Cell>
+                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
+                          <Text style={{ backgroundColor: '#ffffff' }}>{material.supplier}</Text>
+                        </DataTable.Cell>
+                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
+                          <Text style={{ backgroundColor: '#ffffff' }}>{material.category}</Text>
+                        </DataTable.Cell>
+                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
+                          <View style={{ flexDirection: 'row', backgroundColor: '#ffffff' }}>
+                            <IconButton
+                              icon="pencil"
+                              size={20}
+                              onPress={() => setEditingMaterial(material)}
+                              style={{ backgroundColor: '#ffffff' }}
+                            />
+                            <IconButton
+                              icon="delete"
+                              size={20}
+                              iconColor="red"
+                              onPress={() => handleDeleteMaterial(material.uid)}
+                              style={{ backgroundColor: '#ffffff' }}
+                            />
+                          </View>
+                        </DataTable.Cell>
+                      </DataTable.Row>
+                    ))
+                  )}
+                </DataTable>
+              </Card.Content>
+            </Card>
           </View>
         </View>
         
-        <View style={{
-          flex: 1,
-          margin: 16,
-          marginTop: 0,
-          backgroundColor: '#ffffff',
-        }}>
-          <Card style={{
-            backgroundColor: '#ffffff',
-            borderRadius: 8,
-            elevation: 2,
-            shadowColor: 'rgba(0,0,0,0.1)',
-            shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: 0.8,
-            shadowRadius: 1,
-          }}>
-            <Card.Content style={{ backgroundColor: '#ffffff', padding: 0 }}>
-              <DataTable style={{ backgroundColor: '#ffffff' }}>
-                <DataTable.Header style={{ backgroundColor: '#ffffff' }}>
-                  <DataTable.Title 
-                    style={{ backgroundColor: '#ffffff' }}
-                    sortDirection={sortColumn === 'name' ? sortDirection : undefined}
-                    onPress={() => handleSort('name')}
-                  >
-                    <Text style={{ backgroundColor: '#ffffff' }}>Name</Text>
-                  </DataTable.Title>
-                  <DataTable.Title 
-                    style={{ backgroundColor: '#ffffff' }}
-                    sortDirection={sortColumn === 'description' ? sortDirection : undefined}
-                    onPress={() => handleSort('description')}
-                  >
-                    <Text style={{ backgroundColor: '#ffffff' }}>Description</Text>
-                  </DataTable.Title>
-                  <DataTable.Title 
-                    style={{ backgroundColor: '#ffffff' }}
-                    sortDirection={sortColumn === 'cost' ? sortDirection : undefined}
-                    onPress={() => handleSort('cost')}
-                  >
-                    <Text style={{ backgroundColor: '#ffffff' }}>Cost</Text>
-                  </DataTable.Title>
-                  <DataTable.Title 
-                    style={{ backgroundColor: '#ffffff' }}
-                    sortDirection={sortColumn === 'supplier' ? sortDirection : undefined}
-                    onPress={() => handleSort('supplier')}
-                  >
-                    <Text style={{ backgroundColor: '#ffffff' }}>Supplier</Text>
-                  </DataTable.Title>
-                  <DataTable.Title 
-                    style={{ backgroundColor: '#ffffff' }}
-                    sortDirection={sortColumn === 'category' ? sortDirection : undefined}
-                    onPress={() => handleSort('category')}
-                  >
-                    <Text style={{ backgroundColor: '#ffffff' }}>Category</Text>
-                  </DataTable.Title>
-                  <DataTable.Title style={{ backgroundColor: '#ffffff' }}>
-                    <Text style={{ backgroundColor: '#ffffff' }}>Actions</Text>
-                  </DataTable.Title>
-                </DataTable.Header>
-                
-                {loading ? (
-                  <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
-                    <DataTable.Cell style={{ flex: 6, backgroundColor: '#ffffff' }}>
-                      <ActivityIndicator size="small" style={{ marginRight: 8 }} />
-                      <Text style={{ backgroundColor: '#ffffff' }}>Loading materials...</Text>
-                    </DataTable.Cell>
-                  </DataTable.Row>
-                ) : getFilteredMaterials().length === 0 ? (
-                  <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
-                    <DataTable.Cell style={{ flex: 6, backgroundColor: '#ffffff' }}>
-                      <Text style={{ backgroundColor: '#ffffff' }}>No materials found</Text>
-                    </DataTable.Cell>
-                  </DataTable.Row>
-                ) : (
-                  getFilteredMaterials().map(material => (
-                    <DataTable.Row key={material.uid} style={{ backgroundColor: '#ffffff' }}>
-                      <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
-                        <Text style={{ backgroundColor: '#ffffff' }}>{material.name}</Text>
-                      </DataTable.Cell>
-                      <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
-                        <Text style={{ backgroundColor: '#ffffff' }}>{material.description}</Text>
-                      </DataTable.Cell>
-                      <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
-                        <Text style={{ backgroundColor: '#ffffff' }}>${material.cost.toFixed(2)}</Text>
-                      </DataTable.Cell>
-                      <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
-                        <Text style={{ backgroundColor: '#ffffff' }}>{material.supplier}</Text>
-                      </DataTable.Cell>
-                      <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
-                        <Text style={{ backgroundColor: '#ffffff' }}>{material.category}</Text>
-                      </DataTable.Cell>
-                      <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
-                        <View style={{ flexDirection: 'row', backgroundColor: '#ffffff' }}>
-                          <IconButton
-                            icon="pencil"
-                            size={20}
-                            onPress={() => setEditingMaterial(material)}
-                            style={{ backgroundColor: '#ffffff' }}
-                          />
-                          <IconButton
-                            icon="delete"
-                            size={20}
-                            iconColor="red"
-                            onPress={() => handleDeleteMaterial(material.uid)}
-                            style={{ backgroundColor: '#ffffff' }}
-                          />
-                        </View>
-                      </DataTable.Cell>
-                    </DataTable.Row>
-                  ))
-                )}
-              </DataTable>
-            </Card.Content>
-          </Card>
-        </View>
+        {/* Add Material Dialog */}
+        <Portal>
+          <Dialog visible={showAddForm} onDismiss={() => setShowAddForm(false)} style={{ backgroundColor: '#ffffff' }}>
+            <Dialog.Title style={{ backgroundColor: '#ffffff' }}>Add New Material</Dialog.Title>
+            <Dialog.Content style={{ backgroundColor: '#ffffff' }}>
+              <TextInput
+                label="Name"
+                value={editingMaterial?.name || ''}
+                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), name: text } as any)}
+                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
+              />
+              <TextInput
+                label="Description"
+                value={editingMaterial?.description || ''}
+                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), description: text } as any)}
+                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
+              />
+              <TextInput
+                label="Cost"
+                value={editingMaterial?.cost?.toString() || ''}
+                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), cost: parseFloat(text) } as any)}
+                keyboardType="numeric"
+                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
+              />
+              <TextInput
+                label="Supplier"
+                value={editingMaterial?.supplier || ''}
+                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), supplier: text } as any)}
+                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
+              />
+              <TextInput
+                label="Category"
+                value={editingMaterial?.category || ''}
+                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), category: text } as any)}
+                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
+              />
+            </Dialog.Content>
+            <Dialog.Actions style={{ backgroundColor: '#ffffff' }}>
+              <Button onPress={() => setShowAddForm(false)}>Cancel</Button>
+              <Button onPress={() => handleAddMaterial(editingMaterial)}>Add</Button>
+            </Dialog.Actions>
+          </Dialog>
+        </Portal>
+        
+        {/* Edit Material Dialog */}
+        <Portal>
+          <Dialog visible={editingMaterial !== null} onDismiss={() => setEditingMaterial(null)} style={{ backgroundColor: '#ffffff' }}>
+            <Dialog.Title style={{ backgroundColor: '#ffffff' }}>Edit Material</Dialog.Title>
+            <Dialog.Content style={{ backgroundColor: '#ffffff' }}>
+              <TextInput
+                label="Name"
+                value={editingMaterial?.name || ''}
+                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), name: text } as any)}
+                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
+              />
+              <TextInput
+                label="Description"
+                value={editingMaterial?.description || ''}
+                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), description: text } as any)}
+                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
+              />
+              <TextInput
+                label="Cost"
+                value={editingMaterial?.cost?.toString() || ''}
+                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), cost: parseFloat(text) } as any)}
+                keyboardType="numeric"
+                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
+              />
+              <TextInput
+                label="Supplier"
+                value={editingMaterial?.supplier || ''}
+                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), supplier: text } as any)}
+                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
+              />
+              <TextInput
+                label="Category"
+                value={editingMaterial?.category || ''}
+                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), category: text } as any)}
+                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
+              />
+            </Dialog.Content>
+            <Dialog.Actions style={{ backgroundColor: '#ffffff' }}>
+              <Button onPress={() => setEditingMaterial(null)}>Cancel</Button>
+              <Button onPress={() => handleUpdateMaterial(editingMaterial?.uid || '', editingMaterial || {})}>Update</Button>
+            </Dialog.Actions>
+          </Dialog>
+        </Portal>
+        
+        {/* Delete Material Dialog */}
+        <Portal>
+          <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)} style={{ backgroundColor: '#ffffff' }}>
+            <Dialog.Title style={{ backgroundColor: '#ffffff' }}>Delete Material</Dialog.Title>
+            <Dialog.Content style={{ backgroundColor: '#ffffff' }}>
+              <Text style={{ backgroundColor: '#ffffff' }}>Are you sure you want to delete {editingMaterial?.name}?</Text>
+              <Text style={{ backgroundColor: '#ffffff' }}>This action cannot be undone.</Text>
+            </Dialog.Content>
+            <Dialog.Actions style={{ backgroundColor: '#ffffff' }}>
+              <Button onPress={() => setShowDeleteDialog(false)}>Cancel</Button>
+              <Button onPress={() => handleDeleteMaterial(editingMaterial?.uid || '')} textColor="red">Delete</Button>
+            </Dialog.Actions>
+          </Dialog>
+        </Portal>
+
+        <Snackbar
+          visible={snackbarVisible}
+          onDismiss={() => setSnackbarVisible(false)}
+          duration={3000}
+        >
+          {snackbarMessage}
+        </Snackbar>
       </View>
-      
-      {/* Add Material Dialog */}
-      <Portal>
-        <Dialog visible={showAddForm} onDismiss={() => setShowAddForm(false)} style={{ backgroundColor: '#ffffff' }}>
-          <Dialog.Title style={{ backgroundColor: '#ffffff' }}>Add New Material</Dialog.Title>
-          <Dialog.Content style={{ backgroundColor: '#ffffff' }}>
-            <TextInput
-              label="Name"
-              value={editingMaterial?.name || ''}
-              onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), name: text })}
-              style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-            />
-            <TextInput
-              label="Description"
-              value={editingMaterial?.description || ''}
-              onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), description: text })}
-              style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-            />
-            <TextInput
-              label="Cost"
-              value={editingMaterial?.cost?.toString() || ''}
-              onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), cost: parseFloat(text) })}
-              keyboardType="numeric"
-              style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-            />
-            <TextInput
-              label="Supplier"
-              value={editingMaterial?.supplier || ''}
-              onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), supplier: text })}
-              style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-            />
-            <TextInput
-              label="Category"
-              value={editingMaterial?.category || ''}
-              onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), category: text })}
-              style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-            />
-          </Dialog.Content>
-          <Dialog.Actions style={{ backgroundColor: '#ffffff' }}>
-            <Button onPress={() => setShowAddForm(false)}>Cancel</Button>
-            <Button onPress={() => handleAddMaterial(editingMaterial)}>Add</Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
-      
-      {/* Edit Material Dialog */}
-      <Portal>
-        <Dialog visible={editingMaterial !== null} onDismiss={() => setEditingMaterial(null)} style={{ backgroundColor: '#ffffff' }}>
-          <Dialog.Title style={{ backgroundColor: '#ffffff' }}>Edit Material</Dialog.Title>
-          <Dialog.Content style={{ backgroundColor: '#ffffff' }}>
-            <TextInput
-              label="Name"
-              value={editingMaterial?.name || ''}
-              onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), name: text })}
-              style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-            />
-            <TextInput
-              label="Description"
-              value={editingMaterial?.description || ''}
-              onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), description: text })}
-              style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-            />
-            <TextInput
-              label="Cost"
-              value={editingMaterial?.cost?.toString() || ''}
-              onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), cost: parseFloat(text) })}
-              keyboardType="numeric"
-              style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-            />
-            <TextInput
-              label="Supplier"
-              value={editingMaterial?.supplier || ''}
-              onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), supplier: text })}
-              style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-            />
-            <TextInput
-              label="Category"
-              value={editingMaterial?.category || ''}
-              onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), category: text })}
-              style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-            />
-          </Dialog.Content>
-          <Dialog.Actions style={{ backgroundColor: '#ffffff' }}>
-            <Button onPress={() => setEditingMaterial(null)}>Cancel</Button>
-            <Button onPress={() => handleUpdateMaterial(editingMaterial?.uid || '', editingMaterial || {})}>Update</Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
-      
-      {/* Delete Material Dialog */}
-      <Portal>
-        <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)} style={{ backgroundColor: '#ffffff' }}>
-          <Dialog.Title style={{ backgroundColor: '#ffffff' }}>Delete Material</Dialog.Title>
-          <Dialog.Content style={{ backgroundColor: '#ffffff' }}>
-            <Text style={{ backgroundColor: '#ffffff' }}>Are you sure you want to delete {editingMaterial?.name}?</Text>
-            <Text style={{ backgroundColor: '#ffffff' }}>This action cannot be undone.</Text>
-          </Dialog.Content>
-          <Dialog.Actions style={{ backgroundColor: '#ffffff' }}>
-            <Button onPress={() => setShowDeleteDialog(false)}>Cancel</Button>
-            <Button onPress={() => handleDeleteMaterial(editingMaterial?.uid || '')} textColor="red">Delete</Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
-      
-      <Snackbar
-        visible={snackbarVisible}
-        onDismiss={() => setSnackbarVisible(false)}
-        duration={3000}
-      >
-        {snackbarMessage}
-      </Snackbar>
     </View>
   );
 }
@@ -916,16 +974,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#ffffff',
   },
-  title: {
+  searchAndAddContainer: {
+    flexDirection: 'row',
     marginBottom: 16,
+    alignItems: 'center',
   },
   searchBar: {
-    marginBottom: 16,
+    flex: 1,
+    marginRight: 16,
   },
   addButton: {
-    marginBottom: 16,
+    minWidth: 150,
   },
   tableCard: {
     flex: 1,

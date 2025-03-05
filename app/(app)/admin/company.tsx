@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Image, ScrollView } from 'react-native';
-import { TextInput, Button, Text, Card } from 'react-native-paper';
+import { TextInput, Button, Text, Card, ActivityIndicator, IconButton } from 'react-native-paper';
 import { supabase } from '../lib/api';
 import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
 
 interface CompanyData {
   uid?: string;
@@ -29,6 +30,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
+  const router = useRouter();
 
   useEffect(() => {
     fetchCompanyInfo();
@@ -176,7 +178,7 @@ export default function AdminPage() {
           .from('public')
           .upload(filePath, {
             uri: file.uri,
-            type: file.type,
+            type: file.type || 'image/jpeg', // Provide a default type if undefined
             name: fileName,
           });
 
@@ -204,7 +206,7 @@ export default function AdminPage() {
     }
   };
 
-  const upsertSettings = async (url) => {
+  const upsertSettings = async (url: string) => {
     try {
       setLoading(true);
       
@@ -230,7 +232,7 @@ export default function AdminPage() {
       
       // Force reload to update sidebar
       window.location.reload();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving logo URL:', error);
       alert('Error saving logo URL: ' + (error.message || 'Unknown error'));
     } finally {
@@ -239,113 +241,186 @@ export default function AdminPage() {
   };
 
   if (loading) {
-    return <Text>Loading...</Text>;
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#ffffff' }}>
+        <ActivityIndicator size="large" />
+        <Text style={{ marginTop: 16 }}>Loading company profile...</Text>
+      </View>
+    );
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.contentWrapper}>
-        <Text style={{
-          fontFamily: 'System',
-          fontSize: 26,
-          fontWeight: '600',
-          marginBottom: 16,
-          color: '#333333',
-        }}>Company</Text>
-        
-        <Card style={styles.card}>
-          <Card.Content>
-            <View style={styles.logoSection}>
-              <Image 
-                source={logoUrl ? { uri: logoUrl } : { uri: PLACEHOLDER_LOGO }}
-                style={styles.logoPreview}
-              />
+    <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+      <ScrollView style={{ flex: 1, backgroundColor: '#ffffff' }}>
+        <View style={{ 
+          flex: 1, 
+          backgroundColor: '#ffffff',
+          alignItems: 'center',
+          paddingVertical: 24,
+        }}>
+          <View style={{ 
+            width: '100%', 
+            maxWidth: 800, 
+            paddingHorizontal: 24,
+            backgroundColor: '#ffffff',
+          }}>
+            <Text style={{
+              fontFamily: 'System',
+              fontSize: 26,
+              fontWeight: '600',
+              marginBottom: 24,
+              color: '#333333',
+              backgroundColor: '#ffffff',
+            }}>Company</Text>
+            
+            <View style={{ 
+              alignItems: 'center', 
+              marginBottom: 32,
+              backgroundColor: '#ffffff',
+            }}>
+              <View style={{ 
+                width: 200, 
+                height: 200, 
+                backgroundColor: '#ffffff',
+                borderRadius: 8,
+                justifyContent: 'center',
+                alignItems: 'center',
+                borderWidth: 1,
+                borderColor: '#e0e0e0',
+                marginBottom: 16,
+                overflow: 'hidden',
+              }}>
+                {logoUrl ? (
+                  <Image
+                    source={{ uri: logoUrl }}
+                    style={{ width: '100%', height: '100%', resizeMode: 'contain' }}
+                  />
+                ) : (
+                  <Text style={{ color: '#999', backgroundColor: '#ffffff' }}>Your Company Logo</Text>
+                )}
+              </View>
+              
+              <View style={{ 
+                flexDirection: 'row', 
+                justifyContent: 'center',
+                backgroundColor: '#ffffff',
+                marginBottom: 16,
+              }}>
+                <Button 
+                  mode="contained" 
+                  onPress={() => upsertSettings(logoUrl)}
+                  style={{ marginRight: 8 }}
+                >
+                  Change Logo
+                </Button>
+                
+                <Button 
+                  mode="outlined" 
+                  onPress={() => {
+                    setLogoUrl(DEFAULT_LOGO_URL);
+                    handleSubmit();
+                  }}
+                >
+                  Default
+                </Button>
+              </View>
+              
               <TextInput
                 label="Logo URL"
                 value={logoUrl}
                 onChangeText={setLogoUrl}
                 placeholder="Enter logo image URL"
-                style={styles.input}
+                style={{ 
+                  marginTop: 8, 
+                  width: '100%',
+                  maxWidth: 500,
+                  backgroundColor: '#ffffff',
+                }}
               />
-              <View style={{ flexDirection: 'row', marginBottom: 16, justifyContent: 'space-between' }}>
-                <Button 
-                  mode="contained" 
-                  onPress={() => upsertSettings(logoUrl)}
-                  loading={loading}
-                  style={{ flex: 1, marginRight: 8, height: 40 }}
-                  labelStyle={{ fontSize: 14 }}
-                >
-                  Save
-                </Button>
-                
-                <Button
-                  mode="contained"
-                  icon="image"
-                  onPress={() => {
-                    setLogoUrl(DEFAULT_LOGO_URL);
-                    handleSubmit();
-                  }}
-                  style={{ flex: 1, height: 40, minWidth: 120 }}
-                  labelStyle={{ fontSize: 14 }}
-                  buttonColor="#6200ee"
-                >
-                  Default
-                </Button>
-              </View>
             </View>
             
-            <TextInput
-              label="Business Name"
-              value={company.business_name}
-              onChangeText={(text) => setCompany({ ...company, business_name: text })}
-              style={styles.input}
-            />
+            <Card style={{ 
+              marginBottom: 24,
+              backgroundColor: '#ffffff',
+              borderRadius: 8,
+              elevation: 2,
+              shadowColor: 'rgba(0,0,0,0.1)',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.8,
+              shadowRadius: 1,
+            }}>
+              <Card.Content style={{ backgroundColor: '#ffffff', padding: 24 }}>
+                <Text style={{ 
+                  fontSize: 18, 
+                  fontWeight: 'bold', 
+                  marginBottom: 24,
+                  backgroundColor: '#ffffff',
+                }}>Business Information</Text>
+                
+                <TextInput
+                  label="Business Name"
+                  value={company.business_name}
+                  onChangeText={(text) => setCompany({ ...company, business_name: text })}
+                  style={{ marginBottom: 16, backgroundColor: '#ffffff' }}
+                />
+                
+                <TextInput
+                  label="Address"
+                  value={company.address}
+                  onChangeText={(text) => setCompany({ ...company, address: text })}
+                  multiline
+                  numberOfLines={3}
+                  style={{ marginBottom: 16, backgroundColor: '#ffffff' }}
+                />
+                
+                <TextInput
+                  label="Email"
+                  value={company.email || ''}
+                  onChangeText={(text) => setCompany({ ...company, email: text })}
+                  keyboardType="email-address"
+                  style={{ marginBottom: 16, backgroundColor: '#ffffff' }}
+                />
+                
+                <TextInput
+                  label="Phone Number"
+                  value={company.phone || ''}
+                  onChangeText={(text) => setCompany({ ...company, phone: text })}
+                  keyboardType="phone-pad"
+                  style={{ marginBottom: 16, backgroundColor: '#ffffff' }}
+                />
+                
+                <TextInput
+                  label="EIN Number"
+                  value={company.ein || ''}
+                  onChangeText={(text) => setCompany({ ...company, ein: text })}
+                  style={{ backgroundColor: '#ffffff' }}
+                />
+              </Card.Content>
+            </Card>
             
-            <TextInput
-              label="Address"
-              value={company.address}
-              onChangeText={(text) => setCompany({ ...company, address: text })}
-              multiline
-              numberOfLines={3}
-              style={styles.input}
-            />
-            
-            <TextInput
-              label="Email"
-              value={company.email || ''}
-              onChangeText={(text) => setCompany({ ...company, email: text })}
-              keyboardType="email-address"
-              style={styles.input}
-            />
-            
-            <TextInput
-              label="Phone Number"
-              value={company.phone || ''}
-              onChangeText={(text) => setCompany({ ...company, phone: text })}
-              keyboardType="phone-pad"
-              style={styles.input}
-            />
-            
-            <TextInput
-              label="EIN Number"
-              value={company.ein || ''}
-              onChangeText={(text) => setCompany({ ...company, ein: text })}
-              style={styles.input}
-            />
-
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            
-            <Button 
-              mode="outlined"
-              onPress={handleSubmit}
-              style={[styles.button, { marginBottom: 24 }]}
-            >
-              Save All Changes
-            </Button>
-          </Card.Content>
-        </Card>
-      </View>
-    </ScrollView>
+            <View style={{ 
+              alignItems: 'center',
+              marginBottom: 32,
+              backgroundColor: '#ffffff',
+            }}>
+              <Button
+                mode="contained"
+                onPress={handleSubmit}
+                loading={loading}
+                disabled={loading}
+                style={{ 
+                  width: '100%',
+                  maxWidth: 300,
+                  backgroundColor: loading ? '#cccccc' : undefined,
+                }}
+              >
+                Save All Changes
+              </Button>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 

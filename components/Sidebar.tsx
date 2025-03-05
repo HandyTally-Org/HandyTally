@@ -53,7 +53,7 @@ export function Sidebar() {
   };
 
   return (
-    <View style={styles.sidebar}>
+    <View style={{ backgroundColor: '#ffffff' }}>
       <Image 
         source={{ uri: logoUrl }} 
         style={styles.logo} 
