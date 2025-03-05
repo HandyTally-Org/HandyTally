@@ -10,6 +10,7 @@ export const styles = StyleSheet.create({
   },
   input: {
     marginBottom: 12,
+    marginRight: 16,
   },
   row: {
     flexDirection: 'row',

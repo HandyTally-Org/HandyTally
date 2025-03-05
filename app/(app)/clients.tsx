@@ -779,30 +779,46 @@ export default function ClientsScreen() {
         id="client-excel-import"
       />
       
-      <Card style={styles.tableCard}>
-        <DataTable style={{ backgroundColor: '#ffffff' }}>
-          <DataTable.Header style={{ backgroundColor: '#ffffff' }}>
+      <View style={{
+        margin: 0,
+        padding: 0,
+        borderWidth: 0,
+        borderColor: 'transparent',
+        backgroundColor: 'transparent',
+        shadowOpacity: 0,
+        elevation: 0
+      }}>
+        <DataTable style={{ 
+          backgroundColor: '#ffffff', 
+          borderWidth: 0,
+          borderColor: 'transparent',
+          margin: 0,
+          padding: 0,
+          shadowOpacity: 0,
+          elevation: 0
+        }}>
+          <DataTable.Header style={{ backgroundColor: '#f5f5f5', borderBottomWidth: 1, borderBottomColor: '#e0e0e0' }}>
             <DataTable.Title 
-              onPress={() => handleSort('name')}
               sortDirection={sortColumn === 'name' ? sortDirection : undefined}
+              onPress={() => handleSort('name')}
             >
               Name
             </DataTable.Title>
             <DataTable.Title 
-              onPress={() => handleSort('email')}
               sortDirection={sortColumn === 'email' ? sortDirection : undefined}
+              onPress={() => handleSort('email')}
             >
               Email
             </DataTable.Title>
             <DataTable.Title 
-              onPress={() => handleSort('phone')}
               sortDirection={sortColumn === 'phone' ? sortDirection : undefined}
+              onPress={() => handleSort('phone')}
             >
               Phone
             </DataTable.Title>
             <DataTable.Title 
-              onPress={() => handleSort('address')}
               sortDirection={sortColumn === 'address' ? sortDirection : undefined}
+              onPress={() => handleSort('address')}
             >
               Address
             </DataTable.Title>
@@ -856,7 +872,7 @@ export default function ClientsScreen() {
             ))
           )}
         </DataTable>
-      </Card>
+      </View>
       
       {showAddForm && (
         <View style={{ 

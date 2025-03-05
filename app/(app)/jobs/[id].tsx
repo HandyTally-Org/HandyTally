@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Platform, Pressable, TouchableOpacity } from 'react-native';
-import { Text, Button, Card, SegmentedButtons, FAB, TextInput, Dialog, Portal, Divider, Chip, DataTable, ActivityIndicator, RadioButton, List, IconButton, Menu, Snackbar, Surface } from 'react-native-paper';
+import { Text, Button, Card, SegmentedButtons, FAB, TextInput, Dialog, Portal, Divider, Chip, DataTable, ActivityIndicator, RadioButton, List, IconButton, Menu, Snackbar, Surface, Modal } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 import { formatCurrency, formatDate } from '../../../utils/formatting';
@@ -10,6 +10,7 @@ import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from 'date-fns';
 import { JobForm } from '../../../components/JobForm';
+import { InvoiceDetails } from '../../../components/InvoiceDetails';
 
 // Let's create a simple calendar component using the existing libraries
 interface SimpleCalendarProps {
@@ -217,6 +218,15 @@ export default function JobDetailsScreen() {
   const [totalOtherCost, setTotalOtherCost] = useState(0);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showExitConfirmation, setShowExitConfirmation] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState(null);
+  const [viewingInvoiceId, setViewingInvoiceId] = useState(null);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [editingInvoice, setEditingInvoice] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -265,59 +275,34 @@ export default function JobDetailsScreen() {
 
   const fetchInvoices = async () => {
     try {
-      console.log('Fetching invoices for job_id:', id); // Debug log
-
-      // First, verify we have a valid job_id
-      if (!id) {
-        console.error('No job_id available');
-        return;
-      }
-
-      const { data: invoiceData, error: invoiceError } = await supabase
+      setLoading(true);
+      
+      // Fetch invoices related to this job with client information
+      const { data, error } = await supabase
         .from('invoices')
         .select(`
           *,
-          invoice_items!inner (
-            *
-          )
+          clients:client_id (name, uid)
         `)
-        .eq('job_id', id)
-        .order('created_at', { ascending: false });
-
-      if (invoiceError) {
-        console.error('Error fetching invoices:', invoiceError);
-        setSnackbarMessage('Error loading invoices');
-        setSnackbarVisible(true);
-        return;
-      }
-
-      console.log('Raw invoice data:', invoiceData); // Debug log
-
-      if (!invoiceData || invoiceData.length === 0) {
-        console.log('No invoices found for job_id:', id);
-        setInvoices([]);
-        return;
-      }
-
-      // Process the invoices with their items
-      const processedInvoices = invoiceData.map(invoice => {
-        const totalAmount = invoice.invoice_items?.reduce((sum: number, item: any) => {
-          const itemAmount = Number(item.quantity) * Number(item.unit_price);
-          return sum + (itemAmount || 0);
-        }, 0) || 0;
-
-        return {
+        .eq('job_id', id);
+      
+      if (error) throw error;
+      
+      if (data) {
+        // Transform the data to include client_name
+        const transformedData = data.map(invoice => ({
           ...invoice,
-          total_amount: totalAmount
-        };
-      });
-
-      console.log('Processed invoices:', processedInvoices); // Debug log
-      setInvoices(processedInvoices);
+          client_name: invoice.clients?.name || 'Unknown Client'
+        }));
+        
+        setInvoices(transformedData);
+      }
     } catch (error) {
-      console.error('Error in fetchInvoices:', error);
+      console.error('Error fetching invoices:', error);
       setSnackbarMessage('Error loading invoices');
       setSnackbarVisible(true);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -874,6 +859,352 @@ export default function JobDetailsScreen() {
     return quantity * price;
   };
 
+  const handleUpdateJob = async (updatedJobData) => {
+    try {
+      setSubmitting(true);
+      
+      const { error } = await supabase
+        .from('jobs')
+        .update(updatedJobData)
+        .eq('uid', id);
+        
+      if (error) throw error;
+      
+      // Refresh job data
+      fetchJobDetails();
+      setShowEditForm(false);
+      setSnackbarMessage('Job updated successfully');
+      setSnackbarVisible(true);
+    } catch (error) {
+      console.error('Error updating job:', error);
+      setSnackbarMessage('Error updating job');
+      setSnackbarVisible(true);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleStatusChange = async (newStatus) => {
+    try {
+      const { error } = await supabase
+        .from('jobs')
+        .update({ status: newStatus })
+        .eq('uid', id);
+        
+      if (error) throw error;
+      
+      // Update local state
+      setJob({ ...job, status: newStatus });
+      setShowStatusDropdown(false);
+      setSnackbarMessage('Job status updated');
+      setSnackbarVisible(true);
+    } catch (error) {
+      console.error('Error updating job status:', error);
+      setSnackbarMessage('Error updating status');
+      setSnackbarVisible(true);
+    }
+  };
+
+  const renderStatusDropdown = () => {
+    if (!showStatusDropdown) return null;
+    
+    const statuses = ['pending', 'in_progress', 'completed', 'cancelled'];
+    
+    return (
+      <View style={{
+        position: 'absolute',
+        top: 40,
+        left: 0,
+        width: 200,
+        backgroundColor: '#ffffff',
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+        borderRadius: 4,
+        zIndex: 9999,
+        elevation: 9,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+      }}>
+        {statuses.map((status) => (
+          <Pressable
+            key={status}
+            style={({ hovered }) => ({
+              padding: 12,
+              backgroundColor: hovered ? '#f5f5f5' : '#ffffff',
+              borderBottomWidth: 1,
+              borderBottomColor: '#f0f0f0',
+            })}
+            onPress={() => {
+              handleStatusChange(status);
+              setShowStatusDropdown(false);
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ 
+                width: 16, 
+                height: 16, 
+                borderRadius: 8, 
+                backgroundColor: getStatusColor(status),
+                marginRight: 8 
+              }} />
+              <Text style={{ textTransform: 'capitalize' }}>
+                {status.replace('_', ' ')}
+              </Text>
+            </View>
+          </Pressable>
+        ))}
+      </View>
+    );
+  };
+
+  const WebStatusDropdown = () => {
+    if (!showStatusDropdown) return null;
+    
+    const statuses = ['pending', 'in_progress', 'completed', 'cancelled'];
+    
+    return (
+      <div style={{
+        position: 'absolute',
+        top: '40px',
+        left: 0,
+        width: '200px',
+        backgroundColor: '#ffffff',
+        border: '1px solid #e0e0e0',
+        borderRadius: '4px',
+        zIndex: 9999,
+        boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
+        overflow: 'hidden'
+      }}>
+        {statuses.map((status) => (
+          <div
+            key={status}
+            onClick={() => {
+              handleStatusChange(status);
+              setShowStatusDropdown(false);
+            }}
+            style={{
+              width: '100%',
+              backgroundColor: '#ffffff',
+              borderBottom: '1px solid #f0f0f0',
+              padding: '12px',
+              cursor: 'pointer'
+            }}
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
+          >
+            <div style={{ 
+              display: 'flex', 
+              flexDirection: 'row', 
+              alignItems: 'center',
+              width: '100%'
+            }}>
+              <div style={{ 
+                width: '16px', 
+                height: '16px', 
+                borderRadius: '8px', 
+                backgroundColor: getStatusColor(status),
+                marginRight: '8px' 
+              }} />
+              <span style={{ textTransform: 'capitalize' }}>
+                {status.replace('_', ' ')}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // Replace the problematic useEffect with this approach using React's useEffect for cleanup
+  useEffect(() => {
+    // Function to handle before unload event (for web)
+    const handleBeforeUnload = (e) => {
+      if (editMode && hasUnsavedChanges) {
+        // Standard way to show a confirmation dialog when leaving a page
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+
+    // Add event listener for web
+    if (Platform.OS === 'web') {
+      window.addEventListener('beforeunload', handleBeforeUnload);
+    }
+
+    // Cleanup function
+    return () => {
+      if (Platform.OS === 'web') {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+      }
+    };
+  }, [editMode, hasUnsavedChanges]);
+
+  // Add a function to handle navigation item clicks
+  const handleNavigationItemClick = (tab) => {
+    if (editMode && hasUnsavedChanges) {
+      // Show confirmation dialog
+      setShowExitConfirmation(true);
+      // Store the tab they were trying to navigate to
+      setPendingNavigation(tab);
+    } else {
+      // If not in edit mode or no unsaved changes, just switch tabs
+      setSelectedTab(tab);
+    }
+  };
+
+  // Add a function to handle job form changes
+  const handleJobFormChange = () => {
+    setHasUnsavedChanges(true);
+  };
+
+  // Add a function to handle form submission
+  const handleUpdateJobWithConfirmation = async (updatedJobData) => {
+    await handleUpdateJob(updatedJobData);
+    setHasUnsavedChanges(false);
+    setEditMode(false);
+  };
+
+  // Add a function to handle cancellation
+  const handleCancelEdit = () => {
+    if (hasUnsavedChanges) {
+      setShowExitConfirmation(true);
+    } else {
+      setEditMode(false);
+    }
+  };
+
+  // Add a function to handle confirmed navigation
+  const handleConfirmExit = () => {
+    setHasUnsavedChanges(false);
+    setShowExitConfirmation(false);
+    setEditMode(false);
+    
+    // If there was a pending navigation, execute it
+    if (pendingNavigation) {
+      handleNavigationItemClick(pendingNavigation);
+      setPendingNavigation(null);
+    }
+  };
+
+  // Add this function near the other utility functions
+  const getInvoiceStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'paid':
+        return '#e8f5e9'; // Light green
+      case 'sent':
+        return '#fff3e0'; // Light orange
+      case 'overdue':
+        return '#ffebee'; // Light red
+      case 'draft':
+      default:
+        return '#f5f5f5'; // Light gray
+    }
+  };
+
+  const fetchInvoiceDetails = async (invoiceId) => {
+    try {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('*, invoice_items(*), client:clients(*)')
+        .eq('id', invoiceId)
+        .single();
+      
+      if (error) throw error;
+      
+      setSelectedInvoice(data);
+    } catch (error) {
+      console.error('Error fetching invoice details:', error);
+      setSnackbarMessage('Error loading invoice details');
+      setSnackbarVisible(true);
+    }
+  };
+
+  // Add function to save invoice changes
+  const handleSaveInvoice = async (updatedInvoice) => {
+    try {
+      // Update the invoice
+      const { error: invoiceError } = await supabase
+        .from('invoices')
+        .update({
+          invoice_number: updatedInvoice.invoice_number,
+          date: updatedInvoice.date,
+          status: updatedInvoice.status,
+          amount: updatedInvoice.amount
+        })
+        .eq('id', updatedInvoice.id);
+      
+      if (invoiceError) throw invoiceError;
+      
+      // Handle invoice items
+      if (updatedInvoice.invoice_items) {
+        for (const item of updatedInvoice.invoice_items) {
+          if (item.id) {
+            // Update existing item
+            await supabase
+              .from('invoice_items')
+              .update({
+                description: item.description,
+                quantity: item.quantity,
+                price: item.price
+              })
+              .eq('id', item.id);
+          } else {
+            // Insert new item
+            await supabase
+              .from('invoice_items')
+              .insert({
+                invoice_id: updatedInvoice.id,
+                description: item.description,
+                quantity: item.quantity,
+                price: item.price
+              });
+          }
+        }
+      }
+      
+      // Refresh the invoices list
+      fetchInvoices();
+      
+      // Close the modal
+      setViewingInvoiceId(null);
+      setSelectedInvoice(null);
+      setEditingInvoice(false);
+      
+      // Show success message
+      setSnackbarMessage('Invoice updated successfully');
+      setSnackbarVisible(true);
+      
+    } catch (error) {
+      console.error('Error updating invoice:', error);
+      setSnackbarMessage('Error updating invoice');
+      setSnackbarVisible(true);
+    }
+  };
+
+  // Add these handler functions for invoice actions
+
+  const handleViewInvoice = (invoice) => {
+    // Navigate to the invoice details page
+    router.push(`/invoices?view=${invoice.uid}`);
+  };
+
+  const handleEditInvoice = (invoice) => {
+    // Navigate to edit the invoice
+    localStorage.setItem('editInvoiceData', JSON.stringify(invoice));
+    router.push('/invoices');
+  };
+
+  const handleDeleteInvoice = (invoice) => {
+    // Show a confirmation dialog before deleting
+    if (confirm(`Are you sure you want to delete invoice #${invoice.invoice_number}?`)) {
+      // Navigate to invoices page with delete parameter
+      router.push(`/invoices?delete=${invoice.uid}`);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -899,499 +1230,635 @@ export default function JobDetailsScreen() {
   }
 
   const renderContent = () => {
+    // If in edit mode, show the JobForm instead of the regular content
+    if (editMode) {
+      return (
+        <View style={styles.editFormContainer}>
+          <JobForm 
+            job={job}
+            onSubmit={handleUpdateJobWithConfirmation}
+            onCancel={handleCancelEdit}
+            submitting={submitting}
+            onChange={handleJobFormChange}
+          />
+        </View>
+      );
+    }
+
+    // Otherwise, show the regular content based on selected tab
     switch (selectedTab) {
       case 'info':
-  return (
-          <View>
-            <View style={styles.tabHeader}>
-              <Text variant="titleLarge">Job Information</Text>
-            </View>
-            <Card style={styles.jobInfoCard}>
-                <Card.Content>
-                  <View style={styles.jobInfoSection}>
-                    <View style={styles.jobInfoRow}>
-                    <Text style={styles.jobInfoLabel}>Job Title:</Text>
-                    <Text>{job?.title || 'Not specified'}</Text>
-                    </View>
-                    <View style={styles.jobInfoRow}>
-                      <Text style={styles.jobInfoLabel}>Client:</Text>
-                    <Text>{job?.client?.name || 'Not specified'}</Text>
-                    </View>
-                    <View style={styles.jobInfoRow}>
-                      <Text style={styles.jobInfoLabel}>Status:</Text>
-                    <Chip>{job?.status || 'Not specified'}</Chip>
-                    </View>
-                    <View style={styles.jobInfoRow}>
-                      <Text style={styles.jobInfoLabel}>Start Date:</Text>
-                    <Text>{job?.start_date ? formatDate(job.start_date) : 'Not specified'}</Text>
-                    </View>
-                    <View style={styles.jobInfoRow}>
-                      <Text style={styles.jobInfoLabel}>End Date:</Text>
-                    <Text>{job?.end_date ? formatDate(job.end_date) : 'Not specified'}</Text>
-                    </View>
-                  {job?.description && (
-                    <View style={[styles.jobInfoRow, styles.descriptionRow]}>
-                      <Text style={styles.jobInfoLabel}>Description:</Text>
-                        <Text style={styles.jobDescription}>{job.description}</Text>
-                      </View>
-                  )}
-                </View>
-                </Card.Content>
-              </Card>
-          </View>
-        );
-      case 'costs':
-        return (
-          <View>
-            <View style={styles.tabHeader}>
-              <Text variant="titleLarge">Job Costs</Text>
-              <Button 
-                mode="contained" 
-                onPress={() => setShowAddCostDialog(true)}
-                icon="plus"
-              >
-                Add Cost
-              </Button>
-            </View>
-            
-            <Card style={styles.summaryCard}>
-              <Card.Content>
-                <View style={styles.summaryRow}>
-                  <Text variant="titleMedium">Total Labor:</Text>
-                  <Text variant="titleMedium">
-                    {formatCurrency(totalLaborCost)}
-                  </Text>
-                </View>
-                <View style={styles.summaryRow}>
-                  <Text variant="titleMedium">Total Materials:</Text>
-                  <Text variant="titleMedium">
-                    {formatCurrency(totalMaterialCost)}
-                  </Text>
-                </View>
-                <View style={styles.summaryRow}>
-                  <Text variant="titleMedium">Total Other:</Text>
-                  <Text variant="titleMedium">
-                    {formatCurrency(totalOtherCost)}
-                  </Text>
-                </View>
-                <Divider style={styles.divider} />
-                <View style={styles.summaryRow}>
-                  <Text variant="titleLarge">Total Job Cost:</Text>
-                  <Text variant="titleLarge">
-                    {formatCurrency(totalLaborCost + totalMaterialCost + totalOtherCost)}
-                  </Text>
-                </View>
-              </Card.Content>
-            </Card>
-            
-            {jobCosts.length === 0 ? (
-              <Card>
-                <Card.Content>
-                  <Text>No costs recorded for this job</Text>
-                </Card.Content>
-              </Card>
-            ) : (
-              <Card>
-                <Card.Content>
-              <DataTable>
-                <DataTable.Header>
-                      <DataTable.Title>Type</DataTable.Title>
-                      <DataTable.Title>Description</DataTable.Title>
-                      <DataTable.Title>Quantity</DataTable.Title>
-                      <DataTable.Title>Price</DataTable.Title>
-                      <DataTable.Title>Amount</DataTable.Title>
-                  <DataTable.Title>Date</DataTable.Title>
-                  <DataTable.Title>Actions</DataTable.Title>
-                </DataTable.Header>
-                
-                    {jobCosts.map(cost => (
-                      <DataTable.Row key={cost.uid}>
-                    <DataTable.Cell>
-                          <Chip>{cost.type}</Chip>
-                    </DataTable.Cell>
-                        <DataTable.Cell>{cost.description}</DataTable.Cell>
-                        <DataTable.Cell>{cost.quantity}</DataTable.Cell>
-                        <DataTable.Cell>{formatCurrency(cost.price)}</DataTable.Cell>
-                        <DataTable.Cell>{formatCurrency(cost.quantity * cost.price)}</DataTable.Cell>
-                        <DataTable.Cell>{formatDate(cost.created_at)}</DataTable.Cell>
-                    <DataTable.Cell>
-                      <Button 
-                            icon="delete"
-                        mode="text" 
-                            textColor="red"
-                            onPress={() => handleDeleteCostItem(cost.uid)}
-                      >
-                            Delete
-                      </Button>
-                    </DataTable.Cell>
-                  </DataTable.Row>
-                ))}
-
-                    <DataTable.Row style={styles.totalRow}>
-                      <DataTable.Cell>Total Labor:</DataTable.Cell>
-                      <DataTable.Cell> </DataTable.Cell>
-                      <DataTable.Cell> </DataTable.Cell>
-                      <DataTable.Cell> </DataTable.Cell>
-                      <DataTable.Cell>{formatCurrency(totalLaborCost)}</DataTable.Cell>
-                      <DataTable.Cell> </DataTable.Cell>
-                      <DataTable.Cell> </DataTable.Cell>
-                    </DataTable.Row>
-                    <DataTable.Row style={styles.totalRow}>
-                      <DataTable.Cell>Total Materials:</DataTable.Cell>
-                      <DataTable.Cell> </DataTable.Cell>
-                      <DataTable.Cell> </DataTable.Cell>
-                      <DataTable.Cell> </DataTable.Cell>
-                      <DataTable.Cell>{formatCurrency(totalMaterialCost)}</DataTable.Cell>
-                      <DataTable.Cell> </DataTable.Cell>
-                      <DataTable.Cell> </DataTable.Cell>
-                    </DataTable.Row>
-                    <DataTable.Row style={styles.grandTotalRow}>
-                      <DataTable.Cell>Total Job Cost:</DataTable.Cell>
-                      <DataTable.Cell> </DataTable.Cell>
-                      <DataTable.Cell> </DataTable.Cell>
-                      <DataTable.Cell> </DataTable.Cell>
-                      <DataTable.Cell>{formatCurrency(totalLaborCost + totalMaterialCost)}</DataTable.Cell>
-                      <DataTable.Cell> </DataTable.Cell>
-                      <DataTable.Cell> </DataTable.Cell>
-                    </DataTable.Row>
-                  </DataTable>
-                </Card.Content>
-              </Card>
-            )}
-                        </View>
-        );
+        return renderInfoTab();
       case 'invoices':
-        return (
-          <View>
-            <View style={styles.tabHeader}>
-              <Text variant="titleLarge">Invoices</Text>
-              <Button 
-                mode="contained" 
-                onPress={() => router.push(`/invoices/new?job_id=${id}`)}
-                icon="plus"
-              >
-                Create Invoice
-              </Button>
-            </View>
-            
-            {invoices.length === 0 ? (
-              <Card>
-              <Card.Content>
-                  <Text>No invoices created for this job</Text>
-              </Card.Content>
-            </Card>
-            ) : (
-              <Card>
-                <Card.Content>
-              <DataTable>
-                <DataTable.Header>
-                      <DataTable.Title>Invoice #</DataTable.Title>
-                  <DataTable.Title>Date</DataTable.Title>
-                      <DataTable.Title>Amount</DataTable.Title>
-                      <DataTable.Title>Status</DataTable.Title>
-                  <DataTable.Title>Actions</DataTable.Title>
-                </DataTable.Header>
-                
-                    {invoices.map((invoice) => (
-                      <DataTable.Row key={invoice.id}>
-                        <DataTable.Cell>{invoice.invoice_number || 'Draft'}</DataTable.Cell>
-                        <DataTable.Cell>{formatDate(invoice.created_at)}</DataTable.Cell>
-                        <DataTable.Cell>{formatCurrency(invoice.total_amount)}</DataTable.Cell>
-                    <DataTable.Cell>
-                          <Chip mode="outlined" 
-                            style={{
-                              backgroundColor: invoice.status === 'paid' ? '#e8f5e9' : 
-                                             invoice.status === 'draft' ? '#ffffff' : '#fff3e0'
-                            }}
-                          >
-                            {invoice.status || 'draft'}
-                          </Chip>
-                    </DataTable.Cell>
-                    <DataTable.Cell>
-                      <Button 
-                            icon="eye"
-                        mode="text" 
-                            onPress={() => {
-                              if (invoice.id) {
-                                router.push({
-                                  pathname: '/invoices/[id]',
-                                  params: { id: invoice.id }
-                                });
-                              }
-                            }}
-                          >
-                            View
-                      </Button>
-                    </DataTable.Cell>
-                  </DataTable.Row>
-                ))}
-              </DataTable>
-                </Card.Content>
-              </Card>
-            )}
-          </View>
-        );
+        return renderInvoicesTab();
+      case 'costs':
+        return renderCostsTab();
       case 'calendar':
-        return (
-          <View>
-            <View style={styles.tabHeader}>
-              <Text variant="titleLarge">Schedule</Text>
-              <Button 
-                mode="contained" 
-                onPress={() => setShowAddEventDialog(true)}
-                icon="plus"
-              >
-                New Event
-              </Button>
-            </View>
-            
-            <Card style={styles.calendarCard}>
-              <Card.Content>
-                <View style={styles.calendarHeader}>
-                  <View style={styles.monthSelector}>
-                    <Button 
-                      icon="chevron-left" 
-                      onPress={() => {
-                        const prevMonth = new Date(currentMonth);
-                        prevMonth.setMonth(prevMonth.getMonth() - 1);
-                        setCurrentMonth(prevMonth);
-                      }}
-                      compact
-                    />
-                    <Text variant="titleMedium">
-                      {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
-                    </Text>
-                    <Button 
-                      icon="chevron-right" 
-                      onPress={() => {
-                        const nextMonth = new Date(currentMonth);
-                        nextMonth.setMonth(nextMonth.getMonth() + 1);
-                        setCurrentMonth(nextMonth);
-                      }}
-                      compact
-                    />
-                  </View>
-                  <SegmentedButtons
-                    value={calendarView}
-                    onValueChange={setCalendarView}
-                    buttons={[
-                      { value: 'month', label: 'Month' },
-                      { value: 'agenda', label: 'List' }
-                    ]}
-                    style={styles.viewToggle}
-                  />
-                </View>
-                
-                {calendarView === 'month' ? (
-                  <SimpleCalendar
-                    currentMonth={currentMonth}
-                    onDateSelect={setSelectedDate}
-                    markedDates={markedDates}
-                    selectedDate={selectedDate}
-                  />
-                ) : (
-                  <View style={styles.agendaView}>
-                    {events === null ? (
-                      <Text style={styles.emptyMessage}>Events feature is not yet available</Text>
-                    ) : events.length === 0 ? (
-                      <Text style={styles.emptyMessage}>No events scheduled</Text>
-                    ) : (
-                      events
-                        .sort((a, b) => new Date(a.date) - new Date(b.date))
-                        .map(event => (
-                          <Card key={event.id} style={styles.eventCard}>
-                            <Card.Content>
-                              <Text variant="titleMedium">{event.title}</Text>
-                              <Text>{formatDate(event.date)}</Text>
-                              {event.notes && <Text style={styles.eventNotes}>{event.notes}</Text>}
-                            </Card.Content>
-                            <Card.Actions>
-                              <Button 
-                                icon="pencil" 
-                                onPress={() => handleEditEvent(event)}
-                                compact
-                              >
-                                Edit
-                              </Button>
-                              <Button 
-                                icon="delete" 
-                                onPress={() => handleDeleteEvent(event.id)}
-                                textColor="red"
-                                compact
-                              >
-                                Delete
-                              </Button>
-                            </Card.Actions>
-                          </Card>
-                        ))
-                    )}
-                  </View>
-                )}
-              </Card.Content>
-            </Card>
-            
-            {calendarView === 'month' && (
-              <Card style={styles.eventsForDayCard}>
-                <Card.Title title={`Events for ${formatDate(selectedDate)}`} />
-                <Card.Content>
-                  {events === null ? (
-                    <Text style={styles.emptyMessage}>Events feature is not yet available</Text>
-                  ) : events.filter(event => event.date === selectedDate).length === 0 ? (
-                    <Text style={styles.emptyMessage}>No events for this day</Text>
-                  ) : (
-                    events
-                      .filter(event => event.date === selectedDate)
-                      .map(event => (
-                        <Card key={event.id} style={styles.eventCard}>
-                          <Card.Content>
-                            <Text variant="titleMedium">{event.title}</Text>
-                            {event.notes && <Text style={styles.eventNotes}>{event.notes}</Text>}
-                          </Card.Content>
-                          <Card.Actions>
-                            <Button 
-                              icon="pencil" 
-                              onPress={() => handleEditEvent(event)}
-                              compact
-                            >
-                              Edit
-                            </Button>
-                            <Button 
-                              icon="delete" 
-                              onPress={() => handleDeleteEvent(event.id)}
-                              textColor="red"
-                              compact
-                            >
-                              Delete
-                            </Button>
-                          </Card.Actions>
-                        </Card>
-                      ))
-                  )}
-                </Card.Content>
-              </Card>
-            )}
-          </View>
-        );
+        return renderCalendarTab();
       case 'attachments':
-        return (
-          <View>
-            <View style={styles.tabHeader}>
-              <Text variant="titleLarge">Attachments</Text>
-              <Button 
-                mode="contained" 
-                onPress={handleFileUpload}
-                icon="upload"
-                loading={uploading}
-                disabled={uploading}
-              >
-                Upload File
-              </Button>
-            </View>
-            
-            {uploading && (
-              <Card style={styles.uploadingCard}>
-                <Card.Content>
-                  <Text>Uploading file...</Text>
-                  <ActivityIndicator style={styles.progressBar} />
-                </Card.Content>
-              </Card>
-            )}
-            
-            {localAttachments.length === 0 ? (
-              <Text style={styles.emptyMessage}>No attachments for this job</Text>
-            ) : (
-              <View>
-                {localAttachments.map(attachment => (
-                  <Card key={attachment.id} style={styles.attachmentCard}>
-                    <Card.Content>
-                      <View style={styles.attachmentRow}>
-                        <View style={styles.attachmentIcon}>
-                          <MaterialCommunityIcons 
-                            name={getFileIcon(attachment.name)} 
-                            size={24} 
-                            color="#666"
-                          />
-                        </View>
-                        <View style={styles.attachmentInfo}>
-                          <Text variant="titleMedium">{attachment.name}</Text>
-                          <Text variant="bodySmall">
-                            Type: {attachment.type || 'Unknown'} • 
-                            Size: {formatFileSize(attachment.size || 0)}
-                          </Text>
-                          <Text variant="bodySmall">
-                            Uploaded: {formatDate(attachment.created_at)}
-                          </Text>
-                        </View>
-                        <View style={styles.attachmentActions}>
-                          <Button 
-                            mode="outlined"
-                            icon="eye"
-                            onPress={() => {
-                              if (Platform.OS === 'web') {
-                                window.open(attachment.url, '_blank');
-                              }
-                            }}
-                          >
-                            View
-                          </Button>
-                          <Button 
-                            mode="outlined"
-                            icon="delete"
-                            textColor="red"
-                            onPress={() => handleDeleteLocalAttachment(attachment.id)}
-                          >
-                            Delete
-                          </Button>
-                        </View>
-                      </View>
-                    </Card.Content>
-                  </Card>
-                ))}
-              </View>
-            )}
-          </View>
-        );
+        return renderAttachmentsTab();
       case 'logs':
-        return (
-          <View>
-            <View style={styles.tabHeader}>
-              <Text variant="titleLarge">Logs</Text>
-              <Button 
-                mode="contained" 
-                onPress={() => setShowAddLogDialog(true)}
-                icon="plus"
-              >
-                Add Log
-              </Button>
-            </View>
-            
-            {logs === null ? (
-              <Text style={styles.emptyMessage}>Logs feature is not yet available</Text>
-            ) : logs.length === 0 ? (
-              <Text style={styles.emptyMessage}>No logs recorded</Text>
-            ) : (
-              <View>
-                {logs.map(log => (
-                  <Card key={log.id} style={styles.logCard}>
-                    <Card.Content>
-                      <Text variant="bodyMedium">{log.content}</Text>
-                      <View style={styles.logMeta}>
-                        <Text variant="bodySmall">
-                          {new Date(log.created_at).toLocaleString()}
-                        </Text>
-                        <Text variant="bodySmall">By: {log.created_by}</Text>
-                      </View>
-                    </Card.Content>
-                  </Card>
-                ))}
-              </View>
-            )}
-          </View>
-        );
+        return renderLogsTab();
       default:
-        return null;
+        return renderInfoTab();
     }
   };
+
+  const renderInfoTab = () => (
+    <View>
+      <View style={styles.infoContainer}>
+        <View style={styles.infoHeader}>
+          <Text variant="titleLarge">Job Information</Text>
+          <Button
+            mode="contained"
+            icon="pencil"
+            onPress={() => setEditMode(true)}
+            style={styles.editButton}
+          >
+            Edit Job
+          </Button>
+        </View>
+        
+        {/* Table with field names as column headers */}
+        <View style={styles.table}>
+          {/* Header row with field names */}
+          <View style={[styles.tableRow, { backgroundColor: '#f5f5f5' }]}>
+            <View style={[styles.tableHeaderCell, { width: '20%' }]}>
+              <Text style={styles.tableHeaderText}>Job Title</Text>
+            </View>
+            <View style={[styles.tableHeaderCell, { width: '20%' }]}>
+              <Text style={styles.tableHeaderText}>Client</Text>
+            </View>
+            <View style={[styles.tableHeaderCell, { width: '20%' }]}>
+              <Text style={styles.tableHeaderText}>Status</Text>
+            </View>
+            <View style={[styles.tableHeaderCell, { width: '20%' }]}>
+              <Text style={styles.tableHeaderText}>Start Date</Text>
+            </View>
+            <View style={[styles.tableHeaderCell, { width: '20%', borderRightWidth: 0 }]}>
+              <Text style={styles.tableHeaderText}>End Date</Text>
+            </View>
+          </View>
+          
+          {/* Data row with values */}
+          <View style={styles.tableRow}>
+            <View style={[styles.tableCell, { width: '20%' }]}>
+              <Text>{job?.title || 'N/A'}</Text>
+            </View>
+            <View style={[styles.tableCell, { width: '20%' }]}>
+              <Text>{job?.client?.name || 'N/A'}</Text>
+            </View>
+            <View style={[styles.tableCell, { width: '20%' }]}>
+              <Pressable onPress={() => setShowStatusDropdown(true)}>
+                <Chip style={{ backgroundColor: getStatusColor(job?.status) }}>
+                  {job?.status?.replace('_', ' ') || 'Not specified'}
+                </Chip>
+              </Pressable>
+            </View>
+            <View style={[styles.tableCell, { width: '20%' }]}>
+              <Text>{job?.start_date ? formatDate(job.start_date) : 'N/A'}</Text>
+            </View>
+            <View style={[styles.tableCell, { width: '20%', borderRightWidth: 0 }]}>
+              <Text>{job?.end_date ? formatDate(job.end_date) : 'N/A'}</Text>
+            </View>
+          </View>
+          
+          {/* Description row (if available) - as a separate row spanning all columns */}
+          {job?.description && (
+            <View style={styles.tableRow}>
+              <View style={[styles.tableCell, { width: '20%', backgroundColor: '#ffffff' }]}>
+                <Text style={styles.tableCellLabel}>Description</Text>
+              </View>
+              <View style={[styles.tableCell, { width: '80%', borderRightWidth: 0 }]}>
+                <Text>{job.description}</Text>
+              </View>
+            </View>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'pending': return '#FFF9C4';
+      case 'in_progress': return '#BBDEFB';
+      case 'completed': return '#C8E6C9';
+      case 'cancelled': return '#FFCDD2';
+      default: return '#F5F5F5';
+    }
+  };
+
+  const renderInvoicesTab = () => (
+    <View>
+      <View style={{ 
+        backgroundColor: '#ffffff', 
+        padding: 0,
+        margin: 0,
+        borderWidth: 0,
+        borderRadius: 0,
+        shadowOpacity: 0,
+        elevation: 0
+      }}>
+        <View style={styles.contentHeader}>
+          <Text variant="titleLarge">Invoices</Text>
+          <Button 
+            mode="contained" 
+            onPress={() => {
+              // Store the job ID to use in the invoice form
+              localStorage.setItem('newInvoiceData', JSON.stringify({
+                job_id: job.uid,
+                client_id: job.client_id || '',
+                status: 'estimate'
+              }));
+              
+              // Navigate to the invoices page
+              router.push('/invoices');
+            }}
+            style={{ 
+              position: 'absolute',
+              top: 10,
+              right: 10,
+              backgroundColor: '#333333'
+            }}
+          >
+            Create New Invoice
+          </Button>
+        </View>
+        
+        {/* Add space between button and table */}
+        <View style={{ height: 20 }} />
+        
+        {/* Invoice table with white background, no borders, and left-aligned content */}
+        <View style={{ 
+          backgroundColor: '#ffffff',
+          borderWidth: 0,
+          overflow: 'hidden',
+        }}>
+          <DataTable>
+            <DataTable.Header>
+              <DataTable.Title>Invoice #</DataTable.Title>
+              <DataTable.Title>Client</DataTable.Title>
+              <DataTable.Title>Start Date</DataTable.Title>
+              <DataTable.Title>End Date</DataTable.Title>
+              <DataTable.Title>Total</DataTable.Title>
+              <DataTable.Title>Status</DataTable.Title>
+              <DataTable.Title>Actions</DataTable.Title>
+            </DataTable.Header>
+            
+            {invoices.length === 0 ? (
+              <DataTable.Row>
+                <DataTable.Cell>No invoices found</DataTable.Cell>
+              </DataTable.Row>
+            ) : (
+              invoices.map(invoice => (
+                <DataTable.Row key={invoice.uid}>
+                  <DataTable.Cell>{invoice.invoice_number}</DataTable.Cell>
+                  <DataTable.Cell>{invoice.client_name || 'Unknown Client'}</DataTable.Cell>
+                  <DataTable.Cell>{formatDate(invoice.issue_date)}</DataTable.Cell>
+                  <DataTable.Cell>{formatDate(invoice.due_date)}</DataTable.Cell>
+                  <DataTable.Cell>${invoice.total.toFixed(2)}</DataTable.Cell>
+                  <DataTable.Cell>{invoice.status}</DataTable.Cell>
+                  <DataTable.Cell>
+                    <View style={{ flexDirection: 'row' }}>
+                      <IconButton 
+                        icon="pencil" 
+                        size={20} 
+                        onPress={() => handleEditInvoice(invoice)} 
+                      />
+                      <IconButton 
+                        icon="delete" 
+                        size={20} 
+                        iconColor="red" 
+                        onPress={() => handleDeleteInvoice(invoice)} 
+                      />
+                    </View>
+                  </DataTable.Cell>
+                </DataTable.Row>
+              ))
+            )}
+          </DataTable>
+        </View>
+      </View>
+      {viewingInvoiceId && (
+        <Portal>
+          <Modal
+            visible={viewingInvoiceId !== null}
+            onDismiss={() => {
+              setViewingInvoiceId(null);
+              setSelectedInvoice(null);
+              setEditingInvoice(false);
+            }}
+            contentContainerStyle={{ 
+              backgroundColor: 'white', 
+              padding: 20, 
+              margin: 20,
+              maxWidth: 1000,
+              alignSelf: 'center',
+              width: '90%',
+              borderRadius: 8
+            }}
+          >
+            {selectedInvoice ? (
+              <InvoiceDetails 
+                invoice={selectedInvoice}
+                isEditing={editingInvoice}
+                onSave={(updatedInvoice) => {
+                  handleSaveInvoice(updatedInvoice);
+                  setEditingInvoice(false);
+                }}
+                onCancel={() => setEditingInvoice(false)}
+                onClose={() => {
+                  setViewingInvoiceId(null);
+                  setSelectedInvoice(null);
+                  setEditingInvoice(false);
+                }}
+              />
+            ) : (
+              <ActivityIndicator />
+            )}
+          </Modal>
+        </Portal>
+      )}
+    </View>
+  );
+
+  const renderCostsTab = () => (
+    <View>
+      <View style={styles.tabHeader}>
+        <Text variant="titleLarge">Job Costs</Text>
+        <Button 
+          mode="contained" 
+          onPress={() => setShowAddCostDialog(true)}
+          icon="plus"
+        >
+          Add Cost
+        </Button>
+      </View>
+      
+      <Card style={styles.summaryCard}>
+        <Card.Content>
+          <View style={styles.summaryRow}>
+            <Text variant="titleMedium">Total Labor:</Text>
+            <Text variant="titleMedium">
+              {formatCurrency(totalLaborCost)}
+            </Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text variant="titleMedium">Total Materials:</Text>
+            <Text variant="titleMedium">
+              {formatCurrency(totalMaterialCost)}
+            </Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text variant="titleMedium">Total Other:</Text>
+            <Text variant="titleMedium">
+              {formatCurrency(totalOtherCost)}
+            </Text>
+          </View>
+          <Divider style={styles.divider} />
+          <View style={styles.summaryRow}>
+            <Text variant="titleLarge">Total Job Cost:</Text>
+            <Text variant="titleLarge">
+              {formatCurrency(totalLaborCost + totalMaterialCost + totalOtherCost)}
+            </Text>
+          </View>
+        </Card.Content>
+      </Card>
+      
+      {jobCosts.length === 0 ? (
+        <Card>
+          <Card.Content>
+            <Text>No costs recorded for this job</Text>
+          </Card.Content>
+        </Card>
+      ) : (
+        <Card>
+          <Card.Content>
+            <DataTable>
+              <DataTable.Header>
+                <DataTable.Title>Type</DataTable.Title>
+                <DataTable.Title>Description</DataTable.Title>
+                <DataTable.Title>Quantity</DataTable.Title>
+                <DataTable.Title>Price</DataTable.Title>
+                <DataTable.Title>Amount</DataTable.Title>
+                <DataTable.Title>Date</DataTable.Title>
+                <DataTable.Title>Actions</DataTable.Title>
+              </DataTable.Header>
+              
+              {jobCosts.map(cost => (
+                <DataTable.Row key={cost.uid}>
+                  <DataTable.Cell>
+                    <Chip>{cost.type}</Chip>
+                  </DataTable.Cell>
+                  <DataTable.Cell>{cost.description}</DataTable.Cell>
+                  <DataTable.Cell>{cost.quantity}</DataTable.Cell>
+                  <DataTable.Cell>{formatCurrency(cost.price)}</DataTable.Cell>
+                  <DataTable.Cell>{formatCurrency(cost.quantity * cost.price)}</DataTable.Cell>
+                  <DataTable.Cell>{formatDate(cost.created_at)}</DataTable.Cell>
+                  <DataTable.Cell>
+                    <Button 
+                      icon="delete"
+                      mode="text" 
+                      textColor="red"
+                      onPress={() => handleDeleteCostItem(cost.uid)}
+                    >
+                      Delete
+                    </Button>
+                  </DataTable.Cell>
+                </DataTable.Row>
+              ))}
+
+              <DataTable.Row style={styles.totalRow}>
+                <DataTable.Cell>Total Labor:</DataTable.Cell>
+                <DataTable.Cell> </DataTable.Cell>
+                <DataTable.Cell> </DataTable.Cell>
+                <DataTable.Cell> </DataTable.Cell>
+                <DataTable.Cell>{formatCurrency(totalLaborCost)}</DataTable.Cell>
+                <DataTable.Cell> </DataTable.Cell>
+                <DataTable.Cell> </DataTable.Cell>
+              </DataTable.Row>
+              <DataTable.Row style={styles.totalRow}>
+                <DataTable.Cell>Total Materials:</DataTable.Cell>
+                <DataTable.Cell> </DataTable.Cell>
+                <DataTable.Cell> </DataTable.Cell>
+                <DataTable.Cell> </DataTable.Cell>
+                <DataTable.Cell>{formatCurrency(totalMaterialCost)}</DataTable.Cell>
+                <DataTable.Cell> </DataTable.Cell>
+                <DataTable.Cell> </DataTable.Cell>
+              </DataTable.Row>
+              <DataTable.Row style={styles.grandTotalRow}>
+                <DataTable.Cell>Total Job Cost:</DataTable.Cell>
+                <DataTable.Cell> </DataTable.Cell>
+                <DataTable.Cell> </DataTable.Cell>
+                <DataTable.Cell> </DataTable.Cell>
+                <DataTable.Cell>{formatCurrency(totalLaborCost + totalMaterialCost)}</DataTable.Cell>
+                <DataTable.Cell> </DataTable.Cell>
+                <DataTable.Cell> </DataTable.Cell>
+              </DataTable.Row>
+            </DataTable>
+          </Card.Content>
+        </Card>
+      )}
+    </View>
+  );
+
+  const renderCalendarTab = () => (
+    <View>
+      <View style={styles.tabHeader}>
+        <Text variant="titleLarge">Schedule</Text>
+        <Button 
+          mode="contained" 
+          onPress={() => setShowAddEventDialog(true)}
+          icon="plus"
+        >
+          New Event
+        </Button>
+      </View>
+      
+      <Card style={styles.calendarCard}>
+        <Card.Content>
+          <View style={styles.calendarHeader}>
+            <View style={styles.monthSelector}>
+              <Button 
+                icon="chevron-left" 
+                onPress={() => {
+                  const prevMonth = new Date(currentMonth);
+                  prevMonth.setMonth(prevMonth.getMonth() - 1);
+                  setCurrentMonth(prevMonth);
+                }}
+                compact
+              />
+              <Text variant="titleMedium">
+                {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
+              </Text>
+              <Button 
+                icon="chevron-right" 
+                onPress={() => {
+                  const nextMonth = new Date(currentMonth);
+                  nextMonth.setMonth(nextMonth.getMonth() + 1);
+                  setCurrentMonth(nextMonth);
+                }}
+                compact
+              />
+            </View>
+            <SegmentedButtons
+              value={calendarView}
+              onValueChange={setCalendarView}
+              buttons={[
+                { value: 'month', label: 'Month' },
+                { value: 'agenda', label: 'List' }
+              ]}
+              style={styles.viewToggle}
+            />
+          </View>
+          
+          {calendarView === 'month' ? (
+            <SimpleCalendar
+              currentMonth={currentMonth}
+              onDateSelect={setSelectedDate}
+              markedDates={markedDates}
+              selectedDate={selectedDate}
+            />
+          ) : (
+            <View style={styles.agendaView}>
+              {events === null ? (
+                <Text style={styles.emptyMessage}>Events feature is not yet available</Text>
+              ) : events.length === 0 ? (
+                <Text style={styles.emptyMessage}>No events scheduled</Text>
+              ) : (
+                events
+                  .sort((a, b) => new Date(a.date) - new Date(b.date))
+                  .map(event => (
+                    <Card key={event.id} style={styles.eventCard}>
+                      <Card.Content>
+                        <Text variant="titleMedium">{event.title}</Text>
+                        <Text>{formatDate(event.date)}</Text>
+                        {event.notes && <Text style={styles.eventNotes}>{event.notes}</Text>}
+                      </Card.Content>
+                      <Card.Actions>
+                        <Button 
+                          icon="pencil" 
+                          onPress={() => handleEditEvent(event)}
+                          compact
+                        >
+                          Edit
+                        </Button>
+                        <Button 
+                          icon="delete" 
+                          onPress={() => handleDeleteEvent(event.id)}
+                          textColor="red"
+                          compact
+                        >
+                          Delete
+                        </Button>
+                      </Card.Actions>
+                    </Card>
+                  ))
+              )}
+            </View>
+          )}
+        </Card.Content>
+      </Card>
+      
+      {calendarView === 'month' && (
+        <Card style={styles.eventsForDayCard}>
+          <Card.Title title={`Events for ${formatDate(selectedDate)}`} />
+          <Card.Content>
+            {events === null ? (
+              <Text style={styles.emptyMessage}>Events feature is not yet available</Text>
+            ) : events.filter(event => event.date === selectedDate).length === 0 ? (
+              <Text style={styles.emptyMessage}>No events for this day</Text>
+            ) : (
+              events
+                .filter(event => event.date === selectedDate)
+                .map(event => (
+                  <Card key={event.id} style={styles.eventCard}>
+                    <Card.Content>
+                      <Text variant="titleMedium">{event.title}</Text>
+                      {event.notes && <Text style={styles.eventNotes}>{event.notes}</Text>}
+                    </Card.Content>
+                    <Card.Actions>
+                      <Button 
+                        icon="pencil" 
+                        onPress={() => handleEditEvent(event)}
+                        compact
+                      >
+                        Edit
+                      </Button>
+                      <Button 
+                        icon="delete" 
+                        onPress={() => handleDeleteEvent(event.id)}
+                        textColor="red"
+                        compact
+                      >
+                        Delete
+                      </Button>
+                    </Card.Actions>
+                  </Card>
+                ))
+            )}
+          </Card.Content>
+        </Card>
+      )}
+    </View>
+  );
+
+  const renderAttachmentsTab = () => (
+    <View>
+      <View style={styles.tabHeader}>
+        <Text variant="titleLarge">Attachments</Text>
+        <Button 
+          mode="contained" 
+          onPress={handleFileUpload}
+          icon="upload"
+          loading={uploading}
+          disabled={uploading}
+        >
+          Upload File
+        </Button>
+      </View>
+      
+      {uploading && (
+        <Card style={styles.uploadingCard}>
+          <Card.Content>
+            <Text>Uploading file...</Text>
+            <ActivityIndicator style={styles.progressBar} />
+          </Card.Content>
+        </Card>
+      )}
+      
+      {localAttachments.length === 0 ? (
+        <Text style={styles.emptyMessage}>No attachments for this job</Text>
+      ) : (
+        <View>
+          {localAttachments.map(attachment => (
+            <Card key={attachment.id} style={styles.attachmentCard}>
+              <Card.Content>
+                <View style={styles.attachmentRow}>
+                  <View style={styles.attachmentIcon}>
+                    <MaterialCommunityIcons 
+                      name={getFileIcon(attachment.name)} 
+                      size={24} 
+                      color="#666"
+                    />
+                  </View>
+                  <View style={styles.attachmentInfo}>
+                    <Text variant="titleMedium">{attachment.name}</Text>
+                    <Text variant="bodySmall">
+                      Type: {attachment.type || 'Unknown'} • 
+                      Size: {formatFileSize(attachment.size || 0)}
+                    </Text>
+                    <Text variant="bodySmall">
+                      Uploaded: {formatDate(attachment.created_at)}
+                    </Text>
+                  </View>
+                  <View style={styles.attachmentActions}>
+                    <Button 
+                      mode="outlined"
+                      icon="eye"
+                      onPress={() => {
+                        if (Platform.OS === 'web') {
+                          window.open(attachment.url, '_blank');
+                        }
+                      }}
+                    >
+                      View
+                    </Button>
+                    <Button 
+                      mode="outlined"
+                      icon="delete"
+                      textColor="red"
+                      onPress={() => handleDeleteLocalAttachment(attachment.id)}
+                    >
+                      Delete
+                    </Button>
+                  </View>
+                </View>
+              </Card.Content>
+            </Card>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+
+  const renderLogsTab = () => (
+    <View>
+      <View style={styles.tabHeader}>
+        <Text variant="titleLarge">Logs</Text>
+        <Button 
+          mode="contained" 
+          onPress={() => setShowAddLogDialog(true)}
+          icon="plus"
+        >
+          Add Log
+        </Button>
+      </View>
+      
+      {logs === null ? (
+        <Text style={styles.emptyMessage}>Logs feature is not yet available</Text>
+      ) : logs.length === 0 ? (
+        <Text style={styles.emptyMessage}>No logs recorded</Text>
+      ) : (
+        <View>
+          {logs.map(log => (
+            <Card key={log.id} style={styles.logCard}>
+              <Card.Content>
+                <Text variant="bodyMedium">{log.content}</Text>
+                <View style={styles.logMeta}>
+                  <Text variant="bodySmall">
+                    {new Date(log.created_at).toLocaleString()}
+                  </Text>
+                  <Text variant="bodySmall">By: {log.created_by}</Text>
+                </View>
+              </Card.Content>
+            </Card>
+          ))}
+        </View>
+      )}
+    </View>
+  );
 
   return (
     <View style={styles.container}>
@@ -1403,24 +1870,23 @@ export default function JobDetailsScreen() {
               styles.navigationItem,
               selectedTab === 'info' && styles.selectedItem
             ]}
-            onPress={() => setSelectedTab('info')}
+            onPress={() => handleNavigationItemClick('info')}
+            disabled={editMode && hasUnsavedChanges}
           >
-            <MaterialCommunityIcons
-              name="information"
-              size={24}
-              color={selectedTab === 'info' ? '#000000' : '#666666'}
-            />
+            <MaterialIcons name="dashboard" size={24} color="#666666" />
             <Text style={[
               styles.navigationText,
-              selectedTab === 'info' && styles.selectedText
-            ]}>Job Info</Text>
+              selectedTab === 'info' && styles.selectedText,
+              (editMode && hasUnsavedChanges) ? { color: '#cccccc' } : {}
+            ]}>Info</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[
               styles.navigationItem,
               selectedTab === 'invoices' && styles.selectedItem
             ]}
-            onPress={() => setSelectedTab('invoices')}
+            onPress={() => handleNavigationItemClick('invoices')}
+            disabled={editMode && hasUnsavedChanges}
           >
             <MaterialCommunityIcons
               name="file-document-outline"
@@ -1429,7 +1895,8 @@ export default function JobDetailsScreen() {
             />
             <Text style={[
               styles.navigationText,
-              selectedTab === 'invoices' && styles.selectedText
+              selectedTab === 'invoices' && styles.selectedText,
+              (editMode && hasUnsavedChanges) ? { color: '#cccccc' } : {}
             ]}>Invoices</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -1437,7 +1904,8 @@ export default function JobDetailsScreen() {
               styles.navigationItem,
               selectedTab === 'costs' && styles.selectedItem
             ]}
-            onPress={() => setSelectedTab('costs')}
+            onPress={() => handleNavigationItemClick('costs')}
+            disabled={editMode && hasUnsavedChanges}
           >
             <MaterialCommunityIcons
               name="currency-usd"
@@ -1446,7 +1914,8 @@ export default function JobDetailsScreen() {
             />
             <Text style={[
               styles.navigationText,
-              selectedTab === 'costs' && styles.selectedText
+              selectedTab === 'costs' && styles.selectedText,
+              (editMode && hasUnsavedChanges) ? { color: '#cccccc' } : {}
             ]}>Costs</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -1454,7 +1923,8 @@ export default function JobDetailsScreen() {
               styles.navigationItem,
               selectedTab === 'calendar' && styles.selectedItem
             ]}
-            onPress={() => setSelectedTab('calendar')}
+            onPress={() => handleNavigationItemClick('calendar')}
+            disabled={editMode && hasUnsavedChanges}
           >
             <MaterialCommunityIcons
               name="calendar"
@@ -1463,10 +1933,11 @@ export default function JobDetailsScreen() {
             />
             <Text style={[
               styles.navigationText,
-              selectedTab === 'calendar' && styles.selectedText
+              selectedTab === 'calendar' && styles.selectedText,
+              (editMode && hasUnsavedChanges) ? { color: '#cccccc' } : {}
             ]}>Calendar</Text>
           </TouchableOpacity>
-              </View>
+        </View>
 
         <View style={styles.navigationSection}>
           <Text style={styles.sectionTitle}>DOCUMENTATION</Text>
@@ -1475,7 +1946,8 @@ export default function JobDetailsScreen() {
               styles.navigationItem,
               selectedTab === 'attachments' && styles.selectedItem
             ]}
-            onPress={() => setSelectedTab('attachments')}
+            onPress={() => handleNavigationItemClick('attachments')}
+            disabled={editMode && hasUnsavedChanges}
           >
             <MaterialCommunityIcons
               name="attachment"
@@ -1484,7 +1956,8 @@ export default function JobDetailsScreen() {
             />
             <Text style={[
               styles.navigationText,
-              selectedTab === 'attachments' && styles.selectedText
+              selectedTab === 'attachments' && styles.selectedText,
+              (editMode && hasUnsavedChanges) ? { color: '#cccccc' } : {}
             ]}>Attachments</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -1492,7 +1965,8 @@ export default function JobDetailsScreen() {
               styles.navigationItem,
               selectedTab === 'logs' && styles.selectedItem
             ]}
-            onPress={() => setSelectedTab('logs')}
+            onPress={() => handleNavigationItemClick('logs')}
+            disabled={editMode && hasUnsavedChanges}
           >
             <MaterialCommunityIcons
               name="text-box-outline"
@@ -1501,13 +1975,29 @@ export default function JobDetailsScreen() {
             />
             <Text style={[
               styles.navigationText,
-              selectedTab === 'logs' && styles.selectedText
+              selectedTab === 'logs' && styles.selectedText,
+              (editMode && hasUnsavedChanges) ? { color: '#cccccc' } : {}
             ]}>Logs</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      <View style={styles.content}>
+      <View style={styles.contentPane}>
+        <View style={styles.contentHeader}>
+          <View style={{ flex: 1 }}>
+            <Text variant="headlineMedium">Job Details</Text>
+          </View>
+          <View style={styles.headerButtons}>
+            <Button
+              mode="outlined" 
+              onPress={() => handleNavigationItemClick('/jobs')}
+              style={{ marginRight: 8 }}
+            >
+              Back to Jobs
+            </Button>
+          </View>
+        </View>
+        
         {renderContent()}
       </View>
 
@@ -1518,6 +2008,87 @@ export default function JobDetailsScreen() {
       >
         {snackbarMessage}
       </Snackbar>
+
+      <Portal>
+        <Modal
+          visible={showStatusDropdown}
+          onDismiss={() => setShowStatusDropdown(false)}
+          contentContainerStyle={{
+            backgroundColor: 'white',
+            padding: 0,
+            margin: 20,
+            maxWidth: 300,
+            alignSelf: 'center',
+            borderRadius: 4
+          }}
+        >
+          <View>
+            {['pending', 'in_progress', 'completed', 'cancelled'].map((status) => (
+              <Pressable
+                key={status}
+                style={({ hovered }) => ({
+                  padding: 16,
+                  backgroundColor: hovered ? '#f5f5f5' : '#ffffff',
+                  borderBottomWidth: 1,
+                  borderBottomColor: '#f0f0f0',
+                })}
+                onPress={() => {
+                  handleStatusChange(status);
+                  setShowStatusDropdown(false);
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{ 
+                    width: 16, 
+                    height: 16, 
+                    borderRadius: 8, 
+                    backgroundColor: getStatusColor(status),
+                    marginRight: 8 
+                  }} />
+                  <Text style={{ textTransform: 'capitalize' }}>
+                    {status.replace('_', ' ')}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        </Modal>
+      </Portal>
+
+      <Portal>
+        <Dialog
+          visible={showExitConfirmation}
+          onDismiss={() => setShowExitConfirmation(false)}
+        >
+          <Dialog.Title>Unsaved Changes</Dialog.Title>
+          <Dialog.Content>
+            <Text>You have unsaved changes. Save changes before leaving?</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => {
+              // Discard changes
+              setHasUnsavedChanges(false);
+              setEditMode(false);
+              // Navigate to the pending tab if there is one
+              if (pendingNavigation) {
+                setSelectedTab(pendingNavigation);
+                setPendingNavigation(null);
+              }
+              setShowExitConfirmation(false);
+            }}>Discard</Button>
+            
+            <Button onPress={() => setShowExitConfirmation(false)}>Cancel</Button>
+            
+            <Button mode="contained" onPress={() => {
+              // Trigger save function
+              // This would need to call your form's submit handler
+              // After saving, it would navigate to the pending tab
+              // For now, just close the dialog
+              setShowExitConfirmation(false);
+            }}>Save</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </View>
   );
 }
@@ -1536,7 +2107,7 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: '#ffffff',
   },
-  content: {
+  contentPane: {
     flex: 1,
     padding: 16,
     backgroundColor: '#ffffff',
@@ -1794,34 +2365,92 @@ const styles = StyleSheet.create({
     marginRight: 8,
     width: 100,
   },
-  jobDescription: {
-    marginTop: 8,
-    lineHeight: 20,
-  },
-  backButton: {
+  descriptionRow: {
     marginTop: 8,
   },
-  costButtons: {
+  todayDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#6200ee',
+    position: 'absolute',
+    bottom: 4,
+  },
+  contentHeader: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
+  },
+  headerButton: {
+    marginLeft: 8,
+  },
+  editButton: {
+    backgroundColor: '#444444',
+  },
+  editDialog: {
+    width: '80%',
+    maxWidth: 800,
+    alignSelf: 'center',
+  },
+  formContainer: {
+    padding: 0,
+  },
+  editFormContainer: {
+    width: '100%',
+    backgroundColor: '#ffffff',
+    padding: 16,
+    marginTop: 16,
+    height: '100%',
+    overflow: 'auto',
+  },
+  infoContainer: {
     marginBottom: 16,
   },
-  addButton: {
-    flex: 1,
-  },
-  costCard: {
+  infoHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 16,
   },
-  descriptionInput: {
-    flex: 1,
-    height: 40,
-    backgroundColor: 'transparent',
+  table: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 4,
+    overflow: 'hidden',
   },
-  numberInput: {
-    width: 80,
-    height: 40,
-    textAlign: 'right',
-    backgroundColor: 'transparent',
+  tableHeaderRow: {
+    backgroundColor: '#f5f5f5',
+  },
+  tableHeaderCell: {
+    padding: 12,
+    borderRightWidth: 1,
+    borderRightColor: '#e0e0e0',
+    justifyContent: 'center',
+  },
+  tableHeaderText: {
+    fontWeight: 'bold',
+    textAlign: 'left',
+  },
+  tableRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  tableCell: {
+    padding: 12,
+    borderRightWidth: 1,
+    borderRightColor: '#e0e0e0',
+    justifyContent: 'center',
+  },
+  tableCellLabel: {
+    fontWeight: 'bold',
+    textAlign: 'left',
   },
   totalRow: {
     backgroundColor: '#f5f5f5',
@@ -1862,27 +2491,57 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e0e0e0',
   },
-  jobInfoSection: {
+  backButton: {
+    marginTop: 8,
+  },
+  costButtons: {
+    flexDirection: 'row',
+    gap: 8,
     marginBottom: 16,
   },
-  jobInfoRow: {
-    flexDirection: 'row',
-    marginTop: 8,
+  addButton: {
+    flex: 1,
   },
-  jobInfoLabel: {
-    fontWeight: 'bold',
-    marginRight: 8,
-    width: 100,
+  costCard: {
+    marginBottom: 16,
   },
-  descriptionRow: {
-    marginTop: 8,
+  descriptionInput: {
+    flex: 1,
+    height: 40,
+    backgroundColor: 'transparent',
   },
-  todayDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#6200ee',
+  numberInput: {
+    width: 80,
+    height: 40,
+    textAlign: 'right',
+    backgroundColor: 'transparent',
+  },
+  dropdownItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    backgroundColor: '#ffffff',
+    width: '100%',
+    cursor: 'pointer',
+  },
+  dropdownItemHover: {
+    backgroundColor: '#f5f5f5',
+  },
+  statusDropdown: {
     position: 'absolute',
-    bottom: 4,
+    top: 40,
+    left: 0,
+    right: 0,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 4,
+    zIndex: 9999,
+    elevation: 9,
+  },
+  statusDropdownItem: {
+    width: '100%',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
 }); 

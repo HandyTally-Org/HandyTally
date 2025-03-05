@@ -77,6 +77,7 @@ export default function DashboardScreen() {
   } | null>(null);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [selectedFilter, setSelectedFilter] = useState<string>('all');
 
   useEffect(() => {
     console.log("Dashboard component mounted");
@@ -89,9 +90,9 @@ export default function DashboardScreen() {
   useEffect(() => {
     // When either time range or status filter changes, update the chart
     if (allInvoices.length > 0) {
-      processChartData(allInvoices, timeRange, statusFilter);
+      processChartData(allInvoices, timeRange, selectedFilter);
     }
-  }, [timeRange, statusFilter]);
+  }, [timeRange, selectedFilter]);
 
   const fetchAllData = async () => {
     try {
@@ -369,7 +370,7 @@ export default function DashboardScreen() {
         console.log("Total sales calculated:", total);
         
         // Process data for chart with default time range and status filter
-        processChartData(data, timeRange, statusFilter);
+        processChartData(data, timeRange, selectedFilter);
       }
     } catch (error) {
       console.error('Error fetching sales data:', error);
@@ -421,34 +422,77 @@ export default function DashboardScreen() {
     }
   };
 
-  const processChartData = (invoices: any[], range: TimeRange, status: InvoiceStatus = 'all') => {
-    // Filter invoices based on time range
-    let filteredInvoices = filterInvoicesByTimeRange(invoices, range);
-    
-    // Further filter by status if not 'all'
-    if (status !== 'all') {
-      filteredInvoices = filteredInvoices.filter(invoice => invoice.status === status);
+  const processChartData = (invoices, timeRange, statusFilter) => {
+    try {
+      setSalesLoading(true);
+      
+      // Filter invoices by time range
+      const filteredInvoices = filterInvoicesByTimeRange(invoices, timeRange);
+      
+      // Group invoices by month and status
+      const invoicesByMonth = groupInvoicesByMonthAndStatus(filteredInvoices);
+      setInvoicesByMonth(invoicesByMonth);
+      
+      // Create chart data
+      const chartData = createChartData(invoicesByMonth, statusFilter);
+      setChartData(chartData);
+      
+      // Calculate total sales
+      const total = calculateTotalSales(filteredInvoices, statusFilter);
+      setTotalSales(total);
+      
+    } catch (error) {
+      console.error('Error processing chart data:', error);
+      setError('Failed to process sales data');
+    } finally {
+      setSalesLoading(false);
     }
+  };
+
+  const filterInvoicesByTimeRange = (invoices, range) => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
     
-    // Calculate total sales from filtered invoices
-    const total = filteredInvoices.reduce((sum, invoice) => sum + (invoice.total || 0), 0);
-    setTotalSales(total);
-    
-    // Get current year
-    const currentYear = new Date().getFullYear();
-    
-    // Group invoices by month and status
+    switch (range) {
+      case 'year_to_date':
+        // Filter invoices from the start of the current year to now
+        return invoices.filter(invoice => {
+          const date = new Date(invoice.issue_date);
+          return date.getFullYear() === currentYear;
+        });
+        
+      case 'last_6_months':
+        // Filter invoices from 6 months ago to now
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(currentMonth - 5);
+        return invoices.filter(invoice => {
+          const date = new Date(invoice.issue_date);
+          return date >= sixMonthsAgo;
+        });
+        
+      case 'last_12_months':
+        // Filter invoices from 12 months ago to now
+        const twelveMonthsAgo = new Date();
+        twelveMonthsAgo.setFullYear(currentYear - 1);
+        return invoices.filter(invoice => {
+          const date = new Date(invoice.issue_date);
+          return date >= twelveMonthsAgo;
+        });
+        
+      case 'all_time':
+      default:
+        // Return all invoices
+        return invoices;
+    }
+  };
+
+  const groupInvoicesByMonthAndStatus = (invoices) => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const statuses = ['paid', 'sent', 'draft', 'overdue'];
-    const statusColors = {
-      paid: '#71AF24', // Green
-      sent: '#3498db', // Blue
-      draft: '#9b59b6', // Purple
-      overdue: '#e74c3c', // Red
-    };
+    const statuses = ['estimate', 'work_order', 'sent', 'partial_paid', 'paid', 'overdue', 'cancelled'];
     
     // Initialize data structure for invoices by month and status
-    const monthlyData: InvoicesByMonth = {};
+    const monthlyData = {};
     months.forEach(month => {
       monthlyData[month] = {};
       statuses.forEach(status => {
@@ -460,98 +504,96 @@ export default function DashboardScreen() {
     });
     
     // Populate data
-    filteredInvoices.forEach(invoice => {
+    invoices.forEach(invoice => {
       if (!invoice.issue_date) return;
       
       const date = new Date(invoice.issue_date);
-      const year = date.getFullYear();
-      const month = date.toLocaleDateString('en-US', { month: 'short' });
-      const status = invoice.status || 'draft';
+      const month = months[date.getMonth()];
+      const status = invoice.status || 'estimate';
       
-      // Only add current year data
-      if (year === currentYear) {
-        // Make sure the status exists in our structure
-        if (!monthlyData[month][status]) {
-          monthlyData[month][status] = { total: 0, invoices: [] };
-        }
-        
-        // Ensure we have the invoice_number
-        const invoiceWithNumber = {
-          ...invoice,
-          invoice_number: invoice.invoice_number || `Unknown-${monthlyData[month][status].invoices.length + 1}`
-        };
-        
-        monthlyData[month][status].total += invoice.total || 0;
-        monthlyData[month][status].invoices.push(invoiceWithNumber);
+      // Make sure the status exists in our structure
+      if (!monthlyData[month][status]) {
+        monthlyData[month][status] = { total: 0, invoices: [] };
       }
+      
+      monthlyData[month][status].total += invoice.total || 0;
+      monthlyData[month][status].invoices.push(invoice);
     });
     
-    // Log the invoices for debugging
-    console.log("Processed invoices by month:", JSON.stringify(monthlyData, null, 2));
+    return monthlyData;
+  };
+
+  const createChartData = (invoicesByMonth, statusFilter) => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const statuses = ['estimate', 'work_order', 'sent', 'partial_paid', 'paid', 'overdue', 'cancelled'];
     
-    // Save the processed data for interactive features
-    setInvoicesByMonth(monthlyData);
+    const statusColors = {
+      estimate: '#9b59b6',    // Purple
+      work_order: '#f39c12',  // Orange
+      sent: '#3498db',        // Blue
+      partial_paid: '#2ecc71', // Light Green
+      paid: '#27ae60',        // Green
+      overdue: '#e74c3c',     // Red
+      cancelled: '#95a5a6'    // Gray
+    };
+    
+    // If a specific status filter is selected, only show that status
+    const statusesToShow = statusFilter === 'all' ? statuses : [statusFilter];
     
     // Prepare datasets for the stacked bar chart
-    const datasets = statuses.map(status => {
+    const datasets = statusesToShow.map(status => {
       return {
-        label: status.charAt(0).toUpperCase() + status.slice(1),
-        data: months.map(month => monthlyData[month][status]?.total || 0),
-        backgroundColor: statusColors[status as keyof typeof statusColors]
+        label: status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' '),
+        data: months.map(month => {
+          // Make sure we handle the case where the status might not exist in the data
+          if (!invoicesByMonth[month] || !invoicesByMonth[month][status]) {
+            return 0;
+          }
+          return invoicesByMonth[month][status].total || 0;
+        }),
+        backgroundColor: statusColors[status] || '#999999'
       };
     });
     
-    // Set chart data
-    setChartData({
+    return {
       labels: months,
       datasets
-    });
-    
-    console.log("Chart data processed for stacked bar chart");
+    };
   };
 
-  const filterInvoicesByTimeRange = (invoices: any[], range: TimeRange): any[] => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-    
-    switch (range) {
-      case 'year_to_date':
-        // Filter invoices from the start of the current year to now
-        return invoices.filter(invoice => {
-          const date = new Date(invoice.issue_date);
-          return date.getFullYear() === currentYear || date.getFullYear() === currentYear - 1;
-        });
-        
-      case 'last_6_months':
-        // Filter invoices from 6 months ago to now
-        const sixMonthsAgo = new Date();
-        sixMonthsAgo.setMonth(currentMonth - 5);
-        return invoices.filter(invoice => {
-          const date = new Date(invoice.issue_date);
-          return date >= sixMonthsAgo || 
-                 (date.getFullYear() === currentYear - 1 && 
-                  date.getMonth() >= currentMonth - 5 && 
-                  date.getMonth() <= currentMonth);
-        });
-        
-      case 'last_12_months':
-        // Filter invoices from 12 months ago to now
-        const twelveMonthsAgo = new Date();
-        twelveMonthsAgo.setFullYear(currentYear - 1);
-        return invoices.filter(invoice => {
-          const date = new Date(invoice.issue_date);
-          return date >= twelveMonthsAgo || 
-                 (date.getFullYear() === currentYear - 2 && 
-                  date.getMonth() >= currentMonth && 
-                  date.getMonth() <= 11);
-        });
-        
-      case 'all_time':
-      default:
-        // Return all invoices
-        return invoices;
+  const calculateTotalSales = (invoices, statusFilter) => {
+    // If status filter is 'all', sum all invoices, otherwise only sum those matching the filter
+    if (statusFilter === 'all') {
+      return invoices.reduce((sum, invoice) => sum + (invoice.total || 0), 0);
+    } else {
+      return filterInvoicesByStatus(invoices, statusFilter)
+        .reduce((sum, invoice) => sum + (invoice.total || 0), 0);
     }
+  };
+
+  const filterInvoicesByStatus = (invoices, statusFilter) => {
+    if (statusFilter === 'all') {
+      return invoices;
+    }
+    
+    return invoices.filter(invoice => {
+      // Handle special case for 'estimate' which might be stored as 'draft'
+      if (statusFilter === 'estimate' && (invoice.status === 'estimate' || invoice.status === 'draft')) {
+        return true;
+      }
+      
+      // Handle special case for 'work_order'
+      if (statusFilter === 'work_order' && invoice.status === 'work_order') {
+        return true;
+      }
+      
+      // Handle special case for 'partial_paid'
+      if (statusFilter === 'partial_paid' && invoice.status === 'partial_paid') {
+        return true;
+      }
+      
+      return invoice.status === statusFilter;
+    });
   };
 
   const formatCurrency = (amount: number) => {
@@ -945,6 +987,30 @@ export default function DashboardScreen() {
       textAlign: 'center',
       marginTop: 4,
     },
+    filterContainer: {
+      flexDirection: 'row',
+      marginBottom: 16,
+    },
+    filterButton: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderWidth: 1,
+      borderColor: '#e0e0e0',
+      borderRadius: 4,
+      marginRight: 8,
+    },
+    filterButtonActive: {
+      borderColor: '#3498db',
+    },
+    filterText: {
+      fontSize: 14,
+      fontWeight: 'bold',
+    },
+    filterTextActive: {
+      fontSize: 14,
+      fontWeight: 'bold',
+      color: '#3498db',
+    },
   });
 
   return (
@@ -1238,39 +1304,104 @@ export default function DashboardScreen() {
                   </Menu>
                 </View>
                 
-                <View style={{ marginTop: 16 }}>
-                  <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 8 }}>
-                    {formatCurrency(totalSales)}
-                  </Text>
-                  <Text style={{ color: '#666' }}>
-                    Total Sales ({getTimeRangeLabel(timeRange)})
-                  </Text>
-                </View>
-                
-                {/* Add status filter buttons */}
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 16, marginBottom: 8 }}>
-                  {['all', 'paid', 'draft', 'sent', 'overdue'].map(status => (
+                <View style={styles.filterContainer}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     <TouchableOpacity
-                      key={status}
-                      style={{
-                        backgroundColor: statusFilter === status ? getStatusColor(status) : '#ffffff',
-                        borderWidth: 0,
-                        paddingHorizontal: 12,
-                        paddingVertical: 6,
-                        marginRight: 8,
-                        marginBottom: 8,
-                        borderRadius: 4,
-                      }}
-                      onPress={() => handleStatusFilterChange(status as InvoiceStatus)}
+                      style={[
+                        styles.filterButton,
+                        selectedFilter === 'all' && styles.filterButtonActive
+                      ]}
+                      onPress={() => setSelectedFilter('all')}
                     >
-                      <Text style={{ 
-                        color: statusFilter === status ? '#ffffff' : getStatusColor(status),
-                        fontWeight: 'bold',
-                      }}>
-                        {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
+                      <Text style={selectedFilter === 'all' ? styles.filterTextActive : styles.filterText}>
+                        All
                       </Text>
                     </TouchableOpacity>
-                  ))}
+                    
+                    <TouchableOpacity
+                      style={[
+                        styles.filterButton,
+                        selectedFilter === 'estimate' && styles.filterButtonActive
+                      ]}
+                      onPress={() => setSelectedFilter('estimate')}
+                    >
+                      <Text style={selectedFilter === 'estimate' ? styles.filterTextActive : styles.filterText}>
+                        Estimate
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={[
+                        styles.filterButton,
+                        selectedFilter === 'work_order' && styles.filterButtonActive
+                      ]}
+                      onPress={() => setSelectedFilter('work_order')}
+                    >
+                      <Text style={selectedFilter === 'work_order' ? styles.filterTextActive : styles.filterText}>
+                        Work Order
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={[
+                        styles.filterButton,
+                        selectedFilter === 'sent' && styles.filterButtonActive
+                      ]}
+                      onPress={() => setSelectedFilter('sent')}
+                    >
+                      <Text style={selectedFilter === 'sent' ? styles.filterTextActive : styles.filterText}>
+                        Sent
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={[
+                        styles.filterButton,
+                        selectedFilter === 'partial_paid' && styles.filterButtonActive
+                      ]}
+                      onPress={() => setSelectedFilter('partial_paid')}
+                    >
+                      <Text style={selectedFilter === 'partial_paid' ? styles.filterTextActive : styles.filterText}>
+                        Partial Paid
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={[
+                        styles.filterButton,
+                        selectedFilter === 'paid' && styles.filterButtonActive
+                      ]}
+                      onPress={() => setSelectedFilter('paid')}
+                    >
+                      <Text style={selectedFilter === 'paid' ? styles.filterTextActive : styles.filterText}>
+                        Paid
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={[
+                        styles.filterButton,
+                        selectedFilter === 'overdue' && styles.filterButtonActive
+                      ]}
+                      onPress={() => setSelectedFilter('overdue')}
+                    >
+                      <Text style={selectedFilter === 'overdue' ? styles.filterTextActive : styles.filterText}>
+                        Overdue
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={[
+                        styles.filterButton,
+                        selectedFilter === 'cancelled' && styles.filterButtonActive
+                      ]}
+                      onPress={() => setSelectedFilter('cancelled')}
+                    >
+                      <Text style={selectedFilter === 'cancelled' ? styles.filterTextActive : styles.filterText}>
+                        Cancelled
+                      </Text>
+                    </TouchableOpacity>
+                  </ScrollView>
                 </View>
                 
                 <View style={{ marginTop: 16, marginBottom: 8 }}>

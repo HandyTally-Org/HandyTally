@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Modal } from 'react-native';
 import { Text, Button, Searchbar, Snackbar, Card, List, Chip, IconButton, Dialog, Portal, TextInput, DataTable, ActivityIndicator } from 'react-native-paper';
 import { supabase } from '../../lib/supabase';
 import { InvoiceForm } from '../../components/InvoiceForm';
@@ -85,6 +85,11 @@ export default function InvoicesScreen() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [sortColumn, setSortColumn] = useState<string>('invoice_number');
   const [sortDirection, setSortDirection] = useState<'ascending' | 'descending'>('descending');
+  const [showInvoiceFormModal, setShowInvoiceFormModal] = useState(false);
+  const [invoiceToEdit, setInvoiceToEdit] = useState(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showInvoiceList, setShowInvoiceList] = useState(true);
+  const [statusFilter, setStatusFilter] = useState('all');
   const router = useRouter();
 
   useEffect(() => {
@@ -95,6 +100,7 @@ export default function InvoicesScreen() {
     checkInvoicesTables();
     checkDatabaseSchema();
     checkAndCreateInvoiceItemsTable();
+    updateDraftToEstimate();
   }, []);
 
   useEffect(() => {
@@ -115,6 +121,108 @@ export default function InvoicesScreen() {
     return () => {
       Object.prototype.toString = originalToString;
     };
+  }, []);
+
+  useEffect(() => {
+    // Check URL parameters for createNew and jobId
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const createNew = urlParams.get('createNew');
+      const jobId = urlParams.get('jobId');
+      
+      if (createNew === 'true') {
+        // Set up a new invoice with the specified job
+        setShowInvoiceList(false);
+        setInvoiceToEdit(null);
+        
+        // If a job ID was provided, pre-select that job
+        if (jobId) {
+          const selectedJob = jobs.find(job => job.uid === jobId);
+          if (selectedJob) {
+            // Pre-select the job's client as well if available
+            const selectedClient = clients.find(client => client.uid === selectedJob.client_id);
+            
+            // Create a partial invoice object with the pre-selected job and client
+            const newInvoice = {
+              job_id: selectedJob.uid,
+              client_id: selectedClient?.uid || '',
+              status: 'estimate'
+            };
+            
+            setInvoiceToEdit(newInvoice);
+          }
+        }
+      }
+    }
+  }, [jobs, clients]);
+
+  useEffect(() => {
+    // Check if we need to create an invoice for a specific job
+    if (typeof window !== 'undefined') {
+      const jobId = localStorage.getItem('createInvoiceForJob');
+      if (jobId) {
+        // Clear the localStorage item
+        localStorage.removeItem('createInvoiceForJob');
+        
+        // Find the job
+        const selectedJob = jobs.find(job => job.uid === jobId);
+        if (selectedJob) {
+          // Pre-select the job's client as well if available
+          const selectedClient = clients.find(client => client.uid === selectedJob.client_id);
+          
+          // Create a partial invoice object with the pre-selected job and client
+          const newInvoice = {
+            job_id: selectedJob.uid,
+            client_id: selectedClient?.uid || '',
+            status: 'estimate'
+          };
+          
+          // Show the invoice form
+          setShowInvoiceList(false);
+          setInvoiceToEdit(newInvoice);
+        }
+      }
+    }
+  }, [jobs, clients]);
+
+  useEffect(() => {
+    // Check if we have new invoice data in localStorage
+    if (typeof window !== 'undefined') {
+      try {
+        const newInvoiceDataString = localStorage.getItem('newInvoiceData');
+        if (newInvoiceDataString) {
+          // Clear the localStorage item first to prevent loops
+          localStorage.removeItem('newInvoiceData');
+          
+          // Parse the new invoice data
+          const newInvoiceData = JSON.parse(newInvoiceDataString);
+          
+          // Create a properly structured invoice object
+          const newInvoice = {
+            job_id: newInvoiceData.job_id || '',
+            client_id: newInvoiceData.client_id || '',
+            status: newInvoiceData.status || 'estimate',
+            invoice_number: '',
+            issue_date: new Date().toISOString().split('T')[0],
+            due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            subtotal: 0,
+            tax_rate: 0,
+            tax_amount: 0,
+            total: 0,
+            notes: '',
+            invoice_items: []
+          };
+          
+          console.log('Created new invoice object:', newInvoice);
+          
+          // Show the invoice form with the new invoice data
+          setShowInvoiceList(false);
+          setInvoiceToEdit(newInvoice);
+        }
+      } catch (error) {
+        console.error('Error handling new invoice data:', error);
+      }
+    }
   }, []);
 
   async function fetchInvoices() {
@@ -466,10 +574,10 @@ export default function InvoicesScreen() {
       if (invoiceItems && invoiceItems.length > 0) {
         // Delete all related invoice items first
         const { error: deleteItemsError } = await supabase
-        .from('invoice_items')
-        .delete()
+          .from('invoice_items')
+          .delete()
         .eq('invoice_id', invoiceId);
-      
+        
         if (deleteItemsError) {
           console.error('Error deleting invoice items:', deleteItemsError);
           throw new Error(`Error deleting invoice items: ${deleteItemsError.message}`);
@@ -576,16 +684,23 @@ export default function InvoicesScreen() {
   const getFilteredInvoices = () => {
     let filtered = [...invoices];
     
-    // Apply existing filters
+    // Apply status filter with special handling for estimate/draft
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(invoice => {
+        if (statusFilter === 'estimate') {
+          // Match both 'estimate' and 'draft' for backward compatibility
+          return invoice.status === 'estimate' || invoice.status === 'draft';
+        }
+        return invoice.status === statusFilter;
+      });
+    }
+    
+    // Apply search filter
     if (searchQuery) {
       filtered = filtered.filter(invoice => 
         invoice.invoice_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (invoice.client_name || '').toLowerCase().includes(searchQuery.toLowerCase())
       );
-    }
-    
-    if (selectedStatuses.length > 0) {
-      filtered = filtered.filter(invoice => selectedStatuses.includes(invoice.status));
     }
     
     // Apply sorting based on current sort column and direction
@@ -809,23 +924,66 @@ export default function InvoicesScreen() {
     return invoice.status === 'draft';
   };
 
-  const handleEditInvoice = async (invoice: Invoice) => {
-    console.log('Editing invoice:', invoice);
-    
+  const handleEditInvoice = async (invoice) => {
     try {
-      const items = await fetchInvoiceItems(invoice.uid);
+      console.log('Editing invoice:', JSON.stringify(invoice, null, 2));
       
-      setEditingInvoice({
+      // Fetch invoice items
+      const { data: items, error: itemsError } = await supabase
+        .from('invoice_items')
+        .select('*')
+        .eq('invoice_id', invoice.uid);
+      
+      if (itemsError) throw itemsError;
+      console.log('Fetched invoice items:', JSON.stringify(items, null, 2));
+      
+      // Fetch job details
+      let jobData = null;
+      if (invoice.job_id) {
+        const { data: job, error: jobError } = await supabase
+          .from('jobs')
+          .select('*')
+          .eq('uid', invoice.job_id)
+          .single();
+        
+        if (!jobError && job) {
+          jobData = job;
+          console.log('Fetched job data:', JSON.stringify(job, null, 2));
+        }
+      }
+      
+      // Fetch client details
+      let clientData = null;
+      if (invoice.client_id) {
+        const { data: client, error: clientError } = await supabase
+          .from('clients')
+          .select('*')
+          .eq('uid', invoice.client_id)
+          .single();
+        
+        if (!clientError && client) {
+          clientData = client;
+          console.log('Fetched client data:', JSON.stringify(client, null, 2));
+        }
+      }
+      
+      // Set the complete invoice data with related entities
+      const completeInvoice = {
         ...invoice,
-        job_id: invoice.job?.id || invoice.job_id,
-        client_id: invoice.client?.id || invoice.client_id
-      });
+        job: jobData,
+        client: clientData,
+        invoice_items: items || []
+      };
       
-      // Set the items for the form
-      setInvoiceItems(items);
-    } catch (error: any) {
-      console.error('Error preparing invoice for editing:', error);
-      showSnackbar(`Error: ${error.message}`);
+      console.log('Complete invoice data for editing:', JSON.stringify(completeInvoice, null, 2));
+      
+      // Set the invoice to edit with all related data
+      setInvoiceToEdit(completeInvoice);
+      setShowInvoiceList(false);
+      
+    } catch (error) {
+      console.error('Error fetching invoice details:', error);
+      showSnackbar('Error loading invoice details');
     }
   };
   
@@ -897,17 +1055,25 @@ export default function InvoicesScreen() {
         showSnackbar('Invoice updated successfully');
       } else {
         // Create a new invoice
-        const { data: newInvoice, error: createError } = await supabase
+        const { data: newInvoice, error: invoiceError } = await supabase
           .from('invoices')
           .insert({
-            ...invoiceData,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            invoice_number: updatedInvoice.invoice_number,
+            client_id: updatedInvoice.client_id,
+            job_id: updatedInvoice.job_id,
+            issue_date: updatedInvoice.issue_date,
+            due_date: updatedInvoice.due_date,
+            subtotal: updatedInvoice.subtotal,
+            tax_rate: updatedInvoice.tax_rate,
+            tax_amount: updatedInvoice.tax_amount,
+            total: updatedInvoice.total,
+            notes: updatedInvoice.notes,
+            status: updatedInvoice.status || 'estimate',
           })
           .select()
           .single();
         
-        if (createError) throw createError;
+        if (invoiceError) throw invoiceError;
         
         console.log('Created new invoice:', newInvoice);
         
@@ -983,7 +1149,7 @@ export default function InvoicesScreen() {
           // Don't include items here
         })
         .eq('uid', invoiceId);
-
+      
       if (invoiceError) throw invoiceError;
 
       // Then handle the items separately
@@ -1135,177 +1301,445 @@ export default function InvoicesScreen() {
     setSelectedStatuses([]);
   };
 
-  return (
-    <View style={{
-      flex: 1,
-      padding: 16,
-      backgroundColor: '#ffffff',
-    }}>
-      <Text style={{
-        fontFamily: 'System',
-        fontSize: 26,
-        fontWeight: '600',
-        marginBottom: 16,
-        color: '#333333',
-      }}>Invoices</Text>
-      
-      <View style={styles.searchAndAddContainer}>
-      <Searchbar
-        placeholder="Search invoices..."
-        onChangeText={setSearchQuery}
-          value={searchQuery}
-          style={[styles.searchBar, { backgroundColor: '#f5f5f5' }]}
-      />
-      
-        <Button 
-          mode="contained" 
-          onPress={() => router.push('/invoices/new')}
-          style={styles.addButton}
-        >
-          Create New Invoice
-        </Button>
-      </View>
-        
-        <View style={styles.filtersContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll}>
-          <Chip 
-            selected={selectedStatuses.length === 0}
-            onPress={clearFilters}
-            style={styles.filterChip}
-            mode="outlined"
-          >
-            All
-          </Chip>
-          
-          {allStatuses.map(status => (
-            <Chip
-              key={status}
-              selected={selectedStatuses.includes(status)}
-              onPress={() => toggleStatusFilter(status)}
-              style={[
-                styles.filterChip,
-                { 
-                  backgroundColor: 'white',
-                  borderColor: '#e0e0e0', // Gray border for all chips
-                  borderWidth: 1
-                }
-              ]}
-              textStyle={{ 
-                color: selectedStatuses.includes(status) ? getStatusChipColor(status) : 'black',
-                fontWeight: selectedStatuses.includes(status) ? 'bold' : 'normal'
-              }}
-            >
-              {status.charAt(0).toUpperCase() + status.slice(1)}
-            </Chip>
-          ))}
-        </ScrollView>
-      </View>
+  // Add a function to handle viewing invoice details
+  const handleViewInvoiceDetails = (invoice) => {
+    setSelectedInvoice(invoice);
+    setShowDetailsModal(true);
+  };
 
-      <Card style={{
-        flex: 1,
-        marginBottom: 16,
-        backgroundColor: '#ffffff',
-        borderRadius: 8,
-        elevation: 2,
-        shadowColor: 'rgba(0,0,0,0.1)',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.8,
-        shadowRadius: 1,
-      }}>
-        <DataTable style={{ backgroundColor: '#ffffff' }}>
-          <DataTable.Header style={{ backgroundColor: '#ffffff' }}>
-            <DataTable.Title 
-              style={{ backgroundColor: '#ffffff' }}
-              sortDirection={sortColumn === 'invoice_number' ? sortDirection : undefined}
-              onPress={() => handleSort('invoice_number')}
+  // Add this right before rendering the InvoiceForm
+  console.log('RENDERING INVOICE FORM WITH DATA:', {
+    invoiceToEdit: JSON.stringify(invoiceToEdit, null, 2),
+    invoiceItems: invoiceToEdit?.invoice_items ? JSON.stringify(invoiceToEdit.invoice_items, null, 2) : 'No items'
+  });
+
+  // Add this function to directly update the invoice status
+  const updateInvoiceStatus = async (invoiceId, newStatus) => {
+    try {
+      console.log(`Directly updating invoice ${invoiceId} status to: ${newStatus}`);
+      
+      const { error } = await supabase
+        .from('invoices')
+        .update({ status: newStatus })
+        .eq('uid', invoiceId);
+      
+      if (error) {
+        console.error('Error updating invoice status:', error);
+        showSnackbar(`Failed to update status: ${error.message}`);
+        return false;
+      }
+      
+      console.log('Status updated successfully');
+      showSnackbar('Invoice status updated successfully');
+      fetchInvoices(); // Refresh the list
+      return true;
+    } catch (error) {
+      console.error('Error in updateInvoiceStatus:', error);
+      showSnackbar(`Error: ${error.message}`);
+      return false;
+    }
+  };
+
+  // Update the getStatusTextColor function to include the new statuses
+  const getStatusTextColor = (status: string): string => {
+    switch (status) {
+      case 'estimate':
+        return '#666666'; // Dark gray
+      case 'work_order':
+        return '#9c27b0'; // Purple
+      case 'sent':
+        return '#0066cc'; // Blue
+      case 'partial_paid':
+        return '#ff9800'; // Orange
+      case 'paid':
+        return '#008800'; // Green
+      case 'overdue':
+        return '#cc0000'; // Red
+      case 'cancelled':
+        return '#888888'; // Gray
+      default:
+        return '#000000'; // Black
+    }
+  };
+
+  // Add a function to update all existing "draft" statuses to "estimate"
+  const updateDraftToEstimate = async () => {
+    try {
+      console.log('Updating all draft invoices to estimate status...');
+      
+      const { error } = await supabase
+        .from('invoices')
+        .update({ status: 'estimate' })
+        .eq('status', 'draft');
+      
+      if (error) {
+        console.error('Error updating draft invoices:', error);
+        showSnackbar('Error updating invoice statuses');
+        return;
+      }
+      
+      console.log('Successfully updated draft invoices to estimate');
+      fetchInvoices(); // Refresh the list
+    } catch (error) {
+      console.error('Error in updateDraftToEstimate:', error);
+      showSnackbar(`Error: ${error.message}`);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <PageHeader title="Invoices" />
+      
+      {showInvoiceList ? (
+        <>
+          <View style={styles.searchContainer}>
+            <Searchbar
+              placeholder="Search invoices..."
+              onChangeText={setSearchQuery}
+              value={searchQuery}
+              style={[styles.searchBar, { backgroundColor: '#f5f5f5' }]}
+            />
+            
+            <Button
+              mode="contained"
+              onPress={() => {
+                setInvoiceToEdit(null); // No invoice to edit (creating new)
+                setShowInvoiceList(false); // Show the form
+              }}
+              style={styles.addButton}
             >
-              Invoice #
-            </DataTable.Title>
-            <DataTable.Title 
-              style={{ backgroundColor: '#ffffff' }}
-              sortDirection={sortColumn === 'client_name' ? sortDirection : undefined}
-              onPress={() => handleSort('client_name')}
-            >
-              Client
-            </DataTable.Title>
-            <DataTable.Title 
-              style={{ backgroundColor: '#ffffff' }}
-              sortDirection={sortColumn === 'issue_date' ? sortDirection : undefined}
-              onPress={() => handleSort('issue_date')}
-            >
-              Issue Date
-            </DataTable.Title>
-            <DataTable.Title 
-              style={{ backgroundColor: '#ffffff' }}
-              sortDirection={sortColumn === 'due_date' ? sortDirection : undefined}
-              onPress={() => handleSort('due_date')}
-            >
-              Due Date
-            </DataTable.Title>
-            <DataTable.Title 
-              style={{ backgroundColor: '#ffffff' }}
-              sortDirection={sortColumn === 'total' ? sortDirection : undefined}
-              onPress={() => handleSort('total')}
-            >
-              Total
-            </DataTable.Title>
-            <DataTable.Title 
-              style={{ backgroundColor: '#ffffff' }}
-              sortDirection={sortColumn === 'status' ? sortDirection : undefined}
-              onPress={() => handleSort('status')}
-            >
-              Status
-            </DataTable.Title>
-            <DataTable.Title style={{ backgroundColor: '#ffffff' }}>Actions</DataTable.Title>
-          </DataTable.Header>
+              Create New Invoice
+            </Button>
+          </View>
           
-            {loading ? (
-            <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
-              <DataTable.Cell style={{ flex: 7, backgroundColor: '#ffffff' }}>
-                <ActivityIndicator size="small" style={{ marginRight: 8 }} />
-                Loading invoices...
-              </DataTable.Cell>
-            </DataTable.Row>
-            ) : getFilteredInvoices().length === 0 ? (
-            <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
-              <DataTable.Cell style={{ flex: 7, backgroundColor: '#ffffff' }}>No invoices found</DataTable.Cell>
-            </DataTable.Row>
-          ) : (
-            getFilteredInvoices().map(invoice => (
-              <DataTable.Row key={invoice.uid} style={{ backgroundColor: '#ffffff' }}>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{invoice.invoice_number}</DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{invoice.client_name || 'Unknown Client'}</DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(invoice.issue_date)}</DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(invoice.due_date)}</DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>${invoice.total.toFixed(2)}</DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
-                  <Chip mode="outlined" style={{ backgroundColor: getStatusChipColor(invoice.status) }}>
-                        {invoice.status.toUpperCase()}
-                      </Chip>
-                </DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
-                  <View style={{ flexDirection: 'row' }}>
-                    <IconButton
-                      icon="pencil"
-                      size={20}
-                      onPress={() => handleEditInvoice(invoice)}
-                    />
-                    <IconButton
-                      icon="delete"
-                      size={20}
-                      iconColor="red"
-                            onPress={() => {
-                        setSelectedInvoice(invoice);
-                        setShowDeleteDialog(true);
-                      }}
-                    />
-                  </View>
-                </DataTable.Cell>
-              </DataTable.Row>
-            ))
-          )}
-        </DataTable>
-        </Card>
+          <View style={styles.filtersContainer}>
+            <View style={{ flexDirection: 'row', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+              <Button
+                mode={statusFilter === 'all' ? 'contained' : 'outlined'}
+                onPress={() => setStatusFilter('all')}
+                style={{ marginRight: 8 }}
+              >
+                All
+              </Button>
+              <Button
+                mode={statusFilter === 'estimate' ? 'contained' : 'outlined'}
+                onPress={() => setStatusFilter('estimate')}
+                style={{ marginRight: 8 }}
+              >
+                Estimate
+              </Button>
+              <Button
+                mode={statusFilter === 'work_order' ? 'contained' : 'outlined'}
+                onPress={() => setStatusFilter('work_order')}
+                style={{ marginRight: 8 }}
+              >
+                Work Order
+              </Button>
+              <Button
+                mode={statusFilter === 'sent' ? 'contained' : 'outlined'}
+                onPress={() => setStatusFilter('sent')}
+                style={{ marginRight: 8 }}
+              >
+                Sent
+              </Button>
+              <Button
+                mode={statusFilter === 'partial_paid' ? 'contained' : 'outlined'}
+                onPress={() => setStatusFilter('partial_paid')}
+                style={{ marginRight: 8 }}
+              >
+                Partial Paid
+              </Button>
+              <Button
+                mode={statusFilter === 'paid' ? 'contained' : 'outlined'}
+                onPress={() => setStatusFilter('paid')}
+                style={{ marginRight: 8 }}
+              >
+                Paid
+              </Button>
+              <Button
+                mode={statusFilter === 'overdue' ? 'contained' : 'outlined'}
+                onPress={() => setStatusFilter('overdue')}
+                style={{ marginRight: 8 }}
+              >
+                Overdue
+              </Button>
+              <Button
+                mode={statusFilter === 'cancelled' ? 'contained' : 'outlined'}
+                onPress={() => setStatusFilter('cancelled')}
+              >
+                Cancelled
+              </Button>
+            </View>
+          </View>
+
+          <Card style={{
+            flex: 1,
+            marginBottom: 16,
+            backgroundColor: '#ffffff',
+            borderRadius: 8,
+            elevation: 2,
+            shadowColor: 'rgba(0,0,0,0.1)',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.8,
+            shadowRadius: 1,
+          }}>
+            <DataTable style={{ backgroundColor: '#ffffff' }}>
+              <DataTable.Header style={{ backgroundColor: '#ffffff' }}>
+                <DataTable.Title 
+                  style={{ backgroundColor: '#ffffff' }}
+                  sortDirection={sortColumn === 'invoice_number' ? sortDirection : undefined}
+                  onPress={() => handleSort('invoice_number')}
+                >
+                  Invoice #
+                </DataTable.Title>
+                <DataTable.Title 
+                  style={{ backgroundColor: '#ffffff' }}
+                  sortDirection={sortColumn === 'client_name' ? sortDirection : undefined}
+                  onPress={() => handleSort('client_name')}
+                >
+                  Client
+                </DataTable.Title>
+                <DataTable.Title 
+                  style={{ backgroundColor: '#ffffff' }}
+                  sortDirection={sortColumn === 'issue_date' ? sortDirection : undefined}
+                  onPress={() => handleSort('issue_date')}
+                >
+                  Issue Date
+                </DataTable.Title>
+                <DataTable.Title 
+                  style={{ backgroundColor: '#ffffff' }}
+                  sortDirection={sortColumn === 'due_date' ? sortDirection : undefined}
+                  onPress={() => handleSort('due_date')}
+                >
+                  Due Date
+                </DataTable.Title>
+                <DataTable.Title 
+                  style={{ backgroundColor: '#ffffff' }}
+                  sortDirection={sortColumn === 'total' ? sortDirection : undefined}
+                  onPress={() => handleSort('total')}
+                >
+                  Total
+                </DataTable.Title>
+                <DataTable.Title 
+                  style={{ backgroundColor: '#ffffff' }}
+                  sortDirection={sortColumn === 'status' ? sortDirection : undefined}
+                  onPress={() => handleSort('status')}
+                >
+                  Status
+                </DataTable.Title>
+                <DataTable.Title style={{ backgroundColor: '#ffffff' }}>Actions</DataTable.Title>
+              </DataTable.Header>
+              
+              {loading ? (
+                <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
+                  <DataTable.Cell style={{ flex: 7, backgroundColor: '#ffffff' }}>
+                    <ActivityIndicator size="small" style={{ marginRight: 8 }} />
+                    Loading invoices...
+                  </DataTable.Cell>
+                </DataTable.Row>
+              ) : getFilteredInvoices().length === 0 ? (
+                <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
+                  <DataTable.Cell style={{ flex: 7, backgroundColor: '#ffffff' }}>No invoices found</DataTable.Cell>
+                </DataTable.Row>
+              ) : (
+                getFilteredInvoices().map(invoice => (
+                  <DataTable.Row key={invoice.uid} style={{ backgroundColor: '#ffffff' }}>
+                    <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{invoice.invoice_number}</DataTable.Cell>
+                    <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{invoice.client_name || 'Unknown Client'}</DataTable.Cell>
+                    <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(invoice.issue_date)}</DataTable.Cell>
+                    <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(invoice.due_date)}</DataTable.Cell>
+                    <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>${invoice.total.toFixed(2)}</DataTable.Cell>
+                    <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
+                      <select
+                        value={invoice.status}
+                        onChange={(e) => updateInvoiceStatus(invoice.uid, e.target.value)}
+                        style={{
+                          padding: 8,
+                          borderRadius: 4,
+                          borderColor: '#ccc',
+                          backgroundColor: '#ffffff',
+                          color: '#000000',
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        <option value="estimate">Estimate</option>
+                        <option value="work_order">Work Order</option>
+                        <option value="sent">Sent</option>
+                        <option value="partial_paid">Partial Paid</option>
+                        <option value="paid">Paid</option>
+                        <option value="overdue">Overdue</option>
+                        <option value="cancelled">Cancelled</option>
+                      </select>
+                    </DataTable.Cell>
+                    <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
+                      <View style={{ flexDirection: 'row' }}>
+                        <IconButton
+                          icon="pencil"
+                          size={20}
+                          onPress={() => handleEditInvoice(invoice)}
+                        />
+                        <IconButton
+                          icon="delete"
+                          size={20}
+                          iconColor="red"
+                          onPress={() => {
+                            setSelectedInvoice(invoice);
+                            setShowDeleteDialog(true);
+                          }}
+                        />
+                      </View>
+                    </DataTable.Cell>
+                  </DataTable.Row>
+                ))
+              )}
+            </DataTable>
+          </Card>
+        </>
+      ) : (
+        <ScrollView style={{ backgroundColor: '#ffffff' }}>
+          <View style={{ 
+            backgroundColor: '#ffffff',
+            padding: 16,
+          }}>
+            <InvoiceForm
+              jobs={jobs}
+              clients={clients}
+              onSubmit={async (updatedInvoice, invoiceItems) => {
+                try {
+                  console.log('Saving invoice with data:', updatedInvoice);
+                  console.log('Invoice items to save:', invoiceItems);
+                  console.log('Status to save:', updatedInvoice.status);
+                  
+                  if (invoiceToEdit) {
+                    // Update existing invoice
+                    const { error: invoiceError } = await supabase
+                      .from('invoices')
+                      .update({
+                        invoice_number: updatedInvoice.invoice_number,
+                        client_id: updatedInvoice.client_id,
+                        job_id: updatedInvoice.job_id,
+                        issue_date: updatedInvoice.issue_date,
+                        due_date: updatedInvoice.due_date,
+                        subtotal: updatedInvoice.subtotal,
+                        tax_rate: updatedInvoice.tax_rate,
+                        tax_amount: updatedInvoice.tax_amount,
+                        total: updatedInvoice.total,
+                        notes: updatedInvoice.notes,
+                        status: updatedInvoice.status,
+                      })
+                      .eq('uid', invoiceToEdit.uid);
+                      
+                    if (invoiceError) {
+                      console.error('Error updating invoice:', invoiceError);
+                      throw invoiceError;
+                    }
+                    
+                    console.log('Invoice updated successfully with status:', updatedInvoice.status);
+                    
+                    // Handle invoice items
+                    // First delete existing items
+                    const { error: deleteError } = await supabase
+                      .from('invoice_items')
+                      .delete()
+                      .eq('invoice_id', invoiceToEdit.uid);
+
+                    if (deleteError) throw deleteError;
+
+                    // Then insert new items
+                    if (invoiceItems && invoiceItems.length > 0) {
+                      const itemsToInsert = invoiceItems.map(item => ({
+                        invoice_id: invoiceToEdit.uid,
+                        description: item.description,
+                        quantity: item.quantity,
+                        unit_price: item.unit_price,
+                        amount: item.amount,
+                        // Include these if they exist
+                        service_id: item.service_id || null,
+                        material_id: item.material_id || null,
+                        type: item.type || 'custom'
+                      }));
+
+                      console.log('Inserting invoice items:', itemsToInsert);
+
+                      const { error: insertError } = await supabase
+                        .from('invoice_items')
+                        .insert(itemsToInsert);
+
+                      if (insertError) throw insertError;
+                    }
+                    
+                    showSnackbar('Invoice updated successfully');
+                  } else {
+                    // Create new invoice
+                    const { data: newInvoice, error: invoiceError } = await supabase
+                      .from('invoices')
+                      .insert({
+                        invoice_number: updatedInvoice.invoice_number,
+                        client_id: updatedInvoice.client_id,
+                        job_id: updatedInvoice.job_id,
+                        issue_date: updatedInvoice.issue_date,
+                        due_date: updatedInvoice.due_date,
+                        subtotal: updatedInvoice.subtotal,
+                        tax_rate: updatedInvoice.tax_rate,
+                        tax_amount: updatedInvoice.tax_amount,
+                        total: updatedInvoice.total,
+                        notes: updatedInvoice.notes,
+                        status: updatedInvoice.status || 'estimate',
+                      })
+                      .select()
+                      .single();
+                      
+                    if (invoiceError) throw invoiceError;
+                    
+                    // Insert invoice items if any
+                    if (invoiceItems && invoiceItems.length > 0) {
+                      const itemsToInsert = invoiceItems.map(item => ({
+                        invoice_id: newInvoice.uid,
+                        description: item.description,
+                        quantity: item.quantity,
+                        unit_price: item.unit_price,
+                        amount: item.amount,
+                        // Include these if they exist
+                        service_id: item.service_id || null,
+                        material_id: item.material_id || null,
+                        type: item.type || 'custom'
+                      }));
+
+                      console.log('Inserting invoice items for new invoice:', itemsToInsert);
+
+                      const { error: insertError } = await supabase
+                        .from('invoice_items')
+                        .insert(itemsToInsert);
+
+                      if (insertError) throw insertError;
+                    }
+                    
+                    showSnackbar('Invoice created successfully');
+                  }
+                  
+                  // Refresh the invoices list
+                  fetchInvoices();
+                  
+                  // Show the list again
+                  setShowInvoiceList(true);
+                } catch (error) {
+                  console.error('Error saving invoice:', error);
+                  showSnackbar(`Failed to save invoice: ${error.message}`);
+                }
+              }}
+              onCancel={() => {
+                // Go back to the list view
+                setShowInvoiceList(true);
+              }}
+              initialInvoice={invoiceToEdit}
+              initialItems={invoiceToEdit?.invoice_items || []}
+              isEditing={true}
+              lastInvoiceNumber={getLastInvoiceNumber()}
+              hideTitle={true}
+            />
+          </View>
+        </ScrollView>
+      )}
       
       {/* Delete Invoice Dialog */}
       <Portal>
@@ -1321,6 +1755,35 @@ export default function InvoicesScreen() {
           </Dialog.Actions>
         </Dialog>
       </Portal>
+
+      {showDetailsModal && selectedInvoice && (
+        <Portal>
+          <Modal
+            visible={showDetailsModal}
+            onDismiss={() => {
+              setShowDetailsModal(false);
+              setSelectedInvoice(null);
+            }}
+            contentContainerStyle={{
+              backgroundColor: 'white',
+              padding: 20,
+              margin: 20,
+              maxHeight: '90%',
+              borderRadius: 10
+            }}
+          >
+            <ScrollView>
+              <InvoiceDetails
+                invoice={selectedInvoice}
+                onClose={() => {
+                  setShowDetailsModal(false);
+                  setSelectedInvoice(null);
+                }}
+              />
+            </ScrollView>
+          </Modal>
+        </Portal>
+      )}
 
       <Snackbar
         visible={snackbarVisible}
@@ -1339,7 +1802,7 @@ const styles = StyleSheet.create({
     padding: 16,
     backgroundColor: '#ffffff',
   },
-  searchAndAddContainer: {
+  searchContainer: {
     flexDirection: 'row',
     marginBottom: 16,
     alignItems: 'center',

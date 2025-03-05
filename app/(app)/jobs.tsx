@@ -375,7 +375,7 @@ export default function JobsScreen() {
     
     try {
       // Try to create a date object and format it
-      const date = new Date(dateString);
+    const date = new Date(dateString);
       if (!isNaN(date.getTime())) {
         return date.toISOString().split('T')[0];
       }
@@ -588,12 +588,12 @@ export default function JobsScreen() {
           // Check if job should be deleted
           if (job.delete && (job.delete.toString().toLowerCase() === 'y' || job.delete.toString().toLowerCase() === 'yes')) {
             if (job.uid) {
-              const { error } = await supabase
-                .from('jobs')
-                .delete()
+      const { error } = await supabase
+        .from('jobs')
+        .delete()
                 .eq('uid', job.uid);
-              
-              if (error) {
+      
+      if (error) {
                 console.error('Error deleting job:', error);
                 errorCount++;
               } else {
@@ -658,6 +658,42 @@ export default function JobsScreen() {
     }
   };
 
+  // Add a function to update the job status
+  const updateJobStatus = async (jobId: string, newStatus: string) => {
+    try {
+      console.log(`Updating job ${jobId} status to: ${newStatus}`);
+      
+      const { error } = await supabase
+        .from('jobs')
+        .update({ status: newStatus })
+        .eq('uid', jobId);
+      
+      if (error) {
+        console.error('Error updating job status:', error);
+        showSnackbar(`Error: ${error.message}`);
+        return false;
+      }
+      
+      // Update the local state
+      setJobs(prevJobs => 
+        prevJobs.map(job => 
+          job.uid === jobId ? { ...job, status: newStatus } : job
+        )
+      );
+      
+      if (selectedJob && selectedJob.uid === jobId) {
+        setSelectedJob({ ...selectedJob, status: newStatus });
+      }
+      
+      showSnackbar('Job status updated successfully');
+      return true;
+    } catch (error) {
+      console.error('Error in updateJobStatus:', error);
+      showSnackbar(`Error: ${error.message}`);
+      return false;
+    }
+  };
+
   return (
     <View style={{
       flex: 1,
@@ -673,26 +709,26 @@ export default function JobsScreen() {
       }}>Jobs</Text>
       
       <View style={styles.searchAndAddContainer}>
-        <Searchbar
-          placeholder="Search jobs..."
-          onChangeText={setSearchQuery}
-          value={searchQuery}
+      <Searchbar
+        placeholder="Search jobs..."
+        onChangeText={setSearchQuery}
+        value={searchQuery}
           style={[styles.searchBar, { backgroundColor: '#f5f5f5' }]}
-        />
-        
+      />
+      
         <View style={{ 
           flexDirection: 'row', 
           alignItems: 'center',
           height: 40 // Set a fixed height to ensure vertical alignment
         }}>
-        <Button
-          mode="contained"
+      <Button 
+        mode="contained" 
             onPress={() => setShowAddForm(true)}
             style={[styles.addButton, { marginLeft: 16 }]}
-        >
-          Add New Job
-        </Button>
-          
+      >
+        Add New Job
+      </Button>
+      
           <View 
             style={{ marginLeft: 8 }}
             accessibilityLabel="Export"
@@ -771,7 +807,7 @@ export default function JobsScreen() {
                 Import
               </div>
             )}
-          </View>
+                  </View>
         </View>
       </View>
       
@@ -787,14 +823,14 @@ export default function JobsScreen() {
       
       <View style={styles.filtersContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll}>
-          <Chip
+                    <Chip 
             selected={selectedStatuses.length === 0}
             onPress={() => setSelectedStatuses([])}
             style={styles.filterChip}
-            mode="outlined"
-          >
+                      mode="outlined" 
+                    >
             All
-          </Chip>
+                    </Chip>
           
           <Chip
             selected={selectedStatuses.includes('pending')}
@@ -832,7 +868,7 @@ export default function JobsScreen() {
             Cancelled
           </Chip>
         </ScrollView>
-      </View>
+                  </View>
       
       <Card style={styles.tableCard}>
         <DataTable style={{ backgroundColor: '#ffffff' }}>
@@ -891,13 +927,13 @@ export default function JobsScreen() {
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(job.end_date)}</DataTable.Cell>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
                   <View style={styles.actionButtons}>
-                    <IconButton
-                      icon="pencil"
+                    <IconButton 
+                      icon="pencil" 
                       size={20}
                       onPress={() => handleEditJob(job)}
                     />
-                    <IconButton
-                      icon="delete"
+                    <IconButton 
+                      icon="delete" 
                       size={20}
                       onPress={() => {
                         setSelectedJob(job);
@@ -1128,11 +1164,167 @@ export default function JobsScreen() {
           onCancel={() => setShowAddForm(false)}
         />
       ) : selectedJob ? (
-        <></>
+        <View style={{ marginTop: 16 }}>
+          <Text style={{
+            fontFamily: 'System',
+            fontSize: 20,
+            fontWeight: '600',
+            marginBottom: 16,
+            color: '#333333',
+          }}>Job Information</Text>
+          
+          <View style={{ 
+            borderWidth: 0,
+            borderColor: '#e0e0e0', 
+            borderRadius: 4,
+            overflow: 'hidden',
+            marginBottom: 20
+          }}>
+            <View style={{ 
+              flexDirection: 'row', 
+              backgroundColor: '#f5f5f5', 
+              padding: 12,
+              borderBottomWidth: 1,
+              borderBottomColor: '#e0e0e0'
+            }}>
+              <Text style={{ flex: 1, fontWeight: 'normal', fontSize: 14 }}>Job Title</Text>
+              <Text style={{ flex: 1, fontWeight: 'normal', fontSize: 14 }}>Client</Text>
+              <Text style={{ flex: 1, fontWeight: 'normal', fontSize: 14 }}>Status</Text>
+              <Text style={{ flex: 1, fontWeight: 'normal', fontSize: 14 }}>Start Date</Text>
+              <Text style={{ flex: 1, fontWeight: 'normal', fontSize: 14 }}>End Date</Text>
+            </View>
+            
+            <View style={{ 
+              flexDirection: 'row', 
+              padding: 12,
+              backgroundColor: 'white',
+              alignItems: 'center',
+              borderBottomWidth: 1,
+              borderBottomColor: '#e0e0e0'
+            }}>
+              <Text style={{ flex: 1 }}>{selectedJob.title}</Text>
+              <Text style={{ flex: 1 }}>{selectedJob.client_name || 'Unknown Client'}</Text>
+              <View style={{ flex: 1 }}>
+                <select
+                  value={selectedJob.status}
+                  onChange={(e) => updateJobStatus(selectedJob.uid, e.target.value)}
+                  style={{
+                    padding: 8,
+                    borderRadius: 4,
+                    borderColor: '#ccc',
+                    backgroundColor: '#ffffff',
+                    color: '#000000',
+                    fontWeight: 'normal',
+                    width: '90%'
+                  }}
+                >
+                  <option value="pending">Pending</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="completed">Completed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </View>
+              <Text style={{ flex: 1 }}>{formatDate(selectedJob.start_date)}</Text>
+              <Text style={{ flex: 1 }}>{formatDate(selectedJob.end_date)}</Text>
+            </View>
+          </View>
+          
+          <Button 
+            mode="contained" 
+            onPress={() => handleEditJob(selectedJob)}
+            style={{ alignSelf: 'flex-end', marginBottom: 20 }}
+          >
+            Edit Job
+          </Button>
+          
+          <Button 
+            mode="contained" 
+            onPress={() => {
+              // Create a new invoice for this job
+              const newInvoice = {
+                job_id: selectedJob.uid,
+                client_id: selectedJob.client_id || '',
+                status: 'estimate'
+              };
+              
+              // Store this in localStorage
+              localStorage.setItem('newInvoiceData', JSON.stringify(newInvoice));
+              
+              // Navigate to the invoices page
+              router.push('/invoices');
+            }}
+            style={{ 
+              alignSelf: 'flex-end', 
+              marginBottom: 20,
+              marginLeft: 16
+            }}
+            icon="plus"
+          >
+            Create Invoice
+          </Button>
+          
+          <View style={{ marginTop: 16 }}>
+            <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 8 }}>Description</Text>
+            <Text>{selectedJob.description || 'No description provided'}</Text>
+          </View>
+
+          <View style={{ marginTop: 24 }}>
+            <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 8 }}>Location</Text>
+            <Text>{selectedJob.location || 'No location specified'}</Text>
+          </View>
+
+          <View style={{ marginTop: 24 }}>
+            <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 8 }}>Notes</Text>
+            <Text>{selectedJob.notes || 'No notes'}</Text>
+          </View>
+
+          <DataTable>
+            <DataTable.Header>
+              <DataTable.Title>Invoice #</DataTable.Title>
+              <DataTable.Title>Client</DataTable.Title>
+              <DataTable.Title>Start Date</DataTable.Title>
+              <DataTable.Title>End Date</DataTable.Title>
+              <DataTable.Title>Total</DataTable.Title>
+              <DataTable.Title>Status</DataTable.Title>
+              <DataTable.Title>Actions</DataTable.Title>
+            </DataTable.Header>
+            
+            {jobInvoices.length === 0 ? (
+              <DataTable.Row>
+                <DataTable.Cell>No invoices found for this job</DataTable.Cell>
+              </DataTable.Row>
+            ) : (
+              jobInvoices.map(invoice => (
+                <DataTable.Row key={invoice.uid}>
+                  <DataTable.Cell>{invoice.invoice_number}</DataTable.Cell>
+                  <DataTable.Cell>{invoice.client_name || 'Unknown Client'}</DataTable.Cell>
+                  <DataTable.Cell>{formatDate(invoice.issue_date)}</DataTable.Cell>
+                  <DataTable.Cell>{formatDate(invoice.due_date)}</DataTable.Cell>
+                  <DataTable.Cell>${invoice.total.toFixed(2)}</DataTable.Cell>
+                  <DataTable.Cell>{invoice.status}</DataTable.Cell>
+                  <DataTable.Cell>
+                    <View style={{ flexDirection: 'row' }}>
+                      <IconButton
+                        icon="eye"
+                        size={20}
+                        onPress={() => handleViewInvoice(invoice)}
+                      />
+                      <IconButton
+                        icon="pencil"
+                        size={20}
+                        onPress={() => handleEditInvoice(invoice)}
+                      />
+                    </View>
+                  </DataTable.Cell>
+                </DataTable.Row>
+              ))
+            )}
+          </DataTable>
+        </View>
       ) : (
         <></>
       )}
-      
+
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}

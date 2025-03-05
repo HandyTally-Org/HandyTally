@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, ScrollView, Modal, TouchableOpacity, FlatList, Platform, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, FlatList, Platform, StyleSheet, Modal, ScrollView } from 'react-native';
 import { TextInput, Button, Card, Text, Divider, Menu, IconButton, DataTable, HelperText, List, Portal, Dialog } from 'react-native-paper';
 import { styles as globalStyles } from '../styles';
 import { Invoice, InvoiceItem } from '../app/(app)/invoices';
@@ -45,6 +45,7 @@ type InvoiceFormProps = {
   initialInvoice?: Invoice;
   initialItems?: InvoiceItem[];
   isEditing?: boolean;
+  hideTitle?: boolean;
 };
 
 const webStyles = Platform.OS === 'web' 
@@ -135,7 +136,16 @@ function safeParseNumber(value: any): number {
   return isNaN(num) ? 0 : num;
 }
 
-export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCancel, initialInvoice, initialItems = [], isEditing = false }: InvoiceFormProps) {
+export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCancel, initialInvoice, initialItems = [], isEditing = false, hideTitle = false }: InvoiceFormProps) {
+  // DEBUGGING - Log all props received
+  console.log('INVOICE FORM PROPS:', {
+    initialInvoice: JSON.stringify(initialInvoice, null, 2),
+    initialItems: JSON.stringify(initialItems, null, 2),
+    jobs: JSON.stringify(jobs, null, 2),
+    clients: JSON.stringify(clients, null, 2),
+    isEditing
+  });
+
   const generateNextInvoiceNumber = () => {
     if (!lastInvoiceNumber) {
       return '1001';
@@ -150,9 +160,9 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
   };
 
   const [formData, setFormData] = useState({
-    job_id: initialInvoice?.job_id?.toString() || '',
-    client_id: initialInvoice?.client_id?.toString() || '',
-    invoice_number: initialInvoice?.invoice_number?.toString() || generateNextInvoiceNumber(),
+    job_id: safeToString(initialInvoice?.job_id),
+    client_id: safeToString(initialInvoice?.client_id),
+    invoice_number: initialInvoice?.invoice_number ? safeToString(initialInvoice.invoice_number) : generateNextInvoiceNumber(),
     issue_date: initialInvoice?.issue_date || new Date().toISOString().split('T')[0],
     due_date: initialInvoice?.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     subtotal: initialInvoice?.subtotal || 0,
@@ -160,9 +170,22 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
     tax_amount: initialInvoice?.tax_amount || 0,
     total: initialInvoice?.total || 0,
     notes: initialInvoice?.notes || '',
-    status: initialInvoice?.status || 'draft' as Invoice['status'],
+    status: initialInvoice?.status || 'estimate',
+    invoice_items: initialInvoice?.invoice_items || []
   });
-  const [invoiceItems, setInvoiceItems] = useState<Omit<InvoiceItem, 'id' | 'invoice_id'>[]>([]);
+  const [invoiceItems, setInvoiceItems] = useState<Omit<InvoiceItem, 'id' | 'invoice_id'>[]>(
+    Array.isArray(initialItems) && initialItems.length > 0 
+      ? initialItems.map(item => ({
+          description: item.description || '',
+          quantity: item.quantity || 0,
+          unit_price: item.unit_price || 0,
+          amount: item.amount || 0,
+          service_id: item.service_id || null,
+          material_id: item.material_id || null,
+          type: item.type || 'custom'
+        }))
+      : []
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [services, setServices] = useState<Service[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
@@ -180,6 +203,24 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
   const [submitting, setSubmitting] = useState(false);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [selectedService, setSelectedService] = useState(null);
+  const [selectedMaterial, setSelectedMaterial] = useState(null);
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [itemDescriptionModalVisible, setItemDescriptionModalVisible] = useState(false);
+  const [editingItemDescription, setEditingItemDescription] = useState('');
+
+  useEffect(() => {
+    // Ensure all arrays are initialized
+    if (!Array.isArray(invoiceItems)) {
+      setInvoiceItems([]);
+    }
+    if (!Array.isArray(services)) {
+      setServices([]);
+    }
+    if (!Array.isArray(materials)) {
+      setMaterials([]);
+    }
+  }, []);
 
   useEffect(() => {
     fetchServices();
@@ -242,77 +283,84 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
 
   useEffect(() => {
     if (initialInvoice) {
-      console.log('Initializing form with invoice:', initialInvoice);
+      console.log('INITIALIZING FORM WITH INVOICE:', JSON.stringify(initialInvoice, null, 2));
       
-      // Set form data from the initial invoice
-      setFormData({
+      // FORCE SET THE FORM DATA
+      const formDataToSet = {
         ...initialInvoice,
-        // Ensure these are set correctly
-        job_id: initialInvoice.job_id || (initialInvoice.job ? initialInvoice.job.id || initialInvoice.job.uid : null),
-        client_id: initialInvoice.client_id || (initialInvoice.client ? initialInvoice.client.id || initialInvoice.client.uid : null)
-      });
+        invoice_number: initialInvoice.invoice_number || '',
+        job_id: initialInvoice.job_id || null,
+        client_id: initialInvoice.client_id || null,
+      };
+      console.log('SETTING FORM DATA TO:', formDataToSet);
+      setFormData(formDataToSet);
       
-      // Set selected job and client for display
-      if (initialInvoice.job) {
-        setSelectedJob(initialInvoice.job);
-      } else if (initialInvoice.job_id) {
-        // Find the job in the jobs array
-        const job = jobs.find(j => j.id === initialInvoice.job_id || j.uid === initialInvoice.job_id);
-        if (job) setSelectedJob(job);
+      // FORCE SET THE SELECTED JOB
+      if (initialInvoice.job_id) {
+        const job = jobs.find(j => j.uid === initialInvoice.job_id || j.id === initialInvoice.job_id);
+        console.log('SETTING SELECTED JOB TO:', job);
+        setSelectedJob(job || null);
       }
       
-      if (initialInvoice.client) {
-        setSelectedClient(initialInvoice.client);
-      } else if (initialInvoice.client_id) {
-        // Find the client in the clients array
-        const client = clients.find(c => c.id === initialInvoice.client_id || c.uid === initialInvoice.client_id);
-        if (client) setSelectedClient(client);
+      // FORCE SET THE SELECTED CLIENT
+      if (initialInvoice.client_id) {
+        const client = clients.find(c => c.uid === initialInvoice.client_id || c.id === initialInvoice.client_id);
+        console.log('SETTING SELECTED CLIENT TO:', client);
+        setSelectedClient(client || null);
       }
       
-      // Initialize with the provided items
-      if (initialItems && initialItems.length > 0) {
-        setInvoiceItems(initialItems);
+      // FORCE SET THE INVOICE ITEMS - Make sure this is working
+      console.log('CHECKING INVOICE ITEMS:');
+      console.log('initialInvoice.invoice_items:', initialInvoice.invoice_items);
+      console.log('initialItems:', initialItems);
+      
+      if (initialInvoice.invoice_items && initialInvoice.invoice_items.length > 0) {
+        console.log('SETTING INVOICE ITEMS FROM initialInvoice.invoice_items:', initialInvoice.invoice_items);
+        setInvoiceItems([...initialInvoice.invoice_items]);
+      } else if (initialItems && initialItems.length > 0) {
+        console.log('SETTING INVOICE ITEMS FROM initialItems:', initialItems);
+        setInvoiceItems([...initialItems]);
       }
     }
   }, [initialInvoice, initialItems, jobs, clients]);
 
-  async function fetchServices() {
+  useEffect(() => {
+    console.log('INVOICE ITEMS STATE:', invoiceItems);
+    console.log('INITIAL ITEMS PROP:', initialItems);
+    console.log('INITIAL INVOICE ITEMS:', initialInvoice?.invoice_items);
+  }, [invoiceItems]);
+
+  useEffect(() => {
+    console.log('Form data status changed:', formData.status);
+  }, [formData.status]);
+
+  const fetchServices = async () => {
     try {
       const { data, error } = await supabase
         .from('services')
         .select('*')
         .order('name');
-
-      if (error) {
-        throw error;
-      }
-
-      if (data) {
-        setServices(data);
-      }
+      
+      if (error) throw error;
+      setServices(data || []);
     } catch (error) {
       console.error('Error fetching services:', error);
     }
-  }
+  };
 
-  async function fetchMaterials() {
+  const fetchMaterials = async () => {
     try {
       const { data, error } = await supabase
         .from('materials')
         .select('*')
         .order('name');
-
-      if (error) {
-        throw error;
-      }
-
-      if (data) {
-        setMaterials(data);
-      }
+      
+      if (error) throw error;
+      setMaterials(data || []);
     } catch (error) {
       console.error('Error fetching materials:', error);
     }
-  }
+  };
 
   const handleChange = (field: keyof typeof formData, value: any) => {
     console.log(`Changing ${field} to:`, value);
@@ -355,35 +403,19 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
     }
   };
 
-  const handleAddService = (service: Service) => {
-    const newItem: Omit<InvoiceItem, 'id' | 'invoice_id'> = {
-      description: service.name,
-      quantity: 1,
-      unit_price: service.rate,
-      amount: service.rate,
-      type: 'service',
-      service_id: service.id
-    };
-    setInvoiceItems([...invoiceItems, newItem]);
+  const handleAddService = (service) => {
     setShowServiceMenu(false);
-  };
-
-  const handleAddMaterial = (material: Material) => {
-    console.log('Adding material to invoice:', material);
+    setSelectedService(service);
     
-    // Create a new item with the material's price
-    const newItem: Omit<InvoiceItem, 'id' | 'invoice_id'> = {
-      description: material.name,
+    const newItem = {
+      description: `${service.name} - ${service.description || ''}`,
       quantity: 1,
-      unit_price: material.cost || 0, // Use material.cost instead of unit_price
-      amount: material.cost || 0, // Initial amount is just the cost
-      type: 'material',
-      material_id: material.id || material.uid,
+      unit_price: service.rate || 0,
+      amount: service.rate || 0,
+      type: 'service',
+      service_id: service.id || service.uid
     };
     
-    console.log('New invoice item from material:', newItem);
-    
-    // Add the new item to the invoice items and recalculate totals
     const updatedItems = [...invoiceItems, newItem];
     setInvoiceItems(updatedItems);
     
@@ -400,9 +432,37 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
       tax_amount: taxAmount,
       total
     }));
-    
-    // Close the material menu
+  };
+
+  const handleAddMaterial = (material) => {
     setShowMaterialMenu(false);
+    setSelectedMaterial(material);
+    
+    const newItem = {
+      description: `${material.name} - ${material.description || ''}`,
+      quantity: 1,
+      unit_price: material.cost || 0,
+      amount: material.cost || 0,
+      type: 'material',
+      material_id: material.id || material.uid
+    };
+    
+    const updatedItems = [...invoiceItems, newItem];
+    setInvoiceItems(updatedItems);
+    
+    // Calculate new totals
+    const subtotal = updatedItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+    const taxRate = formData.tax_rate || 0;
+    const taxAmount = subtotal * (taxRate / 100);
+    const total = subtotal + taxAmount;
+    
+    // Update the form data with new totals
+    setFormData(prev => ({
+      ...prev,
+      subtotal,
+      tax_amount: taxAmount,
+      total
+    }));
   };
 
   const handleAddCustomItem = () => {
@@ -464,53 +524,54 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async () => {
-    if (validate()) {
-      try {
-        setSubmitting(true);
-        
-        // Log the data being submitted for debugging
-        console.log('Submitting invoice data:', formData);
-        console.log('Submitting invoice items:', invoiceItems);
-        
-        // Ensure all IDs are properly formatted as strings
-        const safeInvoice = {
-          client_id: formData.client_id,
-          job_id: formData.job_id || null,
-          invoice_number: formData.invoice_number,
-          issue_date: formData.issue_date,
-          due_date: formData.due_date,
-          subtotal: safeParseNumber(formData.subtotal),
-          tax_rate: safeParseNumber(formData.tax_rate),
-          tax_amount: safeParseNumber(formData.tax_amount),
-          total: safeParseNumber(formData.total),
-          notes: formData.notes || '',
-          status: formData.status || 'draft'
-        };
-
-        // Ensure all invoice items have proper types
-        const safeItems = invoiceItems.map(item => ({
-          description: item.description || 'No description',
-          quantity: safeParseNumber(item.quantity),
-          unit_price: safeParseNumber(item.unit_price),
-          amount: safeParseNumber(item.amount),
-          type: item.type || 'other',
-          service_id: item.service_id || null,
-          material_id: item.material_id || null
-        }));
-
-        console.log('Safe invoice data:', safeInvoice);
-        console.log('Safe invoice items:', safeItems);
-
-        // Call the onSubmit function with the properly formatted data
-        await onSubmit(safeInvoice as Omit<Invoice, 'id'>, safeItems as Omit<InvoiceItem, 'id' | 'invoice_id'>[]);
-      } catch (error) {
-        console.error('Error submitting invoice:', error);
-        // Show error to user
-        alert(`Failed to create invoice: ${error.message || 'Unknown error'}`);
-      } finally {
-        setSubmitting(false);
-      }
+  const handleSubmit = () => {
+    // Log the current form data before submission
+    console.log('SUBMITTING FORM WITH DATA:', {
+      ...formData,
+      status: formData.status
+    });
+    
+    // Validate form
+    const validationErrors: Record<string, string> = {};
+    
+    if (!formData.client_id) {
+      validationErrors.client_id = 'Client is required';
+    }
+    
+    if (!formData.invoice_number) {
+      validationErrors.invoice_number = 'Invoice number is required';
+    }
+    
+    if (invoiceItems.length === 0) {
+      validationErrors.items = 'At least one item is required';
+    }
+    
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+    
+    setSubmitting(true);
+    
+    try {
+      // Create a copy of the form data to ensure we don't lose any fields
+      const invoiceData = {
+        ...formData,
+        status: formData.status || 'draft'  // Explicitly include status
+      };
+      
+      console.log('Final invoice data being submitted:', invoiceData);
+      console.log('Status being submitted:', invoiceData.status);
+      
+      // Call the onSubmit function with the invoice data and items
+      onSubmit(invoiceData, invoiceItems);
+      
+      // Clear form
+      setErrors({});
+    } catch (error) {
+      console.error('Error submitting form:', error);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -544,40 +605,103 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
     setNotesModalVisible(false);
   };
 
+  // Add this debugging function at the top of the component
+  const logFormData = () => {
+    console.log('CURRENT FORM DATA:', {
+      ...formData,
+      status: formData.status
+    });
+  };
+
+  // Add this function to directly update the status
+  const handleStatusChange = (newStatus) => {
+    console.log(`Changing status to: ${newStatus}`);
+    // Update the form data
+    setFormData(prevData => {
+      const updatedData = {
+        ...prevData,
+        status: newStatus
+      };
+      console.log('Updated form data with new status:', updatedData);
+      return updatedData;
+    });
+  };
+
+  const openItemDescriptionModal = (index: number, description: string) => {
+    setEditingItemIndex(index);
+    setEditingItemDescription(description);
+    setItemDescriptionModalVisible(true);
+  };
+
+  const saveItemDescription = () => {
+    if (editingItemIndex !== null) {
+      handleUpdateItem(editingItemIndex, 'description', editingItemDescription);
+      setItemDescriptionModalVisible(false);
+      setEditingItemIndex(null);
+    }
+  };
+
   return (
-    <Card style={combinedStyles.card}>
-      <Card.Title title={isEditing ? "Edit Invoice" : "Create New Invoice"} />
-      <Card.Content>
-        <ScrollView style={{ maxHeight: 500 }}>
-          <View style={[combinedStyles.row, { gap: 8 }]}>
+    <View style={{ flex: 1 }}>
+      <Card style={{ backgroundColor: '#ffffff' }}>
+        {!hideTitle && (
+          <Card.Title 
+            title={isEditing ? "Edit Invoice" : "Create Invoice"} 
+            titleStyle={{ fontSize: 20, fontWeight: 'bold' }}
+          />
+        )}
+        <Card.Content>
+          <View style={{ flexDirection: 'row', gap: 16, marginBottom: 16 }}>
             <View style={{ flex: 1 }}>
+              <Text>Invoice Number *</Text>
               <TextInput
-                label="Invoice Number *"
                 value={formData.invoice_number}
-                onChangeText={(value) => handleChange('invoice_number', value)}
-                style={combinedStyles.input}
-                error={!!errors.invoice_number}
+                style={{
+                  height: 50,
+                  borderWidth: 1,
+                  borderColor: '#ccc',
+                  borderRadius: 4,
+                  padding: 8,
+                  backgroundColor: '#f0f0f0',
+                }}
+                editable={false}
+                required
               />
-              {errors.invoice_number && <Text style={combinedStyles.error}>{errors.invoice_number}</Text>}
             </View>
             
             <View style={{ flex: 1 }}>
-              <TextInput
-                label="Status"
-                value={formData.status.charAt(0).toUpperCase() + formData.status.slice(1)}
-                disabled
-                style={combinedStyles.input}
-              />
+              <Text>Status</Text>
+              <select
+                style={{
+                  width: '100%',
+                  height: 50,
+                  padding: 8,
+                  borderWidth: 1,
+                  borderColor: '#ccc',
+                  borderRadius: 4,
+                  backgroundColor: '#fff',
+                  fontSize: 16
+                }}
+                value={formData.status || 'estimate'}
+                onChange={(e) => handleStatusChange(e.target.value)}
+              >
+                <option value="estimate">Estimate</option>
+                <option value="work_order">Work Order</option>
+                <option value="sent">Sent</option>
+                <option value="partial_paid">Partial Paid</option>
+                <option value="paid">Paid</option>
+                <option value="overdue">Overdue</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
             </View>
           </View>
           
-          <View style={[combinedStyles.row, { gap: 8 }]}>
+          <View style={{ flexDirection: 'row', gap: 16, marginBottom: 16 }}>
             <View style={{ flex: 1 }}>
               <TextInput
                 label="Issue Date *"
                 value={formData.issue_date}
                 onChangeText={(value) => handleChange('issue_date', value)}
-                placeholder="YYYY-MM-DD"
                 style={combinedStyles.input}
                 error={!!errors.issue_date}
               />
@@ -589,7 +713,6 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
                 label="Due Date *"
                 value={formData.due_date}
                 onChangeText={(value) => handleChange('due_date', value)}
-                placeholder="YYYY-MM-DD"
                 style={combinedStyles.input}
                 error={!!errors.due_date}
               />
@@ -613,18 +736,23 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
               value={formData.job_id || ''}
               onChange={(e) => {
                 const jobId = e.target.value;
-                const selectedJob = jobs.find(j => (j.id || j.uid) == jobId);
+                console.log('Selected job ID:', jobId);
+                const selectedJob = jobs.find(j => (j.uid || j.id) === jobId);
+                console.log('Found job:', selectedJob);
                 setSelectedJob(selectedJob || null);
                 setFormData({
                   ...formData,
-                  job_id: jobId
+                  job_id: jobId || null
                 });
               }}
             >
               <option value="">Select a job</option>
-              {jobs.map((job) => (
-                <option key={job.id || job.uid} value={job.id || job.uid}>
-                  {job.name || job.title || `Job #${job.id || job.uid}`}
+              {(jobs || []).map((job) => (
+                <option 
+                  key={job.uid || job.id} 
+                  value={job.uid || job.id}
+                >
+                  {job.title || job.name || `Job #${job.uid || job.id}`}
                 </option>
               ))}
             </select>
@@ -646,78 +774,217 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
               value={formData.client_id || ''}
               onChange={(e) => {
                 const clientId = e.target.value;
-                const selectedClient = clients.find(c => (c.id || c.uid) == clientId);
+                console.log('Selected client ID:', clientId);
+                const selectedClient = clients.find(c => (c.uid || c.id) === clientId);
+                console.log('Found client:', selectedClient);
                 setSelectedClient(selectedClient || null);
                 setFormData({
                   ...formData,
-                  client_id: clientId
+                  client_id: clientId || null
                 });
               }}
               required
             >
               <option value="">Select a client</option>
-              {clients.map((client) => (
-                <option key={client.id || client.uid} value={client.id || client.uid}>
-                  {client.name}
+              {(clients || []).map((client) => (
+                <option 
+                  key={client.uid || client.id} 
+                  value={client.uid || client.id}
+                >
+                  {client.name || `Client #${client.uid || client.id}`}
                 </option>
               ))}
             </select>
-            {errors.client_id && <HelperText type="error">{errors.client_id}</HelperText>}
+            {errors.client_id && <Text style={combinedStyles.error}>{errors.client_id}</Text>}
+          </View>
+          
+          <View style={combinedStyles.formGroup}>
+            <Text>Status</Text>
+            <select
+              style={{
+                width: '100%',
+                height: 50,
+                padding: 8,
+                borderWidth: 1,
+                borderColor: '#ccc',
+                borderRadius: 4,
+                backgroundColor: '#fff',
+                fontSize: 16
+              }}
+              value={formData.status || 'draft'}
+              onChange={(e) => handleStatusChange(e.target.value)}
+            >
+              <option value="draft">Draft</option>
+              <option value="sent">Sent</option>
+              <option value="paid">Paid</option>
+              <option value="overdue">Overdue</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
           </View>
           
           <Divider style={{ marginVertical: 16 }} />
           
-          <Text variant="titleMedium" style={{ marginBottom: 8 }}>Invoice Items</Text>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', marginTop: 24, marginBottom: 16, backgroundColor: '#ffffff' }}>
+            Invoice Items
+          </Text>
           
-          <View style={[combinedStyles.row, { gap: 8, marginBottom: 16 }]}>
-            <Menu
-              visible={showServiceMenu}
-              onDismiss={() => setShowServiceMenu(false)}
-              anchor={
-                <Button 
-                  mode="outlined" 
-                  onPress={() => setShowServiceMenu(true)}
-                  icon="plus"
-                >
-                  Add Service
-                </Button>
-              }
-            >
-              {services.map((service) => (
-                <Menu.Item
-                  key={service.id}
-                  title={`${service.name} - ${formatCurrency(service.rate)}/${service.unit}`}
-                  onPress={() => handleAddService(service)}
-                />
-              ))}
-            </Menu>
+          <View style={{ marginBottom: 16, backgroundColor: '#ffffff' }}>
+            <Text style={{ fontSize: 16, marginBottom: 8 }}>Services</Text>
+            <View style={{ 
+              borderWidth: 1, 
+              borderColor: '#ccc', 
+              borderRadius: 4, 
+              backgroundColor: '#ffffff',
+              position: 'relative',
+              marginBottom: 16,
+              zIndex: 1000
+            }}>
+              <TouchableOpacity
+                onPress={() => setShowServiceMenu(!showServiceMenu)}
+                style={{
+                  padding: 12,
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <Text>
+                  {selectedService 
+                    ? `${selectedService.name} - ${formatCurrency(selectedService.rate)}/${selectedService.unit}`
+                    : "Select a service to add"}
+                </Text>
+                <IconButton icon={showServiceMenu ? "chevron-up" : "chevron-down"} size={20} />
+              </TouchableOpacity>
+              
+              {showServiceMenu && (
+                <View style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  backgroundColor: '#ffffff',
+                  borderWidth: 1,
+                  borderColor: '#e0e0e0',
+                  borderRadius: 4,
+                  zIndex: 10000,
+                  elevation: 10,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 4,
+                  overflow: 'visible',
+                }}>
+                  <ScrollView style={{ maxHeight: 200 }}>
+                    {(services || []).map((service) => (
+                      <TouchableOpacity
+                        key={service.id || service.uid}
+                        onPress={() => handleAddService(service)}
+                        style={{
+                          padding: 12,
+                          borderBottomWidth: 1,
+                          borderBottomColor: '#f0f0f0',
+                          backgroundColor: '#ffffff',
+                        }}
+                        className="dropdown-item"
+                        onMouseEnter={(e) => {
+                          if (Platform.OS === 'web') {
+                            e.currentTarget.style.backgroundColor = '#f5f5f5';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (Platform.OS === 'web') {
+                            e.currentTarget.style.backgroundColor = '#ffffff';
+                          }
+                        }}
+                      >
+                        <Text>{service.name} - {formatCurrency(service.rate)}/{service.unit}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
             
-            <Menu
-              visible={showMaterialMenu}
-              onDismiss={() => setShowMaterialMenu(false)}
-              anchor={
-                <Button 
-                  mode="outlined" 
-                  onPress={() => setShowMaterialMenu(true)}
-                  icon="plus"
-                >
-                  Add Material
-                </Button>
-              }
-            >
-              {materials.map((material) => (
-                <Menu.Item
-                  key={material.id}
-                  title={`${material.name} - ${formatCurrency(material.cost)}/${material.unit}`}
-                  onPress={() => handleAddMaterial(material)}
-                />
-              ))}
-            </Menu>
+            <Text style={{ fontSize: 16, marginBottom: 8 }}>Materials</Text>
+            <View style={{ 
+              borderWidth: 1, 
+              borderColor: '#ccc', 
+              borderRadius: 4, 
+              backgroundColor: '#ffffff',
+              position: 'relative',
+              marginBottom: 16,
+              zIndex: 999
+            }}>
+              <TouchableOpacity
+                onPress={() => setShowMaterialMenu(!showMaterialMenu)}
+                style={{
+                  padding: 12,
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <Text>
+                  {selectedMaterial 
+                    ? `${selectedMaterial.name} - ${formatCurrency(selectedMaterial.cost)}/${selectedMaterial.unit}`
+                    : "Select a material to add"}
+                </Text>
+                <IconButton icon={showMaterialMenu ? "chevron-up" : "chevron-down"} size={20} />
+              </TouchableOpacity>
+              
+              {showMaterialMenu && (
+                <View style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  backgroundColor: '#ffffff',
+                  borderWidth: 1,
+                  borderColor: '#e0e0e0',
+                  borderRadius: 4,
+                  zIndex: 9999,
+                  elevation: 9,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 4,
+                  overflow: 'visible',
+                }}>
+                  <ScrollView style={{ maxHeight: 200 }}>
+                    {(materials || []).map((material) => (
+                      <TouchableOpacity
+                        key={material.id || material.uid}
+                        onPress={() => handleAddMaterial(material)}
+                        style={{
+                          padding: 12,
+                          borderBottomWidth: 1,
+                          borderBottomColor: '#f0f0f0',
+                          backgroundColor: '#ffffff',
+                        }}
+                        className="dropdown-item"
+                        onMouseEnter={(e) => {
+                          if (Platform.OS === 'web') {
+                            e.currentTarget.style.backgroundColor = '#f5f5f5';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (Platform.OS === 'web') {
+                            e.currentTarget.style.backgroundColor = '#ffffff';
+                          }
+                        }}
+                      >
+                        <Text>{material.name} - {formatCurrency(material.cost)}/{material.unit}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
             
             <Button 
               mode="outlined" 
               onPress={handleAddCustomItem}
-              icon="plus"
+              style={{ backgroundColor: '#ffffff' }}
             >
               Add Custom Item
             </Button>
@@ -725,105 +992,129 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
           
           {errors.items && <Text style={combinedStyles.error}>{errors.items}</Text>}
           
-          <DataTable>
+          <DataTable style={{ backgroundColor: '#ffffff' }}>
             <DataTable.Header>
-              <DataTable.Title style={{ flex: 3 }}>Description</DataTable.Title>
-              <DataTable.Title numeric style={{ width: 80 }}>Qty</DataTable.Title>
-              <DataTable.Title numeric style={{ width: 120 }}>Price</DataTable.Title>
-              <DataTable.Title numeric style={{ width: 120 }}>Amount</DataTable.Title>
-              <DataTable.Title style={{ width: 50 }}></DataTable.Title>
+              <DataTable.Title 
+                style={{ flex: 3 }}
+              >
+                <Text style={{ fontSize: 18, fontWeight: 'bold' }}>Description</Text>
+              </DataTable.Title>
+              <DataTable.Title 
+                numeric 
+                style={{ width: 80 }}
+              >
+                <Text style={{ fontSize: 18, fontWeight: 'bold', textAlign: 'center' }}>Qty</Text>
+              </DataTable.Title>
+              <DataTable.Title 
+                numeric 
+                style={{ width: 120 }}
+              >
+                <Text style={{ fontSize: 18, fontWeight: 'bold' }}>Price</Text>
+              </DataTable.Title>
+              <DataTable.Title 
+                numeric 
+                style={{ width: 120 }}
+              >
+                <Text style={{ fontSize: 18, fontWeight: 'bold' }}>Amount</Text>
+              </DataTable.Title>
+              <DataTable.Title 
+                style={{ width: 50 }}
+              >
+                <Text style={{ fontSize: 18, fontWeight: 'bold' }}></Text>
+              </DataTable.Title>
             </DataTable.Header>
             
-            {invoiceItems.map((item, index) => (
-              <DataTable.Row key={`item-${index}`}>
-                <DataTable.Cell style={{ flex: 3 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
-                    <TextInput
-                      multiline
-                      value={item.description}
-                      onChangeText={(value) => handleUpdateItem(index, 'description', value)}
-                      style={{
-                        minHeight: item.type === 'other' ? 80 : 40,
-                        maxHeight: 300,
-                        borderWidth: 1,
-                        borderColor: '#ccc',
-                        borderRadius: 4,
-                        padding: 8,
-                        flex: 1,
-                        ...(Platform.OS === 'web' ? { resize: 'vertical' } : {}),
-                      }}
-                    />
-                    {item.type === 'other' && (
+            {invoiceItems.length === 0 ? (
+              <DataTable.Row>
+                <DataTable.Cell style={{ flex: 1 }}>No items added yet</DataTable.Cell>
+              </DataTable.Row>
+            ) : (
+              invoiceItems.map((item, index) => (
+                <DataTable.Row key={`item-${index}`}>
+                  <DataTable.Cell style={{ flex: 3 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                      <TextInput
+                        multiline
+                        value={item.description}
+                        onChangeText={(value) => handleUpdateItem(index, 'description', value)}
+                        style={{
+                          minHeight: 40,
+                          borderWidth: 1,
+                          borderColor: '#ccc',
+                          borderRadius: 4,
+                          padding: 8,
+                          flex: 1,
+                          ...(Platform.OS === 'web' ? { resize: 'vertical' } : {}),
+                        }}
+                      />
                       <IconButton
                         icon="pencil"
                         size={20}
-                        onPress={() => openDescriptionModal(index)}
+                        onPress={() => openItemDescriptionModal(index, item.description)}
                         style={{ marginLeft: 4 }}
                       />
-                    )}
-                  </View>
-                </DataTable.Cell>
-                <DataTable.Cell numeric style={{ width: 80 }}>
-                  <TextInput
-                    value={safeToString(item.quantity)}
-                    onChangeText={(value) => handleUpdateItem(index, 'quantity', parseFloat(value) || 0)}
-                    keyboardType="numeric"
-                    style={{ textAlign: 'right', width: 50 }}
-                  />
-                </DataTable.Cell>
-                <DataTable.Cell numeric style={{ width: 120 }}>
-                  <TextInput
-                    value={safeToString(item.unit_price)}
-                    onChangeText={(value) => handleUpdateItem(index, 'unit_price', parseFloat(value) || 0)}
-                    keyboardType="numeric"
-                    style={{ textAlign: 'right', width: 80 }}
-                  />
-                </DataTable.Cell>
-                <DataTable.Cell numeric style={{ width: 120 }}>
-                  {formatCurrency(item.amount)}
-                </DataTable.Cell>
-                <DataTable.Cell style={{ width: 50 }}>
-                  <IconButton
-                    icon="delete"
-                    size={20}
-                    onPress={() => handleRemoveItem(index)}
-                  />
-                </DataTable.Cell>
-              </DataTable.Row>
-            ))}
+                    </View>
+                  </DataTable.Cell>
+                  <DataTable.Cell numeric style={{ width: 80, justifyContent: 'center' }}>
+                    <TextInput
+                      value={safeToString(item.quantity)}
+                      onChangeText={(value) => handleUpdateItem(index, 'quantity', parseFloat(value) || 0)}
+                      keyboardType="numeric"
+                      style={{ textAlign: 'center', width: 50 }}
+                    />
+                  </DataTable.Cell>
+                  <DataTable.Cell numeric style={{ width: 120 }}>
+                    <TextInput
+                      value={safeToString(item.unit_price)}
+                      onChangeText={(value) => handleUpdateItem(index, 'unit_price', parseFloat(value) || 0)}
+                      keyboardType="numeric"
+                      style={{ textAlign: 'right', width: 80 }}
+                    />
+                  </DataTable.Cell>
+                  <DataTable.Cell numeric style={{ width: 120 }}>
+                    {formatCurrency(item.amount)}
+                  </DataTable.Cell>
+                  <DataTable.Cell style={{ width: 50 }}>
+                    <IconButton
+                      icon="delete"
+                      size={20}
+                      onPress={() => handleRemoveItem(index)}
+                    />
+                  </DataTable.Cell>
+                </DataTable.Row>
+              ))
+            )}
           </DataTable>
           
-          <View style={[combinedStyles.row, { justifyContent: 'flex-end', marginTop: 16 }]}>
-            <View style={{ width: '50%' }}>
-              <View style={[combinedStyles.row, { justifyContent: 'space-between' }]}>
-                <Text>Subtotal:</Text>
-                <Text>{formatCurrency(formData.subtotal)}</Text>
+          <View style={{ marginTop: 24, backgroundColor: '#ffffff' }}>
+            <View style={[combinedStyles.row, { justifyContent: 'flex-end', gap: 8 }]}>
+              <Text>Subtotal:</Text>
+              <Text>{formatCurrency(formData.subtotal)}</Text>
+            </View>
+            
+            <View style={[combinedStyles.row, { justifyContent: 'space-between', alignItems: 'center' }]}>
+              <Text>Tax Rate:</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <TextInput
+                  value={formData.tax_rate.toString()}
+                  onChangeText={(value) => handleChange('tax_rate', value)}
+                  keyboardType="numeric"
+                  style={{ width: 60, height: 40 }}
+                />
+                <Text>%</Text>
               </View>
-              
-              <View style={[combinedStyles.row, { justifyContent: 'space-between', alignItems: 'center' }]}>
-                <Text>Tax Rate:</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <TextInput
-                    value={formData.tax_rate.toString()}
-                    onChangeText={(value) => handleChange('tax_rate', value)}
-                    keyboardType="numeric"
-                    style={{ width: 60, height: 40 }}
-                  />
-                  <Text>%</Text>
-                </View>
-              </View>
-              
-              <View style={[combinedStyles.row, { justifyContent: 'space-between' }]}>
-                <Text>Tax Amount:</Text>
-                <Text>{formatCurrency(formData.tax_amount)}</Text>
-              </View>
-              
-              <Divider style={{ marginVertical: 8 }} />
-              
-              <View style={[combinedStyles.row, { justifyContent: 'space-between' }]}>
-                <Text variant="titleMedium">Total:</Text>
-                <Text variant="titleMedium">{formatCurrency(formData.total)}</Text>
-              </View>
+            </View>
+            
+            <View style={[combinedStyles.row, { justifyContent: 'space-between' }]}>
+              <Text>Tax Amount:</Text>
+              <Text>{formatCurrency(formData.tax_amount)}</Text>
+            </View>
+            
+            <Divider style={{ marginVertical: 8 }} />
+            
+            <View style={[combinedStyles.row, { justifyContent: 'space-between' }]}>
+              <Text variant="titleMedium">Total:</Text>
+              <Text variant="titleMedium">{formatCurrency(formData.total)}</Text>
             </View>
           </View>
           
@@ -852,10 +1143,19 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
               />
             </View>
           </View>
-        </ScrollView>
+        </Card.Content>
         
-        <View style={[combinedStyles.row, { justifyContent: 'flex-end', gap: 8, marginTop: 16 }]}>
-          <Button mode="outlined" onPress={onCancel}>
+        <View style={[
+          combinedStyles.row, 
+          { 
+            justifyContent: 'flex-end', 
+            gap: 8, 
+            marginTop: 16,
+            backgroundColor: '#ffffff',
+            padding: 16
+          }
+        ]}>
+          <Button mode="outlined" onPress={onCancel} style={{ backgroundColor: '#ffffff' }}>
             Cancel
           </Button>
           <Button 
@@ -866,7 +1166,7 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
             {isEditing ? "Update Invoice" : "Create Invoice"}
           </Button>
         </View>
-      </Card.Content>
+      </Card>
       <Modal
         visible={descriptionModalVisible}
         transparent={true}
@@ -985,6 +1285,67 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
           </View>
         </View>
       </Modal>
-    </Card>
+      <Modal
+        visible={itemDescriptionModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setItemDescriptionModalVisible(false)}
+      >
+        <View style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        }}>
+          <View style={{
+            width: '90%',
+            height: '80%',
+            backgroundColor: 'white',
+            borderRadius: 10,
+            padding: 30,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.25,
+            shadowRadius: 3.84,
+            elevation: 5,
+          }}>
+            <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 20 }}>Edit Item Description</Text>
+            <TextInput
+              multiline
+              value={editingItemDescription}
+              onChangeText={setEditingItemDescription}
+              style={{
+                flex: 1,
+                minHeight: 300,
+                borderWidth: 1,
+                borderColor: '#ccc',
+                borderRadius: 4,
+                padding: 16,
+                marginBottom: 20,
+                backgroundColor: 'white',
+                ...(Platform.OS === 'web' ? { resize: 'vertical' } : {}),
+              }}
+              autoFocus
+            />
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 16 }}>
+              <Button 
+                mode="outlined" 
+                onPress={() => setItemDescriptionModalVisible(false)}
+                style={{ paddingHorizontal: 20 }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                mode="contained" 
+                onPress={saveItemDescription}
+                style={{ paddingHorizontal: 20 }}
+              >
+                Save
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 } 

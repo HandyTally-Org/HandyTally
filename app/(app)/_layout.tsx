@@ -41,7 +41,7 @@ function CustomDrawerContent(props: any) {
       setAdminExpanded(true);
     }
   }, [pathname]);
-
+  
   return (
     <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
       {/* Header with toggle button */}
@@ -49,8 +49,8 @@ function CustomDrawerContent(props: any) {
         <TouchableOpacity onPress={toggleDrawer} style={styles.toggleButton}>
           <Ionicons name={isCollapsed ? "menu" : "menu-outline"} size={24} color="#333" />
         </TouchableOpacity>
-      </View>
-      
+        </View>
+        
       <DrawerContentScrollView {...props} contentContainerStyle={{ flexGrow: 1 }}>
         {/* Custom drawer items with conditional rendering based on collapsed state */}
         <View style={styles.drawerContent}>
@@ -285,8 +285,8 @@ function CustomDrawerContent(props: any) {
             {!isCollapsed && (
               <Text style={styles.handyTallyText}>HandyTally</Text>
             )}
-          </View>
-          
+      </View>
+      
           {!isCollapsed && (
             <View style={styles.footerTextContainer}>
               <View style={styles.termsRow}>
@@ -298,7 +298,7 @@ function CustomDrawerContent(props: any) {
               <Text style={styles.versionText}>v1.0</Text>
             </View>
           )}
-        </View>
+      </View>
       </DrawerContentScrollView>
     </View>
   );

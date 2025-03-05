@@ -1,0 +1,50 @@
+/* Add this to your CSS file */
+.dropdown-item {
+  background-color: #ffffff;
+  padding: 12px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  transition: background-color 0.2s ease;
+}
+
+.dropdown-item:hover {
+  background-color: #f5f5f5 !important;
+}
+
+.status-dropdown-item {
+  background-color: #ffffff;
+  width: 100%;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+}
+
+.status-dropdown-item:hover {
+  background-color: #f5f5f5;
+}
+
+.status-dropdown-item-content {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  width: 100%;
+  padding: 12px;
+}
+
+/* Add these styles to ensure dropdowns appear above other elements */
+.dropdown-container {
+  position: relative;
+  z-index: 1000;
+}
+
+.dropdown-menu {
+  position: absolute;
+  z-index: 10000;
+  background-color: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  overflow: visible;
+} 
