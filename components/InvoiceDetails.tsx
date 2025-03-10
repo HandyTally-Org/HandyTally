@@ -224,11 +224,17 @@ export function InvoiceDetails({
   const [companyInfo, setCompanyInfo] = useState(null);
   const [printLoading, setPrintLoading] = useState(false);
   
+  // Ensure invoice_items exists with a default empty array
+  const safeInvoice = {
+    ...invoice,
+    invoice_items: invoice?.invoice_items || []
+  };
+  
   useEffect(() => {
-    console.log('Invoice object in component:', invoice);
-    console.log('Job information:', invoice.job);
+    console.log('Invoice object in component:', safeInvoice);
+    console.log('Job information:', safeInvoice.job);
     fetchCompanyInfo();
-  }, [invoice.id]);
+  }, [safeInvoice.id]);
 
   async function fetchCompanyInfo() {
     try {
@@ -262,8 +268,8 @@ export function InvoiceDetails({
 
   const handleDelete = () => {
     if (onDelete) {
-      console.log('Deleting invoice with ID:', invoice.uid);
-      onDelete(invoice.uid);
+      console.log('Deleting invoice with ID:', safeInvoice.uid);
+      onDelete(safeInvoice.uid);
     }
     setShowDeleteDialog(false);
   };
@@ -273,7 +279,7 @@ export function InvoiceDetails({
       setPrintLoading(true);
       
       // Generate HTML for the invoice
-      const html = generateInvoiceHTML(invoice, items, companyInfo);
+      const html = generateInvoiceHTML(safeInvoice, items, companyInfo);
       
       // For web, create a new window with just the invoice HTML
       if (Platform.OS === 'web') {
@@ -309,19 +315,19 @@ export function InvoiceDetails({
     <ScrollView style={styles.container}>
       <View style={styles.contentWrapper}>
         <Text variant="headlineMedium" style={styles.title}>
-          Invoice #{invoice.invoice_number}
+          Invoice #{safeInvoice.invoice_number}
         </Text>
 
         <View style={styles.section}>
-          <Text>{invoice.client ? invoice.client.name : 'No client'}</Text>
-          <Text>Status: {invoice.status}</Text>
-          <Text>Amount: {formatCurrency(invoice.total)}</Text>
+          <Text>{safeInvoice.client ? safeInvoice.client.name : 'No client'}</Text>
+          <Text>Status: {safeInvoice.status}</Text>
+          <Text>Amount: {formatCurrency(safeInvoice.total)}</Text>
         </View>
 
         <View style={styles.section}>
-          <Text>Job: {invoice.job ? invoice.job.name : 'No job'}</Text>
-          <Text>Issue Date: {formatDate(invoice.issue_date)}</Text>
-          <Text>Due Date: {formatDate(invoice.due_date)}</Text>
+          <Text>Job: {safeInvoice.job ? safeInvoice.job.name : 'No job'}</Text>
+          <Text>Issue Date: {formatDate(safeInvoice.issue_date)}</Text>
+          <Text>Due Date: {formatDate(safeInvoice.due_date)}</Text>
         </View>
 
         <View style={styles.section}>
@@ -338,12 +344,12 @@ export function InvoiceDetails({
               <DataTable.Row>
                 <DataTable.Cell>Loading items...</DataTable.Cell>
               </DataTable.Row>
-            ) : items.length === 0 ? (
+            ) : safeInvoice.invoice_items.length === 0 ? (
               <DataTable.Row>
                 <DataTable.Cell>No items found</DataTable.Cell>
               </DataTable.Row>
             ) : (
-              items.map((item) => (
+              safeInvoice.invoice_items.map((item) => (
                 <DataTable.Row key={item.id}>
                   <DataTable.Cell>{item.description}</DataTable.Cell>
                   <DataTable.Cell numeric>{item.quantity}</DataTable.Cell>
@@ -360,27 +366,27 @@ export function InvoiceDetails({
           <View style={styles.totals}>
             <View style={styles.totalRow}>
               <Text>Subtotal:</Text>
-              <Text>{formatCurrency(invoice.subtotal)}</Text>
+              <Text>{formatCurrency(safeInvoice.subtotal)}</Text>
             </View>
             
             <View style={styles.totalRow}>
-              <Text>Tax ({invoice.tax_rate}%):</Text>
-              <Text>{formatCurrency(invoice.tax_amount)}</Text>
+              <Text>Tax ({safeInvoice.tax_rate}%):</Text>
+              <Text>{formatCurrency(safeInvoice.tax_amount)}</Text>
             </View>
             
             <Divider style={{ marginVertical: 8 }} />
             
             <View style={styles.totalRow}>
               <Text variant="titleMedium">Total:</Text>
-              <Text variant="titleMedium">{formatCurrency(invoice.total)}</Text>
+              <Text variant="titleMedium">{formatCurrency(safeInvoice.total)}</Text>
             </View>
           </View>
         </View>
 
-        {invoice.notes && (
+        {safeInvoice.notes && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Notes</Text>
-            <Text>{invoice.notes}</Text>
+            <Text>{safeInvoice.notes}</Text>
           </View>
         )}
 
@@ -399,7 +405,7 @@ export function InvoiceDetails({
             {isEditable && onEdit && (
               <Button 
                 mode="contained" 
-                onPress={() => onEdit(invoice)}
+                onPress={() => onEdit(safeInvoice)}
                 style={styles.actionButton}
                 icon="pencil"
               >
@@ -420,35 +426,35 @@ export function InvoiceDetails({
             
             <View style={styles.statusButtons}>
               <Button 
-                mode={invoice.status === 'draft' ? 'contained' : 'outlined'} 
+                mode={safeInvoice.status === 'draft' ? 'contained' : 'outlined'} 
                 onPress={() => handleStatusChange('draft')}
                 style={styles.statusButton}
               >
                 Draft
               </Button>
               <Button 
-                mode={invoice.status === 'sent' ? 'contained' : 'outlined'} 
+                mode={safeInvoice.status === 'sent' ? 'contained' : 'outlined'} 
                 onPress={() => handleStatusChange('sent')}
                 style={styles.statusButton}
               >
                 Sent
               </Button>
               <Button 
-                mode={invoice.status === 'paid' ? 'contained' : 'outlined'} 
+                mode={safeInvoice.status === 'paid' ? 'contained' : 'outlined'} 
                 onPress={() => handleStatusChange('paid')}
                 style={styles.statusButton}
               >
                 Paid
               </Button>
               <Button 
-                mode={invoice.status === 'overdue' ? 'contained' : 'outlined'} 
+                mode={safeInvoice.status === 'overdue' ? 'contained' : 'outlined'} 
                 onPress={() => handleStatusChange('overdue')}
                 style={styles.statusButton}
               >
                 Overdue
               </Button>
               <Button 
-                mode={invoice.status === 'cancelled' ? 'contained' : 'outlined'} 
+                mode={safeInvoice.status === 'cancelled' ? 'contained' : 'outlined'} 
                 onPress={() => handleStatusChange('cancelled')}
                 style={styles.statusButton}
               >
@@ -480,7 +486,7 @@ export function InvoiceDetails({
         <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)}>
           <Dialog.Title>Delete Invoice</Dialog.Title>
           <Dialog.Content>
-            <Text>Are you sure you want to delete Invoice #{invoice.invoice_number}? This action cannot be undone.</Text>
+            <Text>Are you sure you want to delete Invoice #{safeInvoice.invoice_number}? This action cannot be undone.</Text>
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setShowDeleteDialog(false)}>Cancel</Button>

@@ -9,6 +9,7 @@ import { Job } from './jobs';
 import { Client } from './clients';
 import { PageHeader } from '../../components/PageHeader';
 import { useRouter } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
 
 export type Invoice = {
   uid: string;
@@ -186,44 +187,88 @@ export default function InvoicesScreen() {
   }, [jobs, clients]);
 
   useEffect(() => {
-    // Check if we have new invoice data in localStorage
+    // Check if we have new invoice data in localStorage with timestamp
     if (typeof window !== 'undefined') {
       try {
-        const newInvoiceDataString = localStorage.getItem('newInvoiceData');
-        if (newInvoiceDataString) {
-          // Clear the localStorage item first to prevent loops
-          localStorage.removeItem('newInvoiceData');
+        // Find any keys that start with newInvoiceData_
+        const keys = Object.keys(localStorage);
+        const newInvoiceKeys = keys.filter(key => key.startsWith('newInvoiceData_'));
+        
+        if (newInvoiceKeys.length > 0) {
+          // Use the most recent one (highest timestamp)
+          const mostRecentKey = newInvoiceKeys.sort().pop();
+          const newInvoiceDataString = localStorage.getItem(mostRecentKey);
           
-          // Parse the new invoice data
-          const newInvoiceData = JSON.parse(newInvoiceDataString);
+          // Clear all newInvoiceData_ items
+          newInvoiceKeys.forEach(key => localStorage.removeItem(key));
           
-          // Create a properly structured invoice object
-          const newInvoice = {
-            job_id: newInvoiceData.job_id || '',
-            client_id: newInvoiceData.client_id || '',
-            status: newInvoiceData.status || 'estimate',
-            invoice_number: '',
-            issue_date: new Date().toISOString().split('T')[0],
-            due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            subtotal: 0,
-            tax_rate: 0,
-            tax_amount: 0,
-            total: 0,
-            notes: '',
-            invoice_items: []
-          };
-          
-          console.log('Created new invoice object:', newInvoice);
-          
-          // Show the invoice form with the new invoice data
-          setShowInvoiceList(false);
-          setInvoiceToEdit(newInvoice);
+          if (newInvoiceDataString) {
+            // Parse the new invoice data
+            const newInvoiceData = JSON.parse(newInvoiceDataString);
+            
+            // Create a properly structured invoice object
+            const newInvoice = {
+              job_id: newInvoiceData.job_id || '',
+              client_id: newInvoiceData.client_id || '',
+              status: newInvoiceData.status || 'draft',
+              invoice_number: '',
+              issue_date: new Date().toISOString().split('T')[0],
+              due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+              subtotal: 0,
+              tax_rate: 0,
+              tax_amount: 0,
+              total: 0,
+              notes: '',
+              invoice_items: []
+            };
+            
+            console.log('Created new invoice object from timestamped data:', newInvoice);
+            
+            // Show the invoice form with the new invoice data
+            setShowInvoiceList(false);
+            setInvoiceToEdit(newInvoice);
+          }
         }
       } catch (error) {
-        console.error('Error handling new invoice data:', error);
+        console.error('Error handling new invoice data with timestamp:', error);
       }
     }
   }, []);
+
+  useEffect(() => {
+    // Check if we should show the invoice form
+    const showForm = localStorage.getItem('showInvoiceForm');
+    if (showForm === 'true') {
+      // Clear the flag
+      localStorage.removeItem('showInvoiceForm');
+      
+      // Show the form
+      setInvoiceToEdit(null); // No invoice to edit (creating new)
+      setShowInvoiceList(false); // Show the form
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const editInvoiceId = localStorage.getItem('editInvoiceId');
+      if (editInvoiceId) {
+        // Clear the localStorage item
+        localStorage.removeItem('editInvoiceId');
+        
+        // Find the invoice to edit
+        const invoiceToEdit = invoices.find(invoice => invoice.uid === editInvoiceId);
+        if (invoiceToEdit) {
+          console.log('Found invoice to edit:', invoiceToEdit);
+          
+          // Show the invoice form with the invoice to edit
+          setInvoiceToEdit(invoiceToEdit);
+          setShowInvoiceList(false);
+        } else {
+          console.log('Invoice not found:', editInvoiceId);
+        }
+      }
+    }
+  }, [invoices]);
 
   async function fetchInvoices() {
     try {
@@ -1393,23 +1438,23 @@ export default function InvoicesScreen() {
       {showInvoiceList ? (
         <>
           <View style={styles.searchContainer}>
-            <Searchbar
-              placeholder="Search invoices..."
-              onChangeText={setSearchQuery}
-              value={searchQuery}
+      <Searchbar
+        placeholder="Search invoices..."
+        onChangeText={setSearchQuery}
+        value={searchQuery}
               style={[styles.searchBar, { backgroundColor: '#f5f5f5' }]}
             />
             
-            <Button
-              mode="contained"
+        <Button
+          mode="contained"
               onPress={() => {
                 setInvoiceToEdit(null); // No invoice to edit (creating new)
                 setShowInvoiceList(false); // Show the form
               }}
-              style={styles.addButton}
-            >
-              Create New Invoice
-            </Button>
+          style={styles.addButton}
+        >
+          Create New Invoice
+        </Button>
           </View>
           
           <View style={styles.filtersContainer}>
@@ -1421,14 +1466,14 @@ export default function InvoicesScreen() {
               >
                 All
               </Button>
-              <Button
+                          <Button 
                 mode={statusFilter === 'estimate' ? 'contained' : 'outlined'}
                 onPress={() => setStatusFilter('estimate')}
                 style={{ marginRight: 8 }}
               >
                 Estimate
-              </Button>
-              <Button
+                          </Button>
+                          <Button 
                 mode={statusFilter === 'work_order' ? 'contained' : 'outlined'}
                 onPress={() => setStatusFilter('work_order')}
                 style={{ marginRight: 8 }}
@@ -1468,9 +1513,9 @@ export default function InvoicesScreen() {
                 onPress={() => setStatusFilter('cancelled')}
               >
                 Cancelled
-              </Button>
-            </View>
-          </View>
+                          </Button>
+                        </View>
+                    </View>
 
           <Card style={{
             flex: 1,
@@ -1593,7 +1638,7 @@ export default function InvoicesScreen() {
                 ))
               )}
             </DataTable>
-          </Card>
+        </Card>
         </>
       ) : (
         <ScrollView style={{ backgroundColor: '#ffffff' }}>
@@ -1629,114 +1674,114 @@ export default function InvoicesScreen() {
                       })
                       .eq('uid', invoiceToEdit.uid);
                       
-                    if (invoiceError) {
-                      console.error('Error updating invoice:', invoiceError);
-                      throw invoiceError;
-                    }
-                    
-                    console.log('Invoice updated successfully with status:', updatedInvoice.status);
-                    
-                    // Handle invoice items
-                    // First delete existing items
-                    const { error: deleteError } = await supabase
-                      .from('invoice_items')
-                      .delete()
-                      .eq('invoice_id', invoiceToEdit.uid);
-
-                    if (deleteError) throw deleteError;
-
-                    // Then insert new items
-                    if (invoiceItems && invoiceItems.length > 0) {
-                      const itemsToInsert = invoiceItems.map(item => ({
-                        invoice_id: invoiceToEdit.uid,
-                        description: item.description,
-                        quantity: item.quantity,
-                        unit_price: item.unit_price,
-                        amount: item.amount,
-                        // Include these if they exist
-                        service_id: item.service_id || null,
-                        material_id: item.material_id || null,
-                        type: item.type || 'custom'
-                      }));
-
-                      console.log('Inserting invoice items:', itemsToInsert);
-
-                      const { error: insertError } = await supabase
-                        .from('invoice_items')
-                        .insert(itemsToInsert);
-
-                      if (insertError) throw insertError;
-                    }
-                    
-                    showSnackbar('Invoice updated successfully');
-                  } else {
-                    // Create new invoice
-                    const { data: newInvoice, error: invoiceError } = await supabase
-                      .from('invoices')
-                      .insert({
-                        invoice_number: updatedInvoice.invoice_number,
-                        client_id: updatedInvoice.client_id,
-                        job_id: updatedInvoice.job_id,
-                        issue_date: updatedInvoice.issue_date,
-                        due_date: updatedInvoice.due_date,
-                        subtotal: updatedInvoice.subtotal,
-                        tax_rate: updatedInvoice.tax_rate,
-                        tax_amount: updatedInvoice.tax_amount,
-                        total: updatedInvoice.total,
-                        notes: updatedInvoice.notes,
-                        status: updatedInvoice.status || 'estimate',
-                      })
-                      .select()
-                      .single();
+                      if (invoiceError) {
+                        console.error('Error updating invoice:', invoiceError);
+                        throw invoiceError;
+                      }
                       
-                    if (invoiceError) throw invoiceError;
-                    
-                    // Insert invoice items if any
-                    if (invoiceItems && invoiceItems.length > 0) {
-                      const itemsToInsert = invoiceItems.map(item => ({
-                        invoice_id: newInvoice.uid,
-                        description: item.description,
-                        quantity: item.quantity,
-                        unit_price: item.unit_price,
-                        amount: item.amount,
-                        // Include these if they exist
-                        service_id: item.service_id || null,
-                        material_id: item.material_id || null,
-                        type: item.type || 'custom'
-                      }));
-
-                      console.log('Inserting invoice items for new invoice:', itemsToInsert);
-
-                      const { error: insertError } = await supabase
+                      console.log('Invoice updated successfully with status:', updatedInvoice.status);
+                      
+                      // Handle invoice items
+                      // First delete existing items
+                      const { error: deleteError } = await supabase
                         .from('invoice_items')
-                        .insert(itemsToInsert);
+                        .delete()
+                        .eq('invoice_id', invoiceToEdit.uid);
 
-                      if (insertError) throw insertError;
+                      if (deleteError) throw deleteError;
+
+                      // Then insert new items
+                      if (invoiceItems && invoiceItems.length > 0) {
+                        const itemsToInsert = invoiceItems.map(item => ({
+                          invoice_id: invoiceToEdit.uid,
+                          description: item.description,
+                          quantity: item.quantity,
+                          unit_price: item.unit_price,
+                          amount: item.amount,
+                          // Include these if they exist
+                          service_id: item.service_id || null,
+                          material_id: item.material_id || null,
+                          type: item.type || 'custom'
+                        }));
+
+                        console.log('Inserting invoice items:', itemsToInsert);
+
+                        const { error: insertError } = await supabase
+                          .from('invoice_items')
+                          .insert(itemsToInsert);
+
+                        if (insertError) throw insertError;
+                      }
+                      
+                      showSnackbar('Invoice updated successfully');
+                    } else {
+                      // Create new invoice
+                      const { data: newInvoice, error: invoiceError } = await supabase
+                        .from('invoices')
+                        .insert({
+                          invoice_number: updatedInvoice.invoice_number,
+                          client_id: updatedInvoice.client_id,
+                          job_id: updatedInvoice.job_id,
+                          issue_date: updatedInvoice.issue_date,
+                          due_date: updatedInvoice.due_date,
+                          subtotal: updatedInvoice.subtotal,
+                          tax_rate: updatedInvoice.tax_rate,
+                          tax_amount: updatedInvoice.tax_amount,
+                          total: updatedInvoice.total,
+                          notes: updatedInvoice.notes,
+                          status: updatedInvoice.status || 'estimate',
+                        })
+                        .select()
+                        .single();
+                        
+                        if (invoiceError) throw invoiceError;
+                        
+                        // Insert invoice items if any
+                        if (invoiceItems && invoiceItems.length > 0) {
+                          const itemsToInsert = invoiceItems.map(item => ({
+                            invoice_id: newInvoice.uid,
+                            description: item.description,
+                            quantity: item.quantity,
+                            unit_price: item.unit_price,
+                            amount: item.amount,
+                            // Include these if they exist
+                            service_id: item.service_id || null,
+                            material_id: item.material_id || null,
+                            type: item.type || 'custom'
+                          }));
+
+                          console.log('Inserting invoice items for new invoice:', itemsToInsert);
+
+                          const { error: insertError } = await supabase
+                            .from('invoice_items')
+                            .insert(itemsToInsert);
+
+                          if (insertError) throw insertError;
+                        }
+                        
+                        showSnackbar('Invoice created successfully');
+                      }
+                      
+                      // Refresh the invoices list
+                      fetchInvoices();
+                      
+                      // Show the list again
+                      setShowInvoiceList(true);
+                    } catch (error) {
+                      console.error('Error saving invoice:', error);
+                      showSnackbar(`Failed to save invoice: ${error.message}`);
                     }
-                    
-                    showSnackbar('Invoice created successfully');
-                  }
-                  
-                  // Refresh the invoices list
-                  fetchInvoices();
-                  
-                  // Show the list again
-                  setShowInvoiceList(true);
-                } catch (error) {
-                  console.error('Error saving invoice:', error);
-                  showSnackbar(`Failed to save invoice: ${error.message}`);
-                }
-              }}
-              onCancel={() => {
-                // Go back to the list view
-                setShowInvoiceList(true);
-              }}
-              initialInvoice={invoiceToEdit}
-              initialItems={invoiceToEdit?.invoice_items || []}
-              isEditing={true}
-              lastInvoiceNumber={getLastInvoiceNumber()}
-              hideTitle={true}
-            />
+                  }}
+                  onCancel={() => {
+                    // Go back to the list view
+                    setShowInvoiceList(true);
+                  }}
+                  initialInvoice={invoiceToEdit}
+                  initialItems={invoiceToEdit?.invoice_items || []}
+                  isEditing={true}
+                  lastInvoiceNumber={getLastInvoiceNumber()}
+                  hideTitle={true}
+                />
           </View>
         </ScrollView>
       )}

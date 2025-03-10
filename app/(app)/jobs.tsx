@@ -6,6 +6,7 @@ import { styles as globalStyles } from '../../styles';
 import { JobForm } from '../../components/JobForm';
 import { useRouter } from 'expo-router';
 import * as XLSX from 'xlsx';
+import { MaterialIcons } from '@expo/vector-icons';
 
 type Job = {
   uid: string;
@@ -1047,7 +1048,7 @@ export default function JobsScreen() {
                   style={styles.input}
                   multiline
                   numberOfLines={3}
-                  mode="outlined"
+                      mode="outlined" 
                 />
                 
                 <Text style={styles.inputLabel}>Start Date</Text>
@@ -1100,7 +1101,7 @@ export default function JobsScreen() {
                       {statusOptions.map(option => (
                         <TouchableOpacity
                           key={option.value}
-                          style={{
+                      style={{ 
                             padding: 12,
                             borderBottomWidth: 1,
                             borderBottomColor: '#f0f0f0',
@@ -1137,8 +1138,8 @@ export default function JobsScreen() {
                           <Text style={{ flex: 1, fontSize: 16, fontWeight: '500', marginLeft: 8 }}>{option.label}</Text>
                         </TouchableOpacity>
                       ))}
-                    </View>
-                  )}
+                  </View>
+                )}
                 </View>
               </View>
             )}
@@ -1304,22 +1305,43 @@ export default function JobsScreen() {
                   <DataTable.Cell>{invoice.status}</DataTable.Cell>
                   <DataTable.Cell>
                     <View style={{ flexDirection: 'row' }}>
-                      <IconButton
+                    <IconButton 
                         icon="eye"
                         size={20}
                         onPress={() => handleViewInvoice(invoice)}
-                      />
-                      <IconButton
+                    />
+                    <IconButton 
                         icon="pencil"
                         size={20}
                         onPress={() => handleEditInvoice(invoice)}
-                      />
-                    </View>
+                    />
+                  </View>
                   </DataTable.Cell>
                 </DataTable.Row>
               ))
             )}
           </DataTable>
+
+          {/* Spacer to push the back button to the bottom */}
+          <View style={{ flex: 1 }} />
+
+          {/* Back to Jobs button */}
+          <TouchableOpacity 
+            style={{ 
+              padding: 16,
+              flexDirection: 'row',
+              alignItems: 'center',
+              borderTopWidth: 1,
+              borderTopColor: '#e0e0e0',
+              marginTop: 'auto'
+            }}
+            onPress={() => setSelectedJob(null)}  // Adjust this based on your navigation logic
+          >
+            <View style={{ width: 24, marginRight: 12 }}>
+              <MaterialIcons name="arrow-back" size={20} color="#666666" />
+            </View>
+            <Text style={{ color: '#666666' }}>Back to Jobs</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <></>

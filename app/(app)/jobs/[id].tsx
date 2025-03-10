@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Platform, Pressable, TouchableOpacity } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
+import { View, StyleSheet, ScrollView, Platform, Pressable, TouchableOpacity, Dimensions } from 'react-native';
 import { Text, Button, Card, SegmentedButtons, FAB, TextInput, Dialog, Portal, Divider, Chip, DataTable, ActivityIndicator, RadioButton, List, IconButton, Menu, Snackbar, Surface, Modal } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
@@ -11,6 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from 'date-fns';
 import { JobForm } from '../../../components/JobForm';
 import { InvoiceDetails } from '../../../components/InvoiceDetails';
+import { InvoiceForm } from '../../../components/InvoiceForm';
 
 // Let's create a simple calendar component using the existing libraries
 interface SimpleCalendarProps {
@@ -195,7 +196,12 @@ export default function JobDetailsScreen() {
   const [showAddLogDialog, setShowAddLogDialog] = useState(false);
   const [newLogText, setNewLogText] = useState('');
   const [showAddCostDialog, setShowAddCostDialog] = useState(false);
-  const [newCost, setNewCost] = useState({ description: '', quantity: '1', price: '0', type: 'labor' });
+  const [newCost, setNewCost] = useState({ 
+    description: '', 
+    quantity: '1', 
+    price: '0', 
+    type: 'labor' 
+  });
   const [showAddEventDialog, setShowAddEventDialog] = useState(false);
   const [newEvent, setNewEvent] = useState({ title: '', date: '', notes: '' });
   const [markedDates, setMarkedDates] = useState({});
@@ -227,6 +233,34 @@ export default function JobDetailsScreen() {
   const [viewingInvoiceId, setViewingInvoiceId] = useState(null);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [editingInvoice, setEditingInvoice] = useState(false);
+  const [editingInvoiceId, setEditingInvoiceId] = useState(null);
+  const [editingInvoiceData, setEditingInvoiceData] = useState(null);
+  const [showInvoiceEditModal, setShowInvoiceEditModal] = useState(false);
+  const [clients, setClients] = useState([]);
+  const [allJobs, setAllJobs] = useState([]);
+  // Add a state variable to track if we're in invoice edit mode
+  const [isInvoiceEditMode, setIsInvoiceEditMode] = useState(false);
+  const [servicesMenuVisible, setServicesMenuVisible] = useState(false);
+  const [materialsMenuVisible, setMaterialsMenuVisible] = useState(false);
+  // Add these new state variables at the top of your component
+  const [selectedServices, setSelectedServices] = useState([]);
+  const [selectedMaterials, setSelectedMaterials] = useState([]);
+  const [customItems, setCustomItems] = useState([]);
+  const [customItemInput, setCustomItemInput] = useState({ description: '', price: '0' });
+  // Add these refs near your state variables
+  const addServiceButtonRef = useRef(null);
+  const addMaterialButtonRef = useRef(null);
+  // First, add these state variables to track menu positions
+  const [serviceMenuPosition, setServiceMenuPosition] = useState({ x: 0, y: 0 });
+  const [materialMenuPosition, setMaterialMenuPosition] = useState({ x: 0, y: 0 });
+  // Add this state variable to control the visibility of the costs input section
+  const [showCostsInputSection, setShowCostsInputSection] = useState(false);
+  // Add these state variables at the top of your component
+  const [editingCostId, setEditingCostId] = useState<string | null>(null);
+  const [isEditingCost, setIsEditingCost] = useState(false);
+  // First, update your state variables
+  const [showServiceDialog, setShowServiceDialog] = useState(false);
+  const [showMaterialDialog, setShowMaterialDialog] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -234,6 +268,7 @@ export default function JobDetailsScreen() {
       fetchServices();
       fetchMaterials();
       fetchInvoices();
+      fetchClientsAndJobs();
     }
   }, [id]);
 
@@ -403,59 +438,54 @@ export default function JobDetailsScreen() {
 
   const handleAddCost = async () => {
     try {
-      if (!id) return;
-
-      let description = '';
-      let price = 0;
-      let quantity = parseFloat(newCost.quantity || '1');
-      
-      if (newCost.type === 'labor') {
-        if (!selectedService) {
-          alert('Please select a service');
-          return;
-        }
-        description = selectedService.name;
-        price = selectedService.rate;
-      } else if (newCost.type === 'material') {
-        if (!selectedMaterial) {
-          alert('Please select a material');
-          return;
-        }
-        description = selectedMaterial.name;
-        price = selectedMaterial.price;
-      } else {
-        if (!newCost.description.trim()) {
-          alert('Please enter a description');
-          return;
-        }
-        description = newCost.description;
-        price = parseFloat(newCost.price || '0');
+      // Validate inputs
+      if (!newCost.description.trim()) {
+        alert('Please enter a description');
+        return;
       }
       
+      if (isNaN(parseFloat(newCost.price)) || parseFloat(newCost.price) < 0) {
+        alert('Please enter a valid price');
+        return;
+      }
+      
+      if (isNaN(parseFloat(newCost.quantity)) || parseFloat(newCost.quantity) <= 0) {
+        alert('Please enter a valid quantity');
+        return;
+      }
+      
+      const amount = parseFloat(newCost.price) * parseFloat(newCost.quantity);
+      
+      // Insert the new cost
       const { data, error } = await supabase
         .from('job_costs')
         .insert([{
           job_id: id,
-          description,
-          quantity,
-          price,
+          description: newCost.description,
+          quantity: parseFloat(newCost.quantity),
+          price: parseFloat(newCost.price),
+          amount: amount,
           type: newCost.type,
+          service_id: selectedService?.id || null,
+          material_id: selectedMaterial?.id || null,
           created_at: new Date().toISOString()
         }])
-        .select()
-        .single();
-
+        .select();
+      
       if (error) throw error;
-
-      setJobCosts([...jobCosts, data]);
+      
+      // Update the job costs state
+      setJobCosts([...jobCosts, data[0]]);
+      
+      // Reset form fields
       setShowAddCostDialog(false);
       setNewCost({ description: '', quantity: '1', price: '0', type: 'labor' });
       setSelectedService(null);
       setSelectedMaterial(null);
       
     } catch (error) {
-      console.error('Error adding cost:', error);
-      alert('Error adding cost');
+      console.error('Error adding job cost:', error);
+      alert(`Error adding cost: ${error.message}`);
     }
   };
 
@@ -931,7 +961,7 @@ export default function JobDetailsScreen() {
           <Pressable
             key={status}
             style={({ hovered }) => ({
-              padding: 12,
+              padding: 16,
               backgroundColor: hovered ? '#f5f5f5' : '#ffffff',
               borderBottomWidth: 1,
               borderBottomColor: '#f0f0f0',
@@ -1122,65 +1152,73 @@ export default function JobDetailsScreen() {
     }
   };
 
-  // Add function to save invoice changes
-  const handleSaveInvoice = async (updatedInvoice) => {
+  // Add this function to handle saving the invoice
+  const handleSaveInvoice = async (updatedInvoice, updatedItems) => {
     try {
-      // Update the invoice
+      setLoading(true);
+      
+      console.log('Saving invoice with data:', updatedInvoice);
+      console.log('Invoice items:', updatedItems);
+      
+      // First, update the invoice record
       const { error: invoiceError } = await supabase
         .from('invoices')
         .update({
-          invoice_number: updatedInvoice.invoice_number,
-          date: updatedInvoice.date,
+          job_id: updatedInvoice.job_id,
+          client_id: updatedInvoice.client_id,
+          issue_date: updatedInvoice.issue_date,
+          due_date: updatedInvoice.due_date,
+          subtotal: updatedInvoice.subtotal,
+          tax_rate: updatedInvoice.tax_rate,
+          tax_amount: updatedInvoice.tax_amount,
+          total: updatedInvoice.total,
+          notes: updatedInvoice.notes,
           status: updatedInvoice.status,
-          amount: updatedInvoice.amount
+          updated_at: new Date().toISOString()
         })
-        .eq('id', updatedInvoice.id);
+        .eq('uid', updatedInvoice.uid);
       
       if (invoiceError) throw invoiceError;
       
-      // Handle invoice items
-      if (updatedInvoice.invoice_items) {
-        for (const item of updatedInvoice.invoice_items) {
-          if (item.id) {
-            // Update existing item
-            await supabase
-              .from('invoice_items')
-              .update({
-                description: item.description,
-                quantity: item.quantity,
-                price: item.price
-              })
-              .eq('id', item.id);
-          } else {
-            // Insert new item
-            await supabase
-              .from('invoice_items')
-              .insert({
-                invoice_id: updatedInvoice.id,
-                description: item.description,
-                quantity: item.quantity,
-                price: item.price
-              });
-          }
-        }
+      // Delete existing invoice items
+      const { error: deleteError } = await supabase
+        .from('invoice_items')
+        .delete()
+        .eq('invoice_id', updatedInvoice.uid);
+      
+      if (deleteError) throw deleteError;
+      
+      // Insert updated items
+      if (updatedItems && updatedItems.length > 0) {
+        const itemsToInsert = updatedItems.map(item => ({
+          invoice_id: updatedInvoice.uid,
+          description: item.description,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          amount: item.amount,
+          service_id: item.service_id,
+          material_id: item.material_id,
+          type: item.type
+        }));
+        
+        const { error: insertError } = await supabase
+          .from('invoice_items')
+          .insert(itemsToInsert);
+        
+        if (insertError) throw insertError;
       }
       
       // Refresh the invoices list
-      fetchInvoices();
-      
-      // Close the modal
-      setViewingInvoiceId(null);
-      setSelectedInvoice(null);
-      setEditingInvoice(false);
+      await fetchInvoices();
       
       // Show success message
-      setSnackbarMessage('Invoice updated successfully');
-      setSnackbarVisible(true);
+      alert('Invoice updated successfully');
       
     } catch (error) {
       console.error('Error updating invoice:', error);
-      setSnackbarMessage('Error updating invoice');
-      setSnackbarVisible(true);
+      alert(`Error updating invoice: ${error.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1204,6 +1242,198 @@ export default function JobDetailsScreen() {
       router.push(`/invoices?delete=${invoice.uid}`);
     }
   };
+
+  // Add this function to fetch the invoice data directly when needed
+  const fetchInvoiceForEditing = async (invoiceId) => {
+    try {
+      setLoading(true);
+      
+      // Fetch complete invoice with job data
+      const { data: invoiceData, error: invoiceError } = await supabase
+        .from('invoices')
+        .select('*, jobs(*)')
+        .eq('uid', invoiceId)
+        .single();
+        
+      if (invoiceError) throw invoiceError;
+      
+      // Fetch invoice items
+      const { data: itemsData, error: itemsError } = await supabase
+        .from('invoice_items')
+        .select('*')
+        .eq('invoice_id', invoiceId);
+        
+      if (itemsError) throw itemsError;
+      
+      // Combine the data
+      const fullInvoice = {
+        ...invoiceData,
+        invoice_items: itemsData || []
+      };
+      
+      console.log("Successfully fetched invoice:", fullInvoice.invoice_number);
+      
+      // Set the editing invoice data and switch to edit mode
+      setEditingInvoiceData(fullInvoice);
+      setIsInvoiceEditMode(true);
+      
+    } catch (error) {
+      console.error('Error fetching invoice for editing:', error);
+      alert('Error loading invoice: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchClientsAndJobs = async () => {
+    try {
+      // Fetch clients
+      const { data: clientData, error: clientError } = await supabase
+        .from('clients')
+        .select('*')
+        .order('name');
+      
+      if (clientError) throw clientError;
+      setClients(clientData || []);
+      
+      // Fetch all jobs
+      const { data: jobsData, error: jobsError } = await supabase
+        .from('jobs')
+        .select('*, clients(name)')
+        .order('created_at', { ascending: false });
+      
+      if (jobsError) throw jobsError;
+      setAllJobs(jobsData || []);
+      
+    } catch (error) {
+      console.error('Error fetching clients and jobs:', error);
+    }
+  };
+
+  // Add this function to handle editing a job cost
+  const handleEditCost = (cost) => {
+    setEditingCostId(cost.uid);
+    setIsEditingCost(true);
+    
+    // Initialize the form with the selected cost data
+    if (cost.service_id) {
+      // It's a service
+      const serviceItem = {
+        service: { id: cost.service_id, name: cost.description },
+        rate: cost.price.toString(),
+        quantity: cost.quantity.toString()
+      };
+      setSelectedServices([serviceItem]);
+    } else if (cost.material_id) {
+      // It's a material
+      const materialItem = {
+        material: { id: cost.material_id, name: cost.description },
+        cost: cost.price.toString(),
+        quantity: cost.quantity.toString()
+      };
+      setSelectedMaterials([materialItem]);
+    } else {
+      // It's a custom item
+      setCustomItems([{
+        description: cost.description,
+        price: cost.price.toString()
+      }]);
+    }
+    
+    setShowCostsInputSection(true);
+  };
+
+  // Modify the handleSaveCosts function to handle updates
+  const handleSaveCosts = async () => {
+    try {
+      setLoading(true);
+      
+      // If we're editing an existing cost
+      if (isEditingCost && editingCostId) {
+        // Delete the old record
+        const { error: deleteError } = await supabase
+          .from('job_costs')
+          .delete()
+          .eq('uid', editingCostId);
+        
+        if (deleteError) throw deleteError;
+      }
+      
+      const costsToAdd = [
+        // Process services
+        ...selectedServices.map(item => ({
+          job_id: id,
+          description: item.service.name,
+          quantity: parseFloat(item.quantity),
+          price: parseFloat(item.rate),
+          amount: parseFloat(item.quantity) * parseFloat(item.rate),
+          type: 'labor',
+          service_id: item.service.id,
+          material_id: null,
+          created_at: new Date().toISOString()
+        })),
+        
+        // Rest of the function remains unchanged
+      ];
+      
+      // After adding the costs
+      // Reset form and editing state
+      setSelectedServices([]);
+      setSelectedMaterials([]);
+      setCustomItems([]);
+      setShowCostsInputSection(false);
+      setIsEditingCost(false);
+      setEditingCostId(null);
+      
+      // Show success message
+      setSnackbarMessage('Job costs updated successfully');
+      setSnackbarVisible(true);
+      
+    } catch (error) {
+      console.error('Error adding job costs:', error);
+      setSnackbarMessage(`Error: ${error.message}`);
+      setSnackbarVisible(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Then update the DataTable part in the renderCostsTab function
+  // Replace the existing DataTable section with this:
+  <DataTable>
+    <DataTable.Header>
+      <DataTable.Title>Description</DataTable.Title>
+      <DataTable.Title>Quantity</DataTable.Title>
+      <DataTable.Title>Total</DataTable.Title>
+      <DataTable.Title>Type</DataTable.Title>
+      <DataTable.Title>Actions</DataTable.Title>
+    </DataTable.Header>
+    
+    {jobCosts.map((cost, index) => (
+      <DataTable.Row key={index}>
+        <DataTable.Cell>{cost.description}</DataTable.Cell>
+        <DataTable.Cell>{cost.quantity}</DataTable.Cell>
+        <DataTable.Cell>${parseFloat(cost.amount || cost.price * cost.quantity).toFixed(2)}</DataTable.Cell>
+        <DataTable.Cell> {cost.type}</DataTable.Cell>
+        <DataTable.Cell>
+          <View style={{ flexDirection: 'row' }}>
+            <IconButton icon="pencil" size={20} onPress={() => handleEditCost(cost)} />
+            <IconButton icon="delete" size={20} iconColor="red" onPress={() => handleDeleteCostItem(cost.uid)} />
+          </View>
+        </DataTable.Cell>
+      </DataTable.Row>
+    ))}
+    
+    <DataTable.Row style={{ backgroundColor: '#f5f5f5' }}>
+      <DataTable.Cell style={{ fontWeight: 'bold' }}>Total</DataTable.Cell>
+      <DataTable.Cell></DataTable.Cell>
+      <DataTable.Cell style={{ fontWeight: 'bold' }}>
+        ${jobCosts.reduce((sum, cost) => sum + parseFloat(cost.amount || cost.price * cost.quantity), 0).toFixed(2)}
+      </DataTable.Cell>
+      <DataTable.Cell></DataTable.Cell>
+      <DataTable.Cell></DataTable.Cell>
+    </DataTable.Row>
+  </DataTable>
 
   if (loading) {
     return (
@@ -1349,259 +1579,444 @@ export default function JobDetailsScreen() {
     }
   };
 
-  const renderInvoicesTab = () => (
-    <View>
-      <View style={{ 
-        backgroundColor: '#ffffff', 
-        padding: 0,
-        margin: 0,
-        borderWidth: 0,
-        borderRadius: 0,
-        shadowOpacity: 0,
-        elevation: 0
-      }}>
-        <View style={styles.contentHeader}>
+  const renderInvoicesTab = () => {
+    // If in invoice edit mode, show the edit form
+    if (isInvoiceEditMode && editingInvoiceData) {
+      return (
+        <View style={{ flex: 1 }}>
+          <View style={{ padding: 16, backgroundColor: '#eef', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <Text style={{ fontSize: 18, fontWeight: 'bold' }}>
+              Editing Invoice #{editingInvoiceData.invoice_number}
+            </Text>
+            <Button 
+              mode="outlined"
+              icon="arrow-left"
+              onPress={() => {
+                setIsInvoiceEditMode(false);
+                setEditingInvoiceData(null);
+                setEditingInvoiceId(null);
+              }}
+            >
+              Back to Invoices
+            </Button>
+          </View>
+          
+          {/* Add ScrollView here to enable scrolling */}
+          <ScrollView style={{ flex: 1 }}>
+            <InvoiceForm
+              key={editingInvoiceData.uid}
+              initialInvoice={editingInvoiceData}
+              initialItems={editingInvoiceData.invoice_items}
+              jobs={allJobs}
+              clients={clients}
+              forceInvoiceNumber={editingInvoiceData.invoice_number}
+              lastInvoiceNumber={null}
+              isEditing={true}
+              onSubmit={(updatedInvoice, updatedItems) => {
+                handleSaveInvoice({
+                  ...updatedInvoice,
+                  uid: editingInvoiceData.uid,
+                  invoice_number: editingInvoiceData.invoice_number
+                }, updatedItems);
+                setIsInvoiceEditMode(false);
+                setEditingInvoiceData(null);
+                setEditingInvoiceId(null);
+              }}
+              onCancel={() => {
+                setIsInvoiceEditMode(false);
+                setEditingInvoiceData(null);
+                setEditingInvoiceId(null);
+              }}
+            />
+          </ScrollView>
+        </View>
+      );
+    }
+
+    // Otherwise, show the regular invoices list
+    return (
+      <View>
+        <View style={styles.tabHeader}>
           <Text variant="titleLarge">Invoices</Text>
           <Button 
             mode="contained" 
-            onPress={() => {
-              // Store the job ID to use in the invoice form
-              localStorage.setItem('newInvoiceData', JSON.stringify({
-                job_id: job.uid,
-                client_id: job.client_id || '',
-                status: 'estimate'
-              }));
-              
-              // Navigate to the invoices page
-              router.push('/invoices');
-            }}
-            style={{ 
-              position: 'absolute',
-              top: 10,
-              right: 10,
-              backgroundColor: '#333333'
-            }}
+            onPress={() => router.push(`/invoices?job=${id}`)}
+            icon="plus"
           >
             Create New Invoice
           </Button>
         </View>
         
-        {/* Add space between button and table */}
-        <View style={{ height: 20 }} />
-        
-        {/* Invoice table with white background, no borders, and left-aligned content */}
-        <View style={{ 
-          backgroundColor: '#ffffff',
-          borderWidth: 0,
-          overflow: 'hidden',
-        }}>
-          <DataTable>
-            <DataTable.Header>
-              <DataTable.Title>Invoice #</DataTable.Title>
-              <DataTable.Title>Client</DataTable.Title>
-              <DataTable.Title>Start Date</DataTable.Title>
-              <DataTable.Title>End Date</DataTable.Title>
-              <DataTable.Title>Total</DataTable.Title>
-              <DataTable.Title>Status</DataTable.Title>
-              <DataTable.Title>Actions</DataTable.Title>
-            </DataTable.Header>
-            
-            {invoices.length === 0 ? (
-              <DataTable.Row>
-                <DataTable.Cell>No invoices found</DataTable.Cell>
+        <DataTable>
+          <DataTable.Header>
+            <DataTable.Title>Invoice #</DataTable.Title>
+            <DataTable.Title>Client</DataTable.Title>
+            <DataTable.Title>Start Date</DataTable.Title>
+            <DataTable.Title>End Date</DataTable.Title>
+            <DataTable.Title>Total</DataTable.Title>
+            <DataTable.Title>Status</DataTable.Title>
+            <DataTable.Title>Actions</DataTable.Title>
+          </DataTable.Header>
+          
+          {invoices.length === 0 ? (
+            <DataTable.Row>
+              <DataTable.Cell>No invoices found</DataTable.Cell>
+            </DataTable.Row>
+          ) : (
+            invoices.map(invoice => (
+              <DataTable.Row key={invoice.uid}>
+                <DataTable.Cell>{invoice.invoice_number}</DataTable.Cell>
+                <DataTable.Cell>{invoice.client_name || 'Unknown Client'}</DataTable.Cell>
+                <DataTable.Cell>{formatDate(invoice.issue_date)}</DataTable.Cell>
+                <DataTable.Cell>{formatDate(invoice.due_date)}</DataTable.Cell>
+                <DataTable.Cell>${invoice.total.toFixed(2)}</DataTable.Cell>
+                <DataTable.Cell>{invoice.status}</DataTable.Cell>
+                <DataTable.Cell>
+                  <View style={{ flexDirection: 'row' }}>
+                    <IconButton 
+                      icon="pencil" 
+                      size={20}
+                      onPress={() => {
+                        console.log("Edit clicked for invoice:", invoice.invoice_number);
+                        setEditingInvoiceId(invoice.uid);
+                        fetchInvoiceForEditing(invoice.uid);
+                      }} 
+                    />
+                    <IconButton 
+                      icon="delete" 
+                      size={20} 
+                      iconColor="red" 
+                      onPress={() => handleDeleteInvoice(invoice)} 
+                    />
+                  </View>
+                </DataTable.Cell>
               </DataTable.Row>
-            ) : (
-              invoices.map(invoice => (
-                <DataTable.Row key={invoice.uid}>
-                  <DataTable.Cell>{invoice.invoice_number}</DataTable.Cell>
-                  <DataTable.Cell>{invoice.client_name || 'Unknown Client'}</DataTable.Cell>
-                  <DataTable.Cell>{formatDate(invoice.issue_date)}</DataTable.Cell>
-                  <DataTable.Cell>{formatDate(invoice.due_date)}</DataTable.Cell>
-                  <DataTable.Cell>${invoice.total.toFixed(2)}</DataTable.Cell>
-                  <DataTable.Cell>{invoice.status}</DataTable.Cell>
-                  <DataTable.Cell>
-                    <View style={{ flexDirection: 'row' }}>
-                      <IconButton 
-                        icon="pencil" 
-                        size={20} 
-                        onPress={() => handleEditInvoice(invoice)} 
-                      />
-                      <IconButton 
-                        icon="delete" 
-                        size={20} 
-                        iconColor="red" 
-                        onPress={() => handleDeleteInvoice(invoice)} 
-                      />
-                    </View>
-                  </DataTable.Cell>
-                </DataTable.Row>
-              ))
-            )}
-          </DataTable>
-        </View>
+            ))
+          )}
+        </DataTable>
       </View>
-      {viewingInvoiceId && (
-        <Portal>
-          <Modal
-            visible={viewingInvoiceId !== null}
-            onDismiss={() => {
-              setViewingInvoiceId(null);
-              setSelectedInvoice(null);
-              setEditingInvoice(false);
-            }}
-            contentContainerStyle={{ 
-              backgroundColor: 'white', 
-              padding: 20, 
-              margin: 20,
-              maxWidth: 1000,
-              alignSelf: 'center',
-              width: '90%',
-              borderRadius: 8
+    );
+  };
+
+  const renderCostsTab = () => {
+    return (
+      <View style={{ flex: 1 }}>
+        <View style={styles.tabHeader}>
+          <Text variant="titleLarge" style={styles.tabTitle}>Job Costs</Text>
+          {!showCostsInputSection && (
+            <Button 
+              mode="contained" 
+              onPress={() => setShowCostsInputSection(true)}
+              icon="plus"
+            >
+              Add Costs
+            </Button>
+          )}
+        </View>
+
+        {showCostsInputSection ? (
+          <ScrollView 
+            style={{ 
+              flex: 1, 
+              marginBottom: 20,
+              borderWidth: 0,
+              borderColor: 'transparent',
+              elevation: 0,
+              shadowOpacity: 0
             }}
           >
-            {selectedInvoice ? (
-              <InvoiceDetails 
-                invoice={selectedInvoice}
-                isEditing={editingInvoice}
-                onSave={(updatedInvoice) => {
-                  handleSaveInvoice(updatedInvoice);
-                  setEditingInvoice(false);
-                }}
-                onCancel={() => setEditingInvoice(false)}
-                onClose={() => {
-                  setViewingInvoiceId(null);
-                  setSelectedInvoice(null);
-                  setEditingInvoice(false);
-                }}
-              />
-            ) : (
-              <ActivityIndicator />
-            )}
-          </Modal>
-        </Portal>
-      )}
-    </View>
-  );
-
-  const renderCostsTab = () => (
-    <View>
-      <View style={styles.tabHeader}>
-        <Text variant="titleLarge">Job Costs</Text>
-        <Button 
-          mode="contained" 
-          onPress={() => setShowAddCostDialog(true)}
-          icon="plus"
-        >
-          Add Cost
-        </Button>
-      </View>
-      
-      <Card style={styles.summaryCard}>
-        <Card.Content>
-          <View style={styles.summaryRow}>
-            <Text variant="titleMedium">Total Labor:</Text>
-            <Text variant="titleMedium">
-              {formatCurrency(totalLaborCost)}
-            </Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text variant="titleMedium">Total Materials:</Text>
-            <Text variant="titleMedium">
-              {formatCurrency(totalMaterialCost)}
-            </Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text variant="titleMedium">Total Other:</Text>
-            <Text variant="titleMedium">
-              {formatCurrency(totalOtherCost)}
-            </Text>
-          </View>
-          <Divider style={styles.divider} />
-          <View style={styles.summaryRow}>
-            <Text variant="titleLarge">Total Job Cost:</Text>
-            <Text variant="titleLarge">
-              {formatCurrency(totalLaborCost + totalMaterialCost + totalOtherCost)}
-            </Text>
-          </View>
-        </Card.Content>
-      </Card>
-      
-      {jobCosts.length === 0 ? (
-        <Card>
-          <Card.Content>
-            <Text>No costs recorded for this job</Text>
-          </Card.Content>
-        </Card>
-      ) : (
-        <Card>
-          <Card.Content>
-            <DataTable>
-              <DataTable.Header>
-                <DataTable.Title>Type</DataTable.Title>
-                <DataTable.Title>Description</DataTable.Title>
-                <DataTable.Title>Quantity</DataTable.Title>
-                <DataTable.Title>Price</DataTable.Title>
-                <DataTable.Title>Amount</DataTable.Title>
-                <DataTable.Title>Date</DataTable.Title>
-                <DataTable.Title>Actions</DataTable.Title>
-              </DataTable.Header>
-              
-              {jobCosts.map(cost => (
-                <DataTable.Row key={cost.uid}>
-                  <DataTable.Cell>
-                    <Chip>{cost.type}</Chip>
+            {/* Main card with content */}
+            <Card 
+              style={{ 
+                marginBottom: 0, // Reduce bottom margin to avoid visual separation
+                backgroundColor: '#ffffff',
+                elevation: 0,
+                shadowOpacity: 0,
+                borderWidth: 0,
+                borderRadius: 0,
+                borderColor: 'transparent'
+              }}
+            >
+              <Card.Content style={{ 
+                padding: 0, 
+                borderWidth: 0,
+                borderColor: 'transparent'
+              }}>
+                {/* SERVICES SECTION */}
+                <View style={{ marginBottom: 20 }}>
+                  <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>Services</Text>
+                  
+                  {selectedServices.map((item, index) => (
+                    <View key={`service-${index}`} style={{ marginBottom: 12, borderWidth: 1, borderColor: '#eee', padding: 12, borderRadius: 4 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <Text style={{ fontWeight: 'bold' }}>{item.service.name}</Text>
+                        <IconButton icon="close" size={20} onPress={() => removeServiceItem(index)} />
+                      </View>
+                      
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TextInput
+                          label="Rate ($)"
+                          value={item.rate}
+                          onChangeText={(text) => updateServiceItem(index, 'rate', text)}
+                          keyboardType="numeric"
+                          style={{ flex: 1 }}
+                        />
+                        <TextInput
+                          label="Quantity"
+                          value={item.quantity}
+                          onChangeText={(text) => updateServiceItem(index, 'quantity', text)}
+                          keyboardType="numeric"
+                          style={{ flex: 1 }}
+                        />
+                        <TextInput
+                          label="Total ($)"
+                          value={(parseFloat(item.rate || '0') * parseFloat(item.quantity || '0')).toFixed(2)}
+                          disabled
+                          style={{ flex: 1, backgroundColor: '#f5f5f5' }}
+                        />
+                      </View>
+                    </View>
+                  ))}
+                  
+                  {selectedServices.length > 0 && (
+                    <View style={{ marginTop: 8, marginBottom: 16, padding: 12, backgroundColor: '#f9f9f9', borderRadius: 4 }}>
+                      <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'right' }}>
+                        Total Labor Cost: ${calculateTotals().serviceTotal.toFixed(2)}
+                      </Text>
+                    </View>
+                  )}
+                  
+                  <Button 
+                    ref={addServiceButtonRef}
+                    mode="outlined" 
+                    icon="plus"
+                    onPress={handleServiceMenuOpen}
+                    style={{ 
+                      borderWidth: 1, 
+                      borderColor: '#ccc', 
+                      borderRadius: 25, 
+                      marginTop: 8
+                    }}
+                    contentStyle={{ 
+                      height: 50
+                    }}
+                    labelStyle={{
+                      fontSize: 16
+                    }}
+                  >
+                    Add Service
+                  </Button>
+                </View>
+                
+                {/* MATERIALS SECTION */}
+                <View style={{ marginBottom: 20 }}>
+                  <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>Materials</Text>
+                  
+                  {selectedMaterials.map((item, index) => (
+                    <View key={`material-${index}`} style={{ marginBottom: 12, borderWidth: 1, borderColor: '#eee', padding: 12, borderRadius: 4 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <Text style={{ fontWeight: 'bold' }}>{item.material.name}</Text>
+                        <IconButton icon="close" size={20} onPress={() => removeMaterialItem(index)} />
+                      </View>
+                      
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TextInput
+                          label="Cost ($)"
+                          value={item.cost}
+                          onChangeText={(text) => updateMaterialItem(index, 'cost', text)}
+                          keyboardType="numeric"
+                          style={{ flex: 1 }}
+                        />
+                        <TextInput
+                          label="Quantity"
+                          value={item.quantity}
+                          onChangeText={(text) => updateMaterialItem(index, 'quantity', text)}
+                          keyboardType="numeric"
+                          style={{ flex: 1 }}
+                        />
+                        <TextInput
+                          label="Total ($)"
+                          value={(parseFloat(item.cost || '0') * parseFloat(item.quantity || '0')).toFixed(2)}
+                          disabled
+                          style={{ flex: 1, backgroundColor: '#f5f5f5' }}
+                        />
+                      </View>
+                    </View>
+                  ))}
+                  
+                  {selectedMaterials.length > 0 && (
+                    <View style={{ marginTop: 8, marginBottom: 16, padding: 12, backgroundColor: '#f9f9f9', borderRadius: 4 }}>
+                      <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'right' }}>
+                        Total Material Cost: ${calculateTotals().materialTotal.toFixed(2)}
+                      </Text>
+                    </View>
+                  )}
+                  
+                  <Button 
+                    ref={addMaterialButtonRef}
+                    mode="outlined" 
+                    icon="plus"
+                    onPress={handleMaterialMenuOpen}
+                    style={{ 
+                      borderWidth: 1, 
+                      borderColor: '#ccc', 
+                      borderRadius: 25, 
+                      marginTop: 8
+                    }}
+                    contentStyle={{ 
+                      height: 50
+                    }}
+                    labelStyle={{
+                      fontSize: 16
+                    }}
+                  >
+                    Add Material
+                  </Button>
+                </View>
+                
+                {/* CUSTOM ITEMS SECTION */}
+                <View style={{ marginBottom: 20 }}>
+                  <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>Custom Items</Text>
+                  
+                  {customItems.map((item, index) => (
+                    <View key={`custom-${index}`} style={{ marginBottom: 12, borderWidth: 1, borderColor: '#eee', padding: 12, borderRadius: 4 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontWeight: 'bold' }}>{item.description}</Text>
+                        <IconButton icon="close" size={20} onPress={() => removeCustomItem(index)} />
+                      </View>
+                      <Text style={{ alignSelf: 'flex-end' }}>
+                        Price: ${parseFloat(item.price).toFixed(2)}
+                      </Text>
+                    </View>
+                  ))}
+                  
+                  <TextInput
+                    label="Description"
+                    value={customItemInput.description}
+                    onChangeText={(text) => setCustomItemInput({ ...customItemInput, description: text })}
+                    style={{ marginBottom: 12 }}
+                    placeholder="Description"
+                  />
+                  
+                  <TextInput
+                    label="Price ($)"
+                    value={customItemInput.price}
+                    onChangeText={(text) => setCustomItemInput({ ...customItemInput, price: text })}
+                    keyboardType="numeric"
+                    style={{ marginBottom: 12 }}
+                    placeholder="0"
+                  />
+                  
+                  <Button 
+                    mode="outlined" 
+                    icon="plus"
+                    onPress={addCustomItem}
+                    style={{ 
+                      borderWidth: 1, 
+                      borderColor: '#ccc', 
+                      borderRadius: 25, 
+                      marginTop: 8
+                    }}
+                    contentStyle={{ 
+                      height: 50
+                    }}
+                    labelStyle={{
+                      fontSize: 16
+                    }}
+                  >
+                    Add Custom Item
+                  </Button>
+                </View>
+                
+                {/* Grand total section */}
+                {(selectedServices.length > 0 || selectedMaterials.length > 0 || customItems.length > 0) && (
+                  <View style={{ padding: 16, backgroundColor: '#f5f5f5', borderRadius: 4, marginTop: 10 }}>
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', textAlign: 'right' }}>
+                      Grand Total: ${calculateTotals().grandTotal.toFixed(2)}
+                    </Text>
+                  </View>
+                )}
+              </Card.Content>
+            </Card>
+            
+            {/* Action buttons directly in the ScrollView without separation */}
+            <View style={{ 
+              flexDirection: 'row', 
+              justifyContent: 'flex-end', 
+              marginTop: 0, // Remove top margin
+              padding: 16,
+              backgroundColor: '#ffffff',
+              borderTopWidth: 0,
+              borderColor: 'transparent',
+              elevation: 0,
+              shadowOpacity: 0
+            }}>
+              <Button 
+                onPress={() => {
+                  setShowCostsInputSection(false);
+                  setSelectedServices([]);
+                  setSelectedMaterials([]);
+                  setCustomItems([]);
+                }} 
+                style={{ marginRight: 10 }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                mode="contained" 
+                onPress={handleSaveCosts}
+                style={{ backgroundColor: '#333' }}
+              >
+                Save All Costs
+              </Button>
+            </View>
+          </ScrollView>
+        ) : (
+          // The regular job costs list when not adding new ones
+          <View>
+            {jobCosts.length > 0 ? (
+              <DataTable>
+                <DataTable.Header>
+                  <DataTable.Title>Description</DataTable.Title>
+                  <DataTable.Title>Quantity</DataTable.Title>
+                  <DataTable.Title>Total</DataTable.Title>
+                  <DataTable.Title>Type</DataTable.Title>
+                  <DataTable.Title>Actions</DataTable.Title>
+                </DataTable.Header>
+                
+                {jobCosts.map((cost, index) => (
+                  <DataTable.Row key={index}>
+                    <DataTable.Cell>{cost.description}</DataTable.Cell>
+                    <DataTable.Cell>{cost.quantity}</DataTable.Cell>
+                    <DataTable.Cell>${parseFloat(cost.amount || cost.price * cost.quantity).toFixed(2)}</DataTable.Cell>
+                    <DataTable.Cell> {cost.type}</DataTable.Cell>
+                    <DataTable.Cell>
+                      <View style={{ flexDirection: 'row' }}>
+                        <IconButton icon="pencil" size={20} onPress={() => handleEditCost(cost)} />
+                        <IconButton icon="delete" size={20} iconColor="red" onPress={() => handleDeleteCostItem(cost.uid)} />
+                      </View>
+                    </DataTable.Cell>
+                  </DataTable.Row>
+                ))}
+                
+                <DataTable.Row style={{ backgroundColor: '#f5f5f5' }}>
+                  <DataTable.Cell style={{ fontWeight: 'bold' }}>Total</DataTable.Cell>
+                  <DataTable.Cell></DataTable.Cell>
+                  <DataTable.Cell style={{ fontWeight: 'bold' }}>
+                    ${jobCosts.reduce((sum, cost) => sum + parseFloat(cost.amount || cost.price * cost.quantity), 0).toFixed(2)}
                   </DataTable.Cell>
-                  <DataTable.Cell>{cost.description}</DataTable.Cell>
-                  <DataTable.Cell>{cost.quantity}</DataTable.Cell>
-                  <DataTable.Cell>{formatCurrency(cost.price)}</DataTable.Cell>
-                  <DataTable.Cell>{formatCurrency(cost.quantity * cost.price)}</DataTable.Cell>
-                  <DataTable.Cell>{formatDate(cost.created_at)}</DataTable.Cell>
-                  <DataTable.Cell>
-                    <Button 
-                      icon="delete"
-                      mode="text" 
-                      textColor="red"
-                      onPress={() => handleDeleteCostItem(cost.uid)}
-                    >
-                      Delete
-                    </Button>
-                  </DataTable.Cell>
+                  <DataTable.Cell></DataTable.Cell>
+                  <DataTable.Cell></DataTable.Cell>
                 </DataTable.Row>
-              ))}
-
-              <DataTable.Row style={styles.totalRow}>
-                <DataTable.Cell>Total Labor:</DataTable.Cell>
-                <DataTable.Cell> </DataTable.Cell>
-                <DataTable.Cell> </DataTable.Cell>
-                <DataTable.Cell> </DataTable.Cell>
-                <DataTable.Cell>{formatCurrency(totalLaborCost)}</DataTable.Cell>
-                <DataTable.Cell> </DataTable.Cell>
-                <DataTable.Cell> </DataTable.Cell>
-              </DataTable.Row>
-              <DataTable.Row style={styles.totalRow}>
-                <DataTable.Cell>Total Materials:</DataTable.Cell>
-                <DataTable.Cell> </DataTable.Cell>
-                <DataTable.Cell> </DataTable.Cell>
-                <DataTable.Cell> </DataTable.Cell>
-                <DataTable.Cell>{formatCurrency(totalMaterialCost)}</DataTable.Cell>
-                <DataTable.Cell> </DataTable.Cell>
-                <DataTable.Cell> </DataTable.Cell>
-              </DataTable.Row>
-              <DataTable.Row style={styles.grandTotalRow}>
-                <DataTable.Cell>Total Job Cost:</DataTable.Cell>
-                <DataTable.Cell> </DataTable.Cell>
-                <DataTable.Cell> </DataTable.Cell>
-                <DataTable.Cell> </DataTable.Cell>
-                <DataTable.Cell>{formatCurrency(totalLaborCost + totalMaterialCost)}</DataTable.Cell>
-                <DataTable.Cell> </DataTable.Cell>
-                <DataTable.Cell> </DataTable.Cell>
-              </DataTable.Row>
-            </DataTable>
-          </Card.Content>
-        </Card>
-      )}
-    </View>
-  );
+              </DataTable>
+            ) : (
+              <Text style={styles.emptyMessage}>No costs added yet.</Text>
+            )}
+          </View>
+        )}
+      </View>
+    );
+  };
 
   const renderCalendarTab = () => (
     <View>
@@ -1860,11 +2275,97 @@ export default function JobDetailsScreen() {
     </View>
   );
 
+  // Add these helper functions after your handleSaveCosts function
+
+  // Add this function to calculate totals for each section
+  const calculateTotals = () => {
+    const serviceTotal = selectedServices.reduce((sum, item) => {
+      return sum + parseFloat(item.rate || '0') * parseFloat(item.quantity || '0');
+    }, 0);
+    
+    const materialTotal = selectedMaterials.reduce((sum, item) => {
+      return sum + parseFloat(item.cost || '0') * parseFloat(item.quantity || '0');
+    }, 0);
+    
+    const customTotal = customItems.reduce((sum, item) => {
+      return sum + parseFloat(item.price || '0');
+    }, 0);
+    
+    return { 
+      serviceTotal, 
+      materialTotal, 
+      customTotal, 
+      grandTotal: serviceTotal + materialTotal + customTotal 
+    };
+  };
+
+  // Service item functions
+  const addServiceItem = () => {
+    setServicesMenuVisible(true);
+  };
+
+  const removeServiceItem = (index) => {
+    const newItems = [...selectedServices];
+    newItems.splice(index, 1);
+    setSelectedServices(newItems);
+  };
+
+  const updateServiceItem = (index, field, value) => {
+    const newItems = [...selectedServices];
+    newItems[index] = { ...newItems[index], [field]: value };
+    setSelectedServices(newItems);
+  };
+
+  // Material item functions
+  const addMaterialItem = () => {
+    setMaterialsMenuVisible(true);
+  };
+
+  const removeMaterialItem = (index) => {
+    const newItems = [...selectedMaterials];
+    newItems.splice(index, 1);
+    setSelectedMaterials(newItems);
+  };
+
+  const updateMaterialItem = (index, field, value) => {
+    const newItems = [...selectedMaterials];
+    newItems[index] = { ...newItems[index], [field]: value };
+    setSelectedMaterials(newItems);
+  };
+
+  // Custom item functions
+  const addCustomItem = () => {
+    if (!customItemInput.description.trim() || parseFloat(customItemInput.price) <= 0) {
+      setSnackbarMessage('Please enter a description and a valid price');
+      setSnackbarVisible(true);
+      return;
+    }
+    
+    setCustomItems([...customItems, { ...customItemInput }]);
+    setCustomItemInput({ description: '', price: '0' });
+  };
+
+  const removeCustomItem = (index) => {
+    const newItems = [...customItems];
+    newItems.splice(index, 1);
+    setCustomItems(newItems);
+  };
+
+  // Menu position handling
+  const handleServiceMenuOpen = () => {
+    setShowServiceDialog(true);
+  };
+
+  const handleMaterialMenuOpen = () => {
+    setShowMaterialDialog(true);
+  };
+
   return (
     <View style={styles.container}>
-      <View style={styles.navigationPane}>
-        <View style={styles.navigationSection}>
+      <View style={[styles.navigationPane, { display: 'flex', flexDirection: 'column', height: '100%' }]}>
+        <View style={[styles.navigationSection, { flex: 1, display: 'flex', flexDirection: 'column' }]}>
           <Text style={styles.sectionTitle}>JOB DETAILS</Text>
+          
           <TouchableOpacity
             style={[
               styles.navigationItem,
@@ -1937,49 +2438,27 @@ export default function JobDetailsScreen() {
               (editMode && hasUnsavedChanges) ? { color: '#cccccc' } : {}
             ]}>Calendar</Text>
           </TouchableOpacity>
+          
+          {/* Spacer that takes up all available space */}
+          <View style={{ flex: 1 }} />
         </View>
-
-        <View style={styles.navigationSection}>
-          <Text style={styles.sectionTitle}>DOCUMENTATION</Text>
-          <TouchableOpacity
-            style={[
-              styles.navigationItem,
-              selectedTab === 'attachments' && styles.selectedItem
-            ]}
-            onPress={() => handleNavigationItemClick('attachments')}
-            disabled={editMode && hasUnsavedChanges}
-          >
-            <MaterialCommunityIcons
-              name="attachment"
-              size={24}
-              color={selectedTab === 'attachments' ? '#000000' : '#666666'}
-            />
-            <Text style={[
-              styles.navigationText,
-              selectedTab === 'attachments' && styles.selectedText,
-              (editMode && hasUnsavedChanges) ? { color: '#cccccc' } : {}
-            ]}>Attachments</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.navigationItem,
-              selectedTab === 'logs' && styles.selectedItem
-            ]}
-            onPress={() => handleNavigationItemClick('logs')}
-            disabled={editMode && hasUnsavedChanges}
-          >
-            <MaterialCommunityIcons
-              name="text-box-outline"
-              size={24}
-              color={selectedTab === 'logs' ? '#000000' : '#666666'}
-            />
-            <Text style={[
-              styles.navigationText,
-              selectedTab === 'logs' && styles.selectedText,
-              (editMode && hasUnsavedChanges) ? { color: '#cccccc' } : {}
-            ]}>Logs</Text>
-          </TouchableOpacity>
-        </View>
+        
+        {/* Back to Jobs button outside the navigationSection but inside the navigationPane */}
+        <TouchableOpacity 
+          style={{ 
+            padding: 16,
+            flexDirection: 'row',
+            alignItems: 'center',
+            borderTopWidth: 1,
+            borderTopColor: '#e0e0e0',
+          }}
+          onPress={() => router.push('/jobs')}
+        >
+          <View style={{ width: 24, marginRight: 12 }}>
+            <MaterialIcons name="arrow-back" size={20} color="#666666" />
+          </View>
+          <Text style={{ color: '#666666' }}>Back to Jobs</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.contentPane}>
@@ -1987,15 +2466,7 @@ export default function JobDetailsScreen() {
           <View style={{ flex: 1 }}>
             <Text variant="headlineMedium">Job Details</Text>
           </View>
-          <View style={styles.headerButtons}>
-            <Button
-              mode="outlined" 
-              onPress={() => handleNavigationItemClick('/jobs')}
-              style={{ marginRight: 8 }}
-            >
-              Back to Jobs
-            </Button>
-          </View>
+
         </View>
         
         {renderContent()}
@@ -2005,6 +2476,11 @@ export default function JobDetailsScreen() {
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
         duration={3000}
+        style={{ backgroundColor: '#333' }}
+        action={{
+          label: 'Dismiss',
+          onPress: () => setSnackbarVisible(false),
+        }}
       >
         {snackbarMessage}
       </Snackbar>
@@ -2086,6 +2562,365 @@ export default function JobDetailsScreen() {
               // For now, just close the dialog
               setShowExitConfirmation(false);
             }}>Save</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+
+      {/* Add Cost Dialog - Simplified to match the image */}
+      <Portal>
+        <Dialog visible={showAddCostDialog} onDismiss={() => setShowAddCostDialog(false)} style={{ maxWidth: 500, alignSelf: 'center', width: '100%' }}>
+          <Dialog.Title>Add Job Costs</Dialog.Title>
+          <Dialog.ScrollArea style={{ maxHeight: 500 }}>
+            <ScrollView>
+              <View style={{ padding: 16 }}>
+                {/* SERVICES SECTION */}
+                <View style={{ marginBottom: 20 }}>
+                  <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>Services</Text>
+                  
+                  {selectedServices.map((item, index) => (
+                    <View key={`service-${index}`} style={{ marginBottom: 12, borderWidth: 1, borderColor: '#eee', padding: 12, borderRadius: 4 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <Text style={{ fontWeight: 'bold' }}>{item.service.name}</Text>
+                        <IconButton icon="close" size={20} onPress={() => removeServiceItem(index)} />
+                      </View>
+                      
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TextInput
+                          label="Rate ($)"
+                          value={item.rate}
+                          onChangeText={(text) => updateServiceItem(index, 'rate', text)}
+                          keyboardType="numeric"
+                          style={{ flex: 1 }}
+                        />
+                        <TextInput
+                          label="Quantity"
+                          value={item.quantity}
+                          onChangeText={(text) => updateServiceItem(index, 'quantity', text)}
+                          keyboardType="numeric"
+                          style={{ flex: 1 }}
+                        />
+                        <TextInput
+                          label="Total ($)"
+                          value={(parseFloat(item.rate || '0') * parseFloat(item.quantity || '0')).toFixed(2)}
+                          disabled
+                          style={{ flex: 1, backgroundColor: '#f5f5f5' }}
+                        />
+                      </View>
+                    </View>
+                  ))}
+                  
+                  {/* Add total services cost calculation */}
+                  {selectedServices.length > 0 && (
+                    <View style={{ marginTop: 8, marginBottom: 16, padding: 12, backgroundColor: '#f9f9f9', borderRadius: 4 }}>
+                      <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'right' }}>
+                        Total Labor Cost: ${calculateTotals().serviceTotal.toFixed(2)}
+                      </Text>
+                    </View>
+                  )}
+                  
+                  {/* "Add Service" button styled to match the image */}
+                  <Button 
+                    ref={addServiceButtonRef}
+                    mode="outlined" 
+                    icon="plus"
+                    onPress={handleServiceMenuOpen}
+                    style={{ 
+                      borderWidth: 1, 
+                      borderColor: '#ccc', 
+                      borderRadius: 25, 
+                      marginTop: 8
+                    }}
+                    contentStyle={{ 
+                      height: 50
+                    }}
+                    labelStyle={{
+                      fontSize: 16
+                    }}
+                  >
+                    Add Service
+                  </Button>
+                </View>
+                
+                {/* MATERIALS SECTION */}
+                <View style={{ marginBottom: 20 }}>
+                  <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>Materials</Text>
+                  
+                  {selectedMaterials.map((item, index) => (
+                    <View key={`material-${index}`} style={{ marginBottom: 12, borderWidth: 1, borderColor: '#eee', padding: 12, borderRadius: 4 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <Text style={{ fontWeight: 'bold' }}>{item.material.name}</Text>
+                        <IconButton icon="close" size={20} onPress={() => removeMaterialItem(index)} />
+                      </View>
+                      
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TextInput
+                          label="Cost ($)"
+                          value={item.cost}
+                          onChangeText={(text) => updateMaterialItem(index, 'cost', text)}
+                          keyboardType="numeric"
+                          style={{ flex: 1 }}
+                        />
+                        <TextInput
+                          label="Quantity"
+                          value={item.quantity}
+                          onChangeText={(text) => updateMaterialItem(index, 'quantity', text)}
+                          keyboardType="numeric"
+                          style={{ flex: 1 }}
+                        />
+                        <TextInput
+                          label="Total ($)"
+                          value={(parseFloat(item.cost || '0') * parseFloat(item.quantity || '0')).toFixed(2)}
+                          disabled
+                          style={{ flex: 1, backgroundColor: '#f5f5f5' }}
+                        />
+                      </View>
+                    </View>
+                  ))}
+                  
+                  {/* Add total materials cost calculation */}
+                  {selectedMaterials.length > 0 && (
+                    <View style={{ marginTop: 8, marginBottom: 16, padding: 12, backgroundColor: '#f9f9f9', borderRadius: 4 }}>
+                      <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'right' }}>
+                        Total Material Cost: ${calculateTotals().materialTotal.toFixed(2)}
+                      </Text>
+                    </View>
+                  )}
+                  
+                  {/* "Add Material" button styled to match the image */}
+                  <Button 
+                    ref={addMaterialButtonRef}
+                    mode="outlined" 
+                    icon="plus"
+                    onPress={handleMaterialMenuOpen}
+                    style={{ 
+                      borderWidth: 1, 
+                      borderColor: '#ccc', 
+                      borderRadius: 25, 
+                      marginTop: 8
+                    }}
+                    contentStyle={{ 
+                      height: 50
+                    }}
+                    labelStyle={{
+                      fontSize: 16
+                    }}
+                  >
+                    Add Material
+                  </Button>
+                </View>
+                
+                {/* CUSTOM ITEMS SECTION */}
+                <View style={{ marginBottom: 20 }}>
+                  <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>Custom Items</Text>
+                  
+                  {customItems.map((item, index) => (
+                    <View key={`custom-${index}`} style={{ marginBottom: 12, borderWidth: 1, borderColor: '#eee', padding: 12, borderRadius: 4 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontWeight: 'bold' }}>{item.description}</Text>
+                        <IconButton icon="close" size={20} onPress={() => removeCustomItem(index)} />
+                      </View>
+                      <Text style={{ alignSelf: 'flex-end' }}>
+                        Price: ${parseFloat(item.price).toFixed(2)}
+                      </Text>
+                    </View>
+                  ))}
+                  
+                  <TextInput
+                    label="Description"
+                    value={customItemInput.description}
+                    onChangeText={(text) => setCustomItemInput({ ...customItemInput, description: text })}
+                    style={{ marginBottom: 12 }}
+                    placeholder="Description"
+                  />
+                  
+                  <TextInput
+                    label="Price ($)"
+                    value={customItemInput.price}
+                    onChangeText={(text) => setCustomItemInput({ ...customItemInput, price: text })}
+                    keyboardType="numeric"
+                    style={{ marginBottom: 12 }}
+                    placeholder="0"
+                  />
+                  
+                  <Button 
+                    mode="outlined" 
+                    icon="plus"
+                    onPress={addCustomItem}
+                    style={{ 
+                      borderWidth: 1, 
+                      borderColor: '#ccc', 
+                      borderRadius: 25, 
+                      marginTop: 8
+                    }}
+                    contentStyle={{ 
+                      height: 50
+                    }}
+                    labelStyle={{
+                      fontSize: 16
+                    }}
+                  >
+                    Add Custom Item
+                  </Button>
+                </View>
+              </View>
+            </ScrollView>
+          </Dialog.ScrollArea>
+          
+          <Dialog.Actions>
+            <Button onPress={() => setShowAddCostDialog(false)}>Cancel</Button>
+            <Button 
+              mode="contained" 
+              onPress={handleSaveCosts}
+              style={{ backgroundColor: '#333' }}
+            >
+              Save All Costs
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+
+      {/* Service Selection Dialog */}
+      <Portal>
+        <Dialog
+          visible={showServiceDialog}
+          onDismiss={() => setShowServiceDialog(false)}
+          style={{ 
+            maxWidth: 600, 
+            alignSelf: 'center', 
+            backgroundColor: '#ffffff',
+            borderWidth: 0,
+            elevation: 0,
+            shadowOpacity: 0,
+            borderRadius: 0
+          }}
+        >
+          <Dialog.Title style={{ 
+            backgroundColor: '#ffffff',
+            borderBottomWidth: 0 
+          }}>
+            Select a Service
+          </Dialog.Title>
+          <Dialog.ScrollArea style={{ 
+            maxHeight: 400, 
+            backgroundColor: '#ffffff',
+            borderTopWidth: 0,
+            borderBottomWidth: 0
+          }}>
+            <ScrollView style={{ backgroundColor: '#ffffff' }}>
+              <RadioButton.Group>
+                {services.map(service => (
+                  <TouchableOpacity 
+                    key={service.id}
+                    onPress={() => {
+                      setSelectedServices([
+                        ...selectedServices,
+                        { 
+                          service: service, 
+                          rate: service.rate?.toString() || service.price?.toString() || '0',
+                          quantity: '1'
+                        }
+                      ]);
+                      setShowServiceDialog(false);
+                    }}
+                    style={{ 
+                      paddingVertical: 8, 
+                      borderBottomWidth: 1, 
+                      borderBottomColor: '#f0f0f0', // Lighter border for list items
+                      backgroundColor: '#ffffff'
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, backgroundColor: '#ffffff' }}>
+                      <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+                        <Text>{service.name}</Text>
+                        <Text style={{ color: '#666', fontSize: 12 }}>
+                          ${service.rate ? service.rate.toFixed(2) : (service.price ? service.price.toFixed(2) : '0.00')}
+                        </Text>
+                      </View>
+                      <IconButton icon="plus-circle" size={24} />
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </RadioButton.Group>
+            </ScrollView>
+          </Dialog.ScrollArea>
+          <Dialog.Actions style={{ 
+            backgroundColor: '#ffffff',
+            borderTopWidth: 0
+          }}>
+            <Button onPress={() => setShowServiceDialog(false)}>Cancel</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+
+      {/* Material Selection Dialog */}
+      <Portal>
+        <Dialog
+          visible={showMaterialDialog}
+          onDismiss={() => setShowMaterialDialog(false)}
+          style={{ 
+            maxWidth: 600, 
+            alignSelf: 'center', 
+            backgroundColor: '#ffffff',
+            borderWidth: 0,
+            elevation: 0,
+            shadowOpacity: 0,
+            borderRadius: 0
+          }}
+        >
+          <Dialog.Title style={{ 
+            backgroundColor: '#ffffff',
+            borderBottomWidth: 0
+          }}>
+            Select a Material
+          </Dialog.Title>
+          <Dialog.ScrollArea style={{ 
+            maxHeight: 400, 
+            backgroundColor: '#ffffff',
+            borderTopWidth: 0,
+            borderBottomWidth: 0
+          }}>
+            <ScrollView style={{ backgroundColor: '#ffffff' }}>
+              <RadioButton.Group>
+                {materials.map(material => (
+                  <TouchableOpacity 
+                    key={material.id}
+                    onPress={() => {
+                      setSelectedMaterials([
+                        ...selectedMaterials,
+                        { 
+                          material: material, 
+                          cost: material.cost?.toString() || material.price?.toString() || '0',
+                          quantity: '1'
+                        }
+                      ]);
+                      setShowMaterialDialog(false);
+                    }}
+                    style={{ 
+                      paddingVertical: 8, 
+                      borderBottomWidth: 1, 
+                      borderBottomColor: '#f0f0f0', // Lighter border for list items
+                      backgroundColor: '#ffffff'
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, backgroundColor: '#ffffff' }}>
+                      <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+                        <Text>{material.name}</Text>
+                        <Text style={{ color: '#666', fontSize: 12 }}>
+                          ${material.cost ? material.cost.toFixed(2) : (material.price ? material.price.toFixed(2) : '0.00')}
+                        </Text>
+                      </View>
+                      <IconButton icon="plus-circle" size={24} />
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </RadioButton.Group>
+            </ScrollView>
+          </Dialog.ScrollArea>
+          <Dialog.Actions style={{ 
+            backgroundColor: '#ffffff',
+            borderTopWidth: 0
+          }}>
+            <Button onPress={() => setShowMaterialDialog(false)}>Cancel</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>

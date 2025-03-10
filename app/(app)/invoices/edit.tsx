@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, ScrollView } from 'react-native';
-import { Text, ActivityIndicator, Button } from 'react-native-paper';
+import { Text, ActivityIndicator, Button, Snackbar } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 import { InvoiceForm } from '../../../components/InvoiceForm';
@@ -11,6 +11,8 @@ export default function EditInvoiceScreen() {
   const [invoice, setInvoice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
 
   useEffect(() => {
     if (id) {
@@ -18,18 +20,56 @@ export default function EditInvoiceScreen() {
     }
   }, [id]);
 
+  useEffect(() => {
+    // Check if we have invoice data in localStorage
+    if (typeof window !== 'undefined') {
+      try {
+        const editInvoiceDataString = localStorage.getItem('editInvoiceData');
+        if (editInvoiceDataString) {
+          // Parse the invoice data
+          const editInvoiceData = JSON.parse(editInvoiceDataString);
+          
+          // Clear the localStorage item to prevent it from being used again
+          localStorage.removeItem('editInvoiceData');
+          
+          // Fetch the invoice data from the database
+          fetchInvoiceData(editInvoiceData.invoiceId);
+        }
+      } catch (error) {
+        console.error('Error handling edit invoice data:', error);
+      }
+    }
+  }, []);
+
   const fetchInvoiceDetails = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      
+      // First fetch just the invoice
+      const { data: invoiceData, error: invoiceError } = await supabase
         .from('invoices')
-        .select('*, invoice_items(*), client(*), job(*)')
+        .select('*')
         .eq('uid', id)
         .single();
 
-      if (error) throw error;
+      if (invoiceError) throw invoiceError;
       
-      setInvoice(data);
+      // Then fetch invoice items separately
+      const { data: itemsData, error: itemsError } = await supabase
+        .from('invoice_items')
+        .select('*')
+        .eq('invoice_id', id);
+        
+      if (itemsError) {
+        console.error('Error fetching invoice items:', itemsError);
+      }
+      
+      // Combine the data
+      setInvoice({
+        ...invoiceData,
+        invoice_items: itemsData || []
+      });
+      
     } catch (err) {
       console.error('Error fetching invoice details:', err);
       setError(err.message);
@@ -37,6 +77,60 @@ export default function EditInvoiceScreen() {
       setLoading(false);
     }
   };
+
+  const showSnackbar = (message) => {
+    setSnackbarMessage(message);
+    setSnackbarVisible(true);
+  };
+
+  async function fetchInvoiceData(invoiceId) {
+    try {
+      setLoading(true);
+      
+      console.log('Fetching invoice with ID:', invoiceId);
+      
+      // Fetch just the invoice without trying to join related tables
+      const { data: invoiceData, error: invoiceError } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('uid', invoiceId)
+        .single();
+        
+      if (invoiceError) {
+        console.error('Error fetching invoice:', invoiceError);
+        throw invoiceError;
+      }
+      
+      console.log('Fetched invoice data:', invoiceData);
+      
+      // Set the invoice data
+      setInvoice(invoiceData);
+      
+      // Separately fetch invoice items if needed
+      const { data: itemsData, error: itemsError } = await supabase
+        .from('invoice_items')
+        .select('*')
+        .eq('invoice_id', invoiceId);
+        
+      if (itemsError) {
+        console.error('Error fetching invoice items:', itemsError);
+      } else {
+        console.log('Fetched invoice items:', itemsData);
+        
+        // Add them to the invoice object
+        setInvoice({
+          ...invoiceData,
+          invoice_items: itemsData || []
+        });
+      }
+      
+    } catch (error) {
+      console.error('Error fetching invoice data:', error);
+      alert('Error loading invoice data: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const handleSaveInvoice = async (updatedInvoice) => {
     try {
@@ -134,6 +228,13 @@ export default function EditInvoiceScreen() {
           </Button>
         </View>
       )}
+      <Snackbar
+        visible={snackbarVisible}
+        onDismiss={() => setSnackbarVisible(false)}
+        duration={3000}
+      >
+        {snackbarMessage}
+      </Snackbar>
     </ScrollView>
   );
 } 

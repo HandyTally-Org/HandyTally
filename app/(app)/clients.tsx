@@ -6,6 +6,9 @@ import { styles as globalStyles } from '../../styles';
 import { ClientForm } from '../../app/components/clientform';
 import { useRouter } from 'expo-router';
 import * as XLSX from 'xlsx';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import { MaterialIcons } from '@expo/vector-icons';
 
 type Client = {
   uid: string;
@@ -14,6 +17,11 @@ type Client = {
   phone: string;
   address: string;
   created_at: string;
+  tag: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  notes?: string;
 };
 
 type Job = {
@@ -21,6 +29,8 @@ type Job = {
   title: string;
   status: string;
   created_at: string;
+  start_date?: string;
+  end_date?: string;
 };
 
 type Invoice = {
@@ -29,10 +39,13 @@ type Invoice = {
   total: number;
   status: string;
   created_at: string;
+  issue_date?: string;
+  due_date?: string;
 };
 
 export default function ClientsScreen() {
   const router = useRouter();
+  console.log('Router object:', router);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -48,7 +61,10 @@ export default function ClientsScreen() {
   const [relatedInvoices, setRelatedInvoices] = useState<Invoice[]>([]);
   const [showRelatedItemsDialog, setShowRelatedItemsDialog] = useState(false);
   const [filteredClients, setFilteredClients] = useState<Client[]>([]);
+  const [tagFilter, setTagFilter] = useState('all');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showClientDetails, setShowClientDetails] = useState(false);
+  const [activeDetailTab, setActiveDetailTab] = useState('info');
 
   useEffect(() => {
     fetchClients();
@@ -58,7 +74,7 @@ export default function ClientsScreen() {
     if (clients.length > 0) {
       filterClients();
     }
-  }, [searchQuery, clients]);
+  }, [searchQuery, clients, tagFilter, sortColumn, sortDirection]);
 
   async function fetchClients() {
     try {
@@ -187,12 +203,57 @@ export default function ClientsScreen() {
     });
   };
 
-  const handleEditClient = (client: Client) => {
-    setEditingClient(client);
-    setShowAddForm(true);
+  const fetchClientJobs = async (clientId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('jobs')
+        .select('*')
+        .eq('client_id', clientId)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching client jobs:', error);
+      showSnackbar('Error loading jobs');
+      return [];
+    }
   };
 
-  const handleAddClient = async (clientData) => {
+  const fetchClientInvoices = async (clientId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('client_id', clientId)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching client invoices:', error);
+      showSnackbar('Error loading invoices');
+      return [];
+    }
+  };
+
+  const handleEditClient = async (client: Client) => {
+    setSelectedClient(client);
+    setEditingClient(client);
+    setShowClientDetails(true);
+    setActiveDetailTab('info');
+    
+    // Fetch related data
+    const jobs = await fetchClientJobs(client.uid);
+    setRelatedJobs(jobs);
+    
+    const invoices = await fetchClientInvoices(client.uid);
+    setRelatedInvoices(invoices);
+  };
+
+  const handleAddClient = async (clientData: any) => {
     try {
       setLoading(true);
       
@@ -262,7 +323,7 @@ export default function ClientsScreen() {
     return filtered;
   };
 
-  const handleUpdateClient = async (clientUid, updates) => {
+  const handleUpdateClient = async (clientUid: string, updates: any) => {
     try {
       setLoading(true);
       
@@ -292,40 +353,69 @@ export default function ClientsScreen() {
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status?.toLowerCase()) {
+  const getStatusColor = (status: string | null | undefined): string => {
+    if (!status) return '#999999'; // Default gray for null/undefined
+    
+    switch (status.toLowerCase()) {
+      case 'active':
       case 'completed':
       case 'paid':
         return '#4CAF50'; // Green
-      case 'in_progress':
-      case 'sent':
-        return '#2196F3'; // Blue
       case 'pending':
+      case 'in_progress':
       case 'draft':
-        return '#9C27B0'; // Purple
+        return '#FFC107'; // Yellow/Amber
       case 'cancelled':
       case 'overdue':
         return '#F44336'; // Red
+      case 'estimate':
+        return '#2196F3'; // Blue
       default:
-        return '#757575'; // Gray
+        return '#9E9E9E'; // Gray for unknown status
     }
   };
 
   const filterClients = () => {
-    const query = searchQuery.toLowerCase();
-    const filtered = clients.filter(client => 
-      client.name.toLowerCase().includes(query) ||
-      (client.email && client.email.toLowerCase().includes(query)) ||
-      (client.phone && client.phone.includes(query))
-    );
+    const filtered = clients.filter(client => {
+      // First apply search filter
+      const matchesSearch = 
+        searchQuery === '' || 
+        client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (client.email && client.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (client.phone && client.phone.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (client.address && client.address.toLowerCase().includes(searchQuery.toLowerCase()));
+      
+      // Then apply tag filter
+      const matchesTag = 
+        tagFilter === 'all' || 
+        (client.tag && client.tag.toLowerCase() === tagFilter.toLowerCase());
+      
+      return matchesSearch && matchesTag;
+    });
+    
+    // Apply sorting
+    filtered.sort((a, b) => {
+      if (sortColumn) {
+        const aValue = a[sortColumn] || '';
+        const bValue = b[sortColumn] || '';
+        
+        if (sortDirection === 'ascending') {
+          return aValue.localeCompare(bValue);
+        } else {
+          return bValue.localeCompare(aValue);
+        }
+      }
+      return 0;
+    });
+    
     setFilteredClients(filtered);
   };
 
-  const handleSearch = (query) => {
+  const handleSearch = (query: string) => {
     setSearchQuery(query);
   };
 
-  const handleClientPress = (client) => {
+  const handleClientPress = (client: Client) => {
     setSelectedClient(client);
     setEditingClient(client);
     setShowAddForm(true);
@@ -336,7 +426,7 @@ export default function ClientsScreen() {
     setShowAddForm(true);
   };
 
-  const renderClientItem = ({ item }) => (
+  const renderClientItem = ({ item }: { item: Client }) => (
     <TouchableOpacity onPress={() => handleClientPress(item)}>
       <Card style={styles.card}>
         <Card.Content>
@@ -360,6 +450,7 @@ export default function ClientsScreen() {
         city: client.city || '',
         state: client.state || '',
         zip: client.zip || '',
+        tag: client.tag || '',
         notes: client.notes || '',
         delete: 'n'  // Default to 'n' (don't delete)
       }));
@@ -378,6 +469,7 @@ export default function ClientsScreen() {
         { wch: 15 }, // city
         { wch: 10 }, // state
         { wch: 10 }, // zip
+        { wch: 15 }, // tag
         { wch: 40 }, // notes
         { wch: 10 }  // delete
       ];
@@ -405,259 +497,220 @@ export default function ClientsScreen() {
     }
   };
 
-  const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelected = async (event: any) => {
     try {
-      const file = event.target.files?.[0];
+      console.log('File selection event triggered', event);
+      let file;
       
-      if (!file) {
-        return;
+      if (Platform.OS === 'web') {
+        // For web, get the file from the input element
+        if (event?.target?.files && event.target.files.length > 0) {
+          file = event.target.files[0];
+          console.log('Web file selected:', file.name, file.type, file.size);
+        } else {
+          console.log('No file selected in web environment');
+          return; // No file selected
+        }
+      } else {
+        // For mobile, use Expo's DocumentPicker
+        const result = await DocumentPicker.getDocumentAsync({
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          copyToCacheDirectory: true
+        });
+        
+        console.log('Mobile document picker result:', result);
+        
+        if (result.canceled === false && result.assets && result.assets.length > 0) {
+          file = result.assets[0];
+          console.log('Mobile file selected:', file.name, file.uri);
+        } else {
+          console.log('No file selected or picker canceled on mobile');
+          return; // No file selected or canceled
+        }
       }
       
-      // Read the Excel file
-      const reader = new FileReader();
-      
-      reader.onload = async (e) => {
-        try {
-          if (!e.target?.result) {
-            alert('Could not read the file. Please try again.');
-            return;
-          }
-          
-          const data = new Uint8Array(e.target.result as ArrayBuffer);
-          
-          // Parse the Excel file
-          const workbook = XLSX.read(data, { type: 'array' });
-          
-          // Get the first sheet
-          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-          
-          // Convert to JSON
-          const jsonData = XLSX.utils.sheet_to_json(firstSheet);
-          
-          if (jsonData.length === 0) {
-            alert('No data found in the Excel file.');
-            return;
-          }
-          
-          console.log('Imported data:', jsonData);
-          
-          // Confirm import
-          if (confirm(`Are you sure you want to import ${jsonData.length} clients?`)) {
-            await importClients(jsonData);
-          }
-        } catch (error: any) {
-          console.error('Error processing Excel file:', error);
-          alert(`Failed to process Excel file: ${error.message}`);
-        }
-      };
-      
-      reader.readAsArrayBuffer(file);
-      
-    } catch (error: any) {
+      if (file) {
+        console.log('Proceeding to import with file:', file.name);
+        await handleImport(file);
+      } else {
+        console.log('No valid file to import');
+      }
+    } catch (error) {
       console.error('Error in handleFileSelected:', error);
-      alert(`Failed to import clients: ${error.message}`);
+      showSnackbar('Error selecting file: ' + error.message);
     }
   };
 
-  const importClients = async (data: any[]) => {
+  const handleImport = async (file: any) => {
     try {
       setLoading(true);
+      console.log('Starting import process with file:', file.name);
       
-      let addedCount = 0;
-      let updatedCount = 0;
-      let deletedCount = 0;
-      let errorCount = 0;
-      const errorDetails: string[] = [];
-      
-      // Process each client
-      for (const client of data) {
-        try {
-          console.log('Processing client:', client);
-          
-          // Check if client should be deleted
-          if (client.delete && (client.delete.toString().toLowerCase() === 'y' || client.delete.toString().toLowerCase() === 'yes')) {
-            // If we have a uid directly, use it
-            if (client.uid) {
-              const { error } = await supabase
-                .from('clients')
-                .delete()
-                .eq('uid', client.uid);
-              
-              if (error) {
-                console.error('Error deleting client by uid:', error);
-                errorCount++;
-                errorDetails.push(`Failed to delete client ${client.name || client.uid}: ${error.message}`);
+      // Read the file data differently based on platform
+      let data;
+      if (Platform.OS === 'web') {
+        // For web, use FileReader API which is more reliable
+        data = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const result = e.target?.result;
+            if (result) {
+              // Convert to ArrayBuffer if it's a string
+              if (typeof result === 'string') {
+                // Base64 string - convert to ArrayBuffer
+                const binary = atob(result.split(',')[1]);
+                const array = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) {
+                  array[i] = binary.charCodeAt(i);
+                }
+                resolve(array.buffer);
               } else {
-                deletedCount++;
+                // Already an ArrayBuffer
+                resolve(result);
               }
-            } 
-            // If we have an id but not uid, try to find the client by id
-            else if (client.id) {
-              // First, find the client by name to get the uid
-              const { data: existingClients, error: findError } = await supabase
-                .from('clients')
-                .select('uid')
-                .eq('name', client.name);
-              
-              if (findError || !existingClients || existingClients.length === 0) {
-                console.error('Error finding client to delete:', findError || 'Client not found');
-                errorCount++;
-                errorDetails.push(`Failed to find client ${client.name} for deletion`);
-                continue;
-              }
-              
-              // Now delete using the found uid
-              const { error } = await supabase
-                .from('clients')
-                .delete()
-                .eq('uid', existingClients[0].uid);
-              
-              if (error) {
-                console.error('Error deleting client by id:', error);
-                errorCount++;
-                errorDetails.push(`Failed to delete client ${client.name}: ${error.message}`);
-              } else {
-                deletedCount++;
-              }
+            } else {
+              reject(new Error('Failed to read file'));
             }
-            continue;
-          }
-          
-          // Prepare client data - only include fields that exist in the database schema
-          const clientData: any = {
-            name: client.name || '',
-            email: client.email || '',
-            phone: client.phone || '',
-            address: client.address || ''
           };
+          reader.onerror = (e) => {
+            reject(new Error('Error reading file: ' + e.target?.error));
+          };
+          reader.readAsArrayBuffer(file);
+        });
+        
+        console.log('Web file read complete, data size:', data.byteLength);
+      } else {
+        // For mobile
+        const fileUri = file.uri;
+        console.log('Reading mobile file from URI:', fileUri);
+        const fileContent = await FileSystem.readAsStringAsync(fileUri, {
+          encoding: FileSystem.EncodingType.Base64
+        });
+        console.log('Mobile file read complete, content length:', fileContent.length);
+        data = _base64ToArrayBuffer(fileContent);
+      }
+      
+      console.log('File data loaded, parsing XLSX...');
+      const workbook = XLSX.read(data, { type: 'array' });
+      console.log('Workbook parsed, sheets:', workbook.SheetNames);
+      
+      // Get the first worksheet
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      
+      // Convert to JSON
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+      console.log('Parsed data:', jsonData.length, 'rows');
+      
+      // Track import stats
+      let updated = 0;
+      let inserted = 0;
+      let deleted = 0;
+      let errors = 0;
+      
+      // Process each row
+      for (const row of jsonData) {
+        try {
+          console.log('Processing row:', row);
           
-          // Add optional fields if they exist in the import data
-          if (client.city !== undefined) clientData.city = client.city || '';
-          if (client.state !== undefined) clientData.state = client.state || '';
-          if (client.zip !== undefined) clientData.zip = client.zip || '';
-          if (client.notes !== undefined) clientData.notes = client.notes || '';
-          
-          // Validate required fields
-          if (!clientData.name) {
-            errorCount++;
-            errorDetails.push(`Client missing required name field: ${JSON.stringify(client)}`);
-            continue;
-          }
-          
-          // Check if we should update or insert
-          // If we have a uid directly, use it for update
-          if (client.uid) {
-            // Update existing client
+          // Check if this is a delete operation
+          if (row.delete && row.delete.toLowerCase() === 'y' && row.id) {
+            console.log('Deleting client with ID:', row.id);
+            // Delete the client
             const { error } = await supabase
               .from('clients')
-              .update(clientData)
-              .eq('uid', client.uid);
+              .delete()
+              .eq('uid', row.id);
             
             if (error) {
-              console.error('Error updating client by uid:', error);
-              errorCount++;
-              errorDetails.push(`Failed to update client ${client.name}: ${error.message}`);
+              console.error('Error deleting client:', error);
+              errors++;
             } else {
-              updatedCount++;
+              deleted++;
             }
-          } 
-          // If we have an id but not uid, try to find the client by name
-          else if (client.id) {
-            // First, check if a client with this name already exists
-            const { data: existingClients, error: findError } = await supabase
-              .from('clients')
-              .select('uid')
-              .eq('name', client.name);
+          } else {
+            // Prepare client data
+            const clientData = {
+              name: row.name || '',
+              email: row.email || '',
+              phone: row.phone || '',
+              address: row.address || '',
+              tag: row.tag || '',  // Make sure tag is included
+            };
             
-            if (findError) {
-              console.error('Error finding client:', findError);
-              errorCount++;
-              errorDetails.push(`Failed to check if client ${client.name} exists: ${findError.message}`);
-              continue;
-            }
+            // Add city, state, zip if they exist
+            if (row.city) clientData.city = row.city;
+            if (row.state) clientData.state = row.state;
+            if (row.zip) clientData.zip = row.zip;
+            if (row.notes) clientData.notes = row.notes;
             
-            if (existingClients && existingClients.length > 0) {
+            console.log('Client data to save:', clientData);
+            
+            // Update or insert
+            if (row.id) {
+              console.log('Updating existing client with ID:', row.id);
               // Update existing client
               const { error } = await supabase
                 .from('clients')
                 .update(clientData)
-                .eq('uid', existingClients[0].uid);
+                .eq('uid', row.id);
               
               if (error) {
-                console.error('Error updating client by name:', error);
-                errorCount++;
-                errorDetails.push(`Failed to update client ${client.name}: ${error.message}`);
+                console.error('Error updating client:', error);
+                errors++;
               } else {
-                updatedCount++;
+                updated++;
               }
             } else {
-              // Add new client
+              console.log('Inserting new client');
+              // Insert new client
               const { error } = await supabase
                 .from('clients')
-                .insert([clientData]);
+                .insert(clientData);
               
               if (error) {
-                console.error('Error adding client with id:', error);
-                errorCount++;
-                errorDetails.push(`Failed to add client ${client.name}: ${error.message}`);
+                console.error('Error inserting client:', error);
+                errors++;
               } else {
-                addedCount++;
+                inserted++;
               }
             }
-          } else {
-            // No id or uid, this is a new client
-            const { error } = await supabase
-              .from('clients')
-              .insert([clientData]);
-            
-            if (error) {
-              console.error('Error adding new client:', error);
-              errorCount++;
-              errorDetails.push(`Failed to add client ${client.name}: ${error.message}`);
-            } else {
-              addedCount++;
-            }
           }
-        } catch (clientError: any) {
-          console.error('Error processing client:', clientError);
-          errorCount++;
-          errorDetails.push(`Error processing client ${client.name || 'unknown'}: ${clientError.message || 'Unknown error'}`);
+        } catch (rowError) {
+          console.error('Error processing row:', rowError);
+          errors++;
         }
       }
       
-      // Refresh clients list
+      // Refresh the client list
       await fetchClients();
       
-      // Show results
-      const resultMessage = `Import complete: ${addedCount} added, ${updatedCount} updated, ${deletedCount} deleted, ${errorCount} errors`;
+      // Show detailed results
+      const resultMessage = `Import complete: ${inserted} added, ${updated} updated, ${deleted} deleted${errors > 0 ? `, ${errors} errors` : ''}`;
+      console.log(resultMessage);
       showSnackbar(resultMessage);
-      
-      // If there were errors, show detailed information in console and alert
-      if (errorCount > 0) {
-        console.error('Import errors:', errorDetails);
-        
-        // Create a formatted error message for display
-        const errorMessage = `${errorCount} clients failed to import/update:\n\n${errorDetails.join('\n\n')}`;
-        
-        // Show error details in an alert for the user to see
-        setTimeout(() => {
-          alert(errorMessage);
-        }, 500);
-      }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error importing clients:', error);
-      showSnackbar(`Error importing clients: ${error.message || 'Unknown error'}`);
+      showSnackbar('Error importing clients: ' + error.message);
     } finally {
       setLoading(false);
     }
   };
 
+  // Helper function to convert base64 to ArrayBuffer
+  const _base64ToArrayBuffer = (base64: string) => {
+    const binary_string = atob(base64);
+    const len = binary_string.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binary_string.charCodeAt(i);
+    }
+    return bytes.buffer;
+  };
+
   return (
-    <View style={{
-      flex: 1,
-      padding: 16,
-      backgroundColor: '#ffffff',
-    }}>
+    <View style={styles.container}>
+      {!showClientDetails ? (
+        <>
       <Text style={{
         fontFamily: 'System',
         fontSize: 26,
@@ -779,49 +832,87 @@ export default function ClientsScreen() {
         id="client-excel-import"
       />
       
-      <View style={{
-        margin: 0,
-        padding: 0,
-        borderWidth: 0,
-        borderColor: 'transparent',
-        backgroundColor: 'transparent',
-        shadowOpacity: 0,
-        elevation: 0
-      }}>
-        <DataTable style={{ 
-          backgroundColor: '#ffffff', 
-          borderWidth: 0,
-          borderColor: 'transparent',
-          margin: 0,
-          padding: 0,
-          shadowOpacity: 0,
-          elevation: 0
-        }}>
-          <DataTable.Header style={{ backgroundColor: '#f5f5f5', borderBottomWidth: 1, borderBottomColor: '#e0e0e0' }}>
+          <View style={{ 
+            flexDirection: 'row', 
+            marginBottom: 16, 
+            marginTop: 16,
+            justifyContent: 'flex-start',
+            gap: 8
+          }}>
+            <Button
+              mode={tagFilter === 'all' ? 'contained' : 'outlined'}
+              onPress={() => setTagFilter('all')}
+              style={{ minWidth: 80 }}
+            >
+              All
+            </Button>
+            <Button
+              mode={tagFilter === 'existing' ? 'contained' : 'outlined'}
+              onPress={() => setTagFilter('existing')}
+              style={{ minWidth: 80 }}
+            >
+              Existing
+            </Button>
+            <Button
+              mode={tagFilter === 'pending' ? 'contained' : 'outlined'}
+              onPress={() => setTagFilter('pending')}
+              style={{ minWidth: 80 }}
+            >
+              Pending
+            </Button>
+            <Button
+              mode={tagFilter === 'prospect' ? 'contained' : 'outlined'}
+              onPress={() => setTagFilter('prospect')}
+              style={{ minWidth: 80 }}
+            >
+              Prospect
+            </Button>
+          </View>
+          
+          <View style={{
+            margin: 0,
+            padding: 0,
+            borderWidth: 0,
+            borderColor: 'transparent',
+            backgroundColor: 'transparent',
+            shadowOpacity: 0,
+            elevation: 0
+          }}>
+            <DataTable style={{ 
+              backgroundColor: '#ffffff', 
+              borderWidth: 0,
+              borderColor: 'transparent',
+              margin: 0,
+              padding: 0,
+              shadowOpacity: 0,
+              elevation: 0
+            }}>
+              <DataTable.Header style={{ backgroundColor: '#f5f5f5', borderBottomWidth: 1, borderBottomColor: '#e0e0e0' }}>
             <DataTable.Title 
               sortDirection={sortColumn === 'name' ? sortDirection : undefined}
-              onPress={() => handleSort('name')}
+                  onPress={() => handleSort('name')}
             >
               Name
             </DataTable.Title>
             <DataTable.Title 
               sortDirection={sortColumn === 'email' ? sortDirection : undefined}
-              onPress={() => handleSort('email')}
+                  onPress={() => handleSort('email')}
             >
               Email
             </DataTable.Title>
             <DataTable.Title 
               sortDirection={sortColumn === 'phone' ? sortDirection : undefined}
-              onPress={() => handleSort('phone')}
+                  onPress={() => handleSort('phone')}
             >
               Phone
             </DataTable.Title>
             <DataTable.Title 
               sortDirection={sortColumn === 'address' ? sortDirection : undefined}
-              onPress={() => handleSort('address')}
+                  onPress={() => handleSort('address')}
             >
               Address
             </DataTable.Title>
+                <DataTable.Title>Tag</DataTable.Title>
             <DataTable.Title>Actions</DataTable.Title>
           </DataTable.Header>
           
@@ -835,18 +926,26 @@ export default function ClientsScreen() {
             </DataTable.Row>
           ) : (
             filteredClients.map(client => (
-              <DataTable.Row key={client.uid} style={{ backgroundColor: '#ffffff' }}>
+                  <DataTable.Row 
+                    key={client.uid} 
+                    style={{ backgroundColor: '#ffffff' }}
+                    onPress={() => router.push(`/client-details?id=${client.uid}`)}
+                  >
                 <DataTable.Cell>{client.name}</DataTable.Cell>
                 <DataTable.Cell>{client.email || '-'}</DataTable.Cell>
                 <DataTable.Cell>{client.phone || '-'}</DataTable.Cell>
                 <DataTable.Cell>{client.address || '-'}</DataTable.Cell>
+                    <DataTable.Cell>{client.tag || '-'}</DataTable.Cell>
                 <DataTable.Cell>
                   <View style={styles.actionButtons}>
                     <Button
                       icon="pencil"
                       mode="text"
                       compact
-                      onPress={() => handleEditClient(client)}
+                          onPress={() => {
+                            console.log('Edit button clicked for client:', client.uid);
+                            router.push(`/client-details?id=${client.uid}`);
+                          }}
                       style={styles.actionButton}
                       labelStyle={styles.actionButtonLabel}
                     >
@@ -872,7 +971,7 @@ export default function ClientsScreen() {
             ))
           )}
         </DataTable>
-      </View>
+          </View>
       
       {showAddForm && (
         <View style={{ 
@@ -996,6 +1095,299 @@ export default function ClientsScreen() {
       >
         {snackbarMessage}
       </Snackbar>
+        </>
+      ) : (
+        <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+          <View style={{ flexDirection: 'row', padding: 16, backgroundColor: '#f5f5f5', alignItems: 'center' }}>
+            <Text style={{ fontSize: 14, fontWeight: 'normal' }}>Client Details</Text>
+          </View>
+          
+          <View style={{ flexDirection: 'row', flex: 1 }}>
+            {/* Left sidebar with icons */}
+            <View style={{ width: 60, backgroundColor: '#f5f5f5', borderRightWidth: 1, borderRightColor: '#e0e0e0' }}>
+              <TouchableOpacity 
+                style={{ alignItems: 'center', marginTop: 16 }}
+                onPress={() => setShowClientDetails(false)}
+              >
+                <MaterialIcons name="menu" size={24} color="#666" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={{ alignItems: 'center', marginTop: 16 }}
+                onPress={() => router.push('/dashboard')}
+              >
+                <MaterialIcons name="dashboard" size={24} color="#666" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={{ alignItems: 'center', marginTop: 16 }}
+                onPress={() => {}}
+              >
+                <MaterialIcons name="person" size={24} color="#666" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={{ alignItems: 'center', marginTop: 16 }}
+                onPress={() => {}}
+              >
+                <MaterialIcons name="folder" size={24} color="#666" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={{ alignItems: 'center', marginTop: 16 }}
+                onPress={() => {}}
+              >
+                <MaterialIcons name="build" size={24} color="#666" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={{ alignItems: 'center', marginTop: 16 }}
+                onPress={() => {}}
+              >
+                <MaterialIcons name="settings" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+            
+            {/* Right sidebar with navigation options */}
+            <View style={{ width: 200, backgroundColor: '#f5f5f5', borderRightWidth: 1, borderRightColor: '#e0e0e0' }}>
+              {/* Info section */}
+              <TouchableOpacity 
+                style={{ 
+                  padding: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: activeDetailTab === 'info' ? '#f0f0f0' : 'transparent'
+                }}
+                onPress={() => setActiveDetailTab('info')}
+              >
+                <View style={{ width: 24, marginRight: 12 }}>
+                  <MaterialIcons name="grid-view" size={20} color="#333" />
+                </View>
+                <Text style={{ color: '#333' }}>Info</Text>
+              </TouchableOpacity>
+              
+              {/* Invoices section */}
+              <TouchableOpacity 
+                style={{ 
+                  padding: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: activeDetailTab === 'invoices' ? '#f0f0f0' : 'transparent'
+                }}
+                onPress={() => setActiveDetailTab('invoices')}
+              >
+                <View style={{ width: 24, marginRight: 12 }}>
+                  <MaterialIcons name="description" size={20} color="#333" />
+                </View>
+                <Text style={{ color: '#333' }}>Invoices</Text>
+              </TouchableOpacity>
+              
+              {/* Costs section */}
+              <TouchableOpacity 
+                style={{ 
+                  padding: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: activeDetailTab === 'costs' ? '#f0f0f0' : 'transparent'
+                }}
+                onPress={() => setActiveDetailTab('costs')}
+              >
+                <View style={{ width: 24, marginRight: 12 }}>
+                  <MaterialIcons name="attach-money" size={20} color="#333" />
+                </View>
+                <Text style={{ color: '#333' }}>Costs</Text>
+              </TouchableOpacity>
+              
+              {/* Calendar section */}
+              <TouchableOpacity 
+                style={{ 
+                  padding: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: activeDetailTab === 'calendar' ? '#f0f0f0' : 'transparent'
+                }}
+                onPress={() => setActiveDetailTab('calendar')}
+              >
+                <View style={{ width: 24, marginRight: 12 }}>
+                  <MaterialIcons name="calendar-today" size={20} color="#333" />
+                </View>
+                <Text style={{ color: '#333' }}>Calendar</Text>
+              </TouchableOpacity>
+              
+              {/* Documentation header */}
+              <View style={{ padding: 16, paddingBottom: 8 }}>
+                <Text style={{ color: '#666', fontWeight: 'bold', fontSize: 12 }}>DOCUMENTATION</Text>
+              </View>
+              
+              {/* Attachments section */}
+              <TouchableOpacity 
+                style={{ 
+                  padding: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: activeDetailTab === 'attachments' ? '#f0f0f0' : 'transparent'
+                }}
+                onPress={() => setActiveDetailTab('attachments')}
+              >
+                <View style={{ width: 24, marginRight: 12 }}>
+                  <MaterialIcons name="attach-file" size={20} color="#333" />
+                </View>
+                <Text style={{ color: '#333' }}>Attachments</Text>
+              </TouchableOpacity>
+              
+              {/* Logs section */}
+              <TouchableOpacity 
+                style={{ 
+                  padding: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: activeDetailTab === 'logs' ? '#f0f0f0' : 'transparent'
+                }}
+                onPress={() => setActiveDetailTab('logs')}
+              >
+                <View style={{ width: 24, marginRight: 12 }}>
+                  <MaterialIcons name="list-alt" size={20} color="#333" />
+                </View>
+                <Text style={{ color: '#333' }}>Logs</Text>
+              </TouchableOpacity>
+            </View>
+            
+            {/* Content area */}
+            <ScrollView style={{ flex: 1, padding: 16, backgroundColor: '#ffffff' }}>
+              {activeDetailTab === 'info' && (
+                <ClientForm
+                  client={editingClient}
+                  onSubmit={(clientData) => {
+                    handleUpdateClient(editingClient.uid, clientData);
+                  }}
+                  onCancel={() => {
+                    setShowClientDetails(false);
+                  }}
+                  submitting={loading}
+                />
+              )}
+              
+              {activeDetailTab === 'jobs' && (
+                <View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
+                    <Text style={{ fontSize: 20, fontWeight: 'bold' }}>Jobs</Text>
+                    <Button 
+                      mode="contained" 
+                      onPress={() => router.push(`/jobs?client_id=${selectedClient?.uid}`)}
+                    >
+                      Add New Job
+                    </Button>
+                  </View>
+                  
+                  {relatedJobs.length === 0 ? (
+                    <Card>
+                      <Card.Content>
+                        <Text>No jobs found for this client</Text>
+                      </Card.Content>
+                    </Card>
+                  ) : (
+                    <DataTable>
+                      <DataTable.Header>
+                        <DataTable.Title>Title</DataTable.Title>
+                        <DataTable.Title>Status</DataTable.Title>
+                        <DataTable.Title>Start Date</DataTable.Title>
+                        <DataTable.Title>End Date</DataTable.Title>
+                        <DataTable.Title>Actions</DataTable.Title>
+                      </DataTable.Header>
+                      
+                      {relatedJobs.map(job => (
+                        <DataTable.Row key={job.uid}>
+                          <DataTable.Cell>{job.title}</DataTable.Cell>
+                          <DataTable.Cell>
+                            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(job.status) }]}>
+                              <Text style={styles.statusText}>{job.status?.replace('_', ' ').toUpperCase()}</Text>
+                            </View>
+                          </DataTable.Cell>
+                          <DataTable.Cell>{formatDate(job.start_date)}</DataTable.Cell>
+                          <DataTable.Cell>{formatDate(job.end_date)}</DataTable.Cell>
+                          <DataTable.Cell>
+                            <View style={{ flexDirection: 'row' }}>
+                              <IconButton 
+                                icon="eye" 
+                                onPress={() => router.push(`/jobs?id=${job.uid}`)} 
+                              />
+                              <IconButton 
+                                icon="pencil" 
+                                onPress={() => router.push(`/jobs?id=${job.uid}`)} 
+                              />
+                            </View>
+                          </DataTable.Cell>
+                        </DataTable.Row>
+                      ))}
+                    </DataTable>
+                  )}
+                </View>
+              )}
+              
+              {activeDetailTab === 'invoices' && (
+                <View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
+                    <Text style={{ fontSize: 20, fontWeight: 'bold' }}>Invoices</Text>
+                    <Button 
+                      mode="contained" 
+                      onPress={() => router.push(`/invoices?client_id=${selectedClient?.uid}`)}
+                    >
+                      Create New Invoice
+                    </Button>
+                  </View>
+                  
+                  {relatedInvoices.length === 0 ? (
+                    <Card>
+                      <Card.Content>
+                        <Text>No invoices found for this client</Text>
+                      </Card.Content>
+                    </Card>
+                  ) : (
+                    <DataTable>
+                      <DataTable.Header>
+                        <DataTable.Title>Invoice #</DataTable.Title>
+                        <DataTable.Title>Issue Date</DataTable.Title>
+                        <DataTable.Title>Due Date</DataTable.Title>
+                        <DataTable.Title>Total</DataTable.Title>
+                        <DataTable.Title>Status</DataTable.Title>
+                        <DataTable.Title>Actions</DataTable.Title>
+                      </DataTable.Header>
+                      
+                      {relatedInvoices.map(invoice => (
+                        <DataTable.Row key={invoice.uid}>
+                          <DataTable.Cell>{invoice.invoice_number}</DataTable.Cell>
+                          <DataTable.Cell>{formatDate(invoice.issue_date)}</DataTable.Cell>
+                          <DataTable.Cell>{formatDate(invoice.due_date)}</DataTable.Cell>
+                          <DataTable.Cell>
+                            {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(invoice.total || 0)}
+                          </DataTable.Cell>
+                          <DataTable.Cell>
+                            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(invoice.status) }]}>
+                              <Text style={styles.statusText}>{invoice.status?.toUpperCase()}</Text>
+                            </View>
+                          </DataTable.Cell>
+                          <DataTable.Cell>
+                            <View style={{ flexDirection: 'row' }}>
+                              <IconButton 
+                                icon="eye" 
+                                onPress={() => router.push(`/invoices?id=${invoice.uid}`)} 
+                              />
+                              <IconButton 
+                                icon="pencil" 
+                                onPress={() => router.push(`/invoices?id=${invoice.uid}`)} 
+                              />
+                            </View>
+                          </DataTable.Cell>
+                        </DataTable.Row>
+                      ))}
+                    </DataTable>
+                  )}
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      )}
     </View>
   );
 }

@@ -238,16 +238,16 @@ export function JobForm({ job, onSubmit, onCancel, submitting = false, onChange 
   };
 
   return (
-    <ScrollView 
+        <ScrollView 
       style={{ 
         flex: 1, 
         backgroundColor: '#ffffff',
         height: '100%' // Ensure it takes full height
       }}
       contentContainerStyle={{ paddingBottom: 80 }} // Extra padding at bottom
-    >
-      <View style={styles.formField}>
-        <Text style={styles.label}>Client</Text>
+        >
+          <View style={styles.formField}>
+            <Text style={styles.label}>Client</Text>
         <View style={{ position: 'relative' }}>
           <TouchableOpacity 
             style={{
@@ -260,7 +260,7 @@ export function JobForm({ job, onSubmit, onCancel, submitting = false, onChange 
               padding: 12,
               backgroundColor: '#ffffff',
             }}
-            onPress={() => {
+                onPress={() => {
               // Get position of the button for positioning the dropdown
               if (clientButtonRef.current) {
                 clientButtonRef.current.measure((x, y, width, height, pageX, pageY) => {
@@ -270,9 +270,9 @@ export function JobForm({ job, onSubmit, onCancel, submitting = false, onChange 
               } else {
                 setShowClientMenu(true);
               }
-            }}
+                }}
             ref={clientButtonRef}
-            disabled={submitting || loadingClients}
+                disabled={submitting || loadingClients}
           >
             <Text>{selectedClient ? selectedClient.name : 'Select Client'}</Text>
             <MaterialIcons name="arrow-drop-down" size={24} color="#000000" />
@@ -312,7 +312,7 @@ export function JobForm({ job, onSubmit, onCancel, submitting = false, onChange 
                   <ScrollView style={{ maxHeight: 300 }}>
                     {clients.map((client) => (
                       <Pressable
-                        key={client.uid}
+                      key={client.uid}
                         style={({ hovered }) => ({
                           padding: 12,
                           borderBottomWidth: client.uid !== clients[clients.length-1].uid ? 1 : 0,
@@ -345,47 +345,47 @@ export function JobForm({ job, onSubmit, onCancel, submitting = false, onChange 
               />
             </Portal>
           )}
-        </View>
-        {errors.client_id && <HelperText type="error">{errors.client_id}</HelperText>}
-      </View>
-      
-      <View style={styles.formField}>
-        <Text style={styles.label}>Title</Text>
-        <TextInput
-          value={formData.title}
+            </View>
+            {errors.client_id && <HelperText type="error">{errors.client_id}</HelperText>}
+          </View>
+          
+          <View style={styles.formField}>
+            <Text style={styles.label}>Title</Text>
+            <TextInput
+              value={formData.title}
           onChangeText={(text) => handleChange('title', text)}
-          style={styles.input}
+              style={styles.input}
           mode="outlined"
           outlineColor="#e0e0e0"
           activeOutlineColor="#000000"
           backgroundColor="#ffffff"
-        />
-        {errors.title && <HelperText type="error">{errors.title}</HelperText>}
-      </View>
-      
-      <View style={styles.formField}>
-        <Text style={styles.label}>Description</Text>
-        <TextInput
+            />
+            {errors.title && <HelperText type="error">{errors.title}</HelperText>}
+          </View>
+          
+          <View style={styles.formField}>
+            <Text style={styles.label}>Description</Text>
+            <TextInput
           label="Job Description"
-          value={formData.description}
-          onChangeText={(value) => {
-            handleChange('description', value);
-            // Scroll to bottom when typing in description to ensure buttons stay visible
-            setTimeout(scrollToBottom, 100);
-          }}
-          multiline
-          numberOfLines={5}
-          style={[styles.input, { minHeight: 100, textAlignVertical: 'top' }]}
+              value={formData.description}
+              onChangeText={(value) => {
+                handleChange('description', value);
+                // Scroll to bottom when typing in description to ensure buttons stay visible
+                setTimeout(scrollToBottom, 100);
+              }}
+              multiline
+              numberOfLines={5}
+              style={[styles.input, { minHeight: 100, textAlignVertical: 'top' }]}
           mode="outlined"
           outlineColor="#e0e0e0"
           activeOutlineColor="#000000"
           backgroundColor="#ffffff"
-          disabled={submitting}
-        />
-      </View>
-      
-      <View style={styles.formField}>
-        <Text style={styles.label}>Status</Text>
+              disabled={submitting}
+            />
+          </View>
+          
+          <View style={styles.formField}>
+            <Text style={styles.label}>Status</Text>
         <View style={{ position: 'relative' }}>
           <TouchableOpacity 
             style={{
@@ -469,14 +469,14 @@ export function JobForm({ job, onSubmit, onCancel, submitting = false, onChange 
             </Portal>
           )}
         </View>
-      </View>
-      
-      <View style={styles.formField}>
+          </View>
+          
+          <View style={styles.formField}>
         <Text style={styles.label}>Start Date & Time</Text>
         <View style={styles.dateTimeContainer}>
-          <TextInput
-            value={formData.start_date || ''}
-            onChangeText={(value) => handleDateInput('start_date', value)}
+            <TextInput
+              value={formData.start_date || ''}
+              onChangeText={(value) => handleDateInput('start_date', value)}
             placeholder="MM-DD-YYYY"
             style={[styles.input, { flex: 2, marginRight: 16, backgroundColor: '#ffffff' }]}
             maxLength={10}
@@ -493,20 +493,20 @@ export function JobForm({ job, onSubmit, onCancel, submitting = false, onChange 
             style={[styles.input, { flex: 1, marginLeft: 8, marginRight: 16, backgroundColor: '#ffffff' }]}
             maxLength={8}
             keyboardType="numeric"
-            disabled={submitting}
+              disabled={submitting}
             mode="outlined"
             outlineColor="#e0e0e0"
             activeOutlineColor="#000000"
-          />
+            />
         </View>
-      </View>
-      
-      <View style={styles.formField}>
+          </View>
+          
+          <View style={styles.formField}>
         <Text style={styles.label}>End Date & Time</Text>
         <View style={styles.dateTimeContainer}>
-          <TextInput
-            value={formData.end_date || ''}
-            onChangeText={(value) => handleDateInput('end_date', value)}
+            <TextInput
+              value={formData.end_date || ''}
+              onChangeText={(value) => handleDateInput('end_date', value)}
             placeholder="MM-DD-YYYY"
             style={[styles.input, { flex: 2, marginRight: 16, backgroundColor: '#ffffff' }]}
             maxLength={10}
@@ -523,34 +523,34 @@ export function JobForm({ job, onSubmit, onCancel, submitting = false, onChange 
             style={[styles.input, { flex: 1, marginLeft: 8, marginRight: 16, backgroundColor: '#ffffff' }]}
             maxLength={8}
             keyboardType="numeric"
-            disabled={submitting}
+              disabled={submitting}
             mode="outlined"
             outlineColor="#e0e0e0"
             activeOutlineColor="#000000"
-          />
+            />
         </View>
-      </View>
-      
-      <View style={[styles.row, { justifyContent: 'flex-end', gap: 8, marginTop: 24, marginBottom: 24 }]}>
-        <Button mode="outlined" onPress={onCancel} disabled={submitting}>
-          Cancel
-        </Button>
-        <Button 
-          mode="contained" 
-          onPress={handleSubmit} 
-          disabled={submitting}
-          loading={submitting}
-        >
-          Save
-        </Button>
-      </View>
-      
-      {submitting && (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="small" />
-          <Text style={styles.loadingText}>Saving...</Text>
-        </View>
-      )}
-    </ScrollView>
+          </View>
+          
+          <View style={[styles.row, { justifyContent: 'flex-end', gap: 8, marginTop: 24, marginBottom: 24 }]}>
+            <Button mode="outlined" onPress={onCancel} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button 
+              mode="contained" 
+              onPress={handleSubmit} 
+              disabled={submitting}
+              loading={submitting}
+            >
+              Save
+            </Button>
+          </View>
+          
+          {submitting && (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" />
+              <Text style={styles.loadingText}>Saving...</Text>
+            </View>
+          )}
+        </ScrollView>
   );
 } 

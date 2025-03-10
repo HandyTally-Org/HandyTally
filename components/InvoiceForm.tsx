@@ -46,6 +46,7 @@ type InvoiceFormProps = {
   initialItems?: InvoiceItem[];
   isEditing?: boolean;
   hideTitle?: boolean;
+  forceInvoiceNumber?: string | null;
 };
 
 const webStyles = Platform.OS === 'web' 
@@ -136,7 +137,7 @@ function safeParseNumber(value: any): number {
   return isNaN(num) ? 0 : num;
 }
 
-export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCancel, initialInvoice, initialItems = [], isEditing = false, hideTitle = false }: InvoiceFormProps) {
+export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCancel, initialInvoice, initialItems = [], isEditing = false, hideTitle = false, forceInvoiceNumber = null }: InvoiceFormProps) {
   // DEBUGGING - Log all props received
   console.log('INVOICE FORM PROPS:', {
     initialInvoice: JSON.stringify(initialInvoice, null, 2),
@@ -159,10 +160,16 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
     return (numericPart + 1).toString().padStart(4, '0');
   };
 
+  const [invoiceNumber, setInvoiceNumber] = useState(
+    forceInvoiceNumber || 
+    (isEditing ? initialInvoice.invoice_number : 
+      generateNextInvoiceNumber())
+  );
+
   const [formData, setFormData] = useState({
     job_id: safeToString(initialInvoice?.job_id),
     client_id: safeToString(initialInvoice?.client_id),
-    invoice_number: initialInvoice?.invoice_number ? safeToString(initialInvoice.invoice_number) : generateNextInvoiceNumber(),
+    invoice_number: invoiceNumber,
     issue_date: initialInvoice?.issue_date || new Date().toISOString().split('T')[0],
     due_date: initialInvoice?.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     subtotal: initialInvoice?.subtotal || 0,
@@ -340,7 +347,7 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
         .from('services')
         .select('*')
         .order('name');
-      
+
       if (error) throw error;
       setServices(data || []);
     } catch (error) {
@@ -354,7 +361,7 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
         .from('materials')
         .select('*')
         .order('name');
-      
+
       if (error) throw error;
       setMaterials(data || []);
     } catch (error) {
@@ -568,10 +575,10 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
       
       // Clear form
       setErrors({});
-    } catch (error) {
+      } catch (error) {
       console.error('Error submitting form:', error);
-    } finally {
-      setSubmitting(false);
+      } finally {
+        setSubmitting(false);
     }
   };
 
@@ -650,7 +657,7 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
             titleStyle={{ fontSize: 20, fontWeight: 'bold' }}
           />
         )}
-        <Card.Content>
+      <Card.Content>
           <View style={{ flexDirection: 'row', gap: 16, marginBottom: 16 }}>
             <View style={{ flex: 1 }}>
               <Text>Invoice Number *</Text>
@@ -841,7 +848,7 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
             }}>
               <TouchableOpacity
                 onPress={() => setShowServiceMenu(!showServiceMenu)}
-                style={{
+                style={{ 
                   padding: 12,
                   flexDirection: 'row',
                   justifyContent: 'space-between',
@@ -858,10 +865,10 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
               
               {showServiceMenu && (
                 <View style={{
-                  position: 'absolute',
+                  position: 'absolute', 
                   top: '100%',
-                  left: 0,
-                  right: 0,
+                  left: 0, 
+                  right: 0, 
                   backgroundColor: '#ffffff',
                   borderWidth: 1,
                   borderColor: '#e0e0e0',
@@ -902,9 +909,9 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
                     ))}
                   </ScrollView>
                 </View>
-              )}
-            </View>
-            
+            )}
+          </View>
+          
             <Text style={{ fontSize: 16, marginBottom: 8 }}>Materials</Text>
             <View style={{ 
               borderWidth: 1, 
@@ -915,29 +922,29 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
               marginBottom: 16,
               zIndex: 999
             }}>
-              <TouchableOpacity
+            <TouchableOpacity 
                 onPress={() => setShowMaterialMenu(!showMaterialMenu)}
                 style={{
                   padding: 12,
                   flexDirection: 'row',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                }}
-              >
-                <Text>
+              }}
+            >
+              <Text>
                   {selectedMaterial 
                     ? `${selectedMaterial.name} - ${formatCurrency(selectedMaterial.cost)}/${selectedMaterial.unit}`
                     : "Select a material to add"}
-                </Text>
+              </Text>
                 <IconButton icon={showMaterialMenu ? "chevron-up" : "chevron-down"} size={20} />
-              </TouchableOpacity>
-              
+            </TouchableOpacity>
+            
               {showMaterialMenu && (
                 <View style={{
-                  position: 'absolute',
+                  position: 'absolute', 
                   top: '100%',
-                  left: 0,
-                  right: 0,
+                  left: 0, 
+                  right: 0, 
                   backgroundColor: '#ffffff',
                   borderWidth: 1,
                   borderColor: '#e0e0e0',
@@ -952,7 +959,7 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
                 }}>
                   <ScrollView style={{ maxHeight: 200 }}>
                     {(materials || []).map((material) => (
-                      <TouchableOpacity
+                        <TouchableOpacity
                         key={material.id || material.uid}
                         onPress={() => handleAddMaterial(material)}
                         style={{
@@ -974,12 +981,12 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
                         }}
                       >
                         <Text>{material.name} - {formatCurrency(material.cost)}/{material.unit}</Text>
-                      </TouchableOpacity>
+                        </TouchableOpacity>
                     ))}
                   </ScrollView>
                 </View>
-              )}
-            </View>
+            )}
+          </View>
             
             <Button 
               mode="outlined" 
@@ -1030,91 +1037,91 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
               </DataTable.Row>
             ) : (
               invoiceItems.map((item, index) => (
-                <DataTable.Row key={`item-${index}`}>
-                  <DataTable.Cell style={{ flex: 3 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
-                      <TextInput
-                        multiline
-                        value={item.description}
-                        onChangeText={(value) => handleUpdateItem(index, 'description', value)}
-                        style={{
+              <DataTable.Row key={`item-${index}`}>
+                <DataTable.Cell style={{ flex: 3 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+                    <TextInput
+                      multiline
+                      value={item.description}
+                      onChangeText={(value) => handleUpdateItem(index, 'description', value)}
+                      style={{
                           minHeight: 40,
-                          borderWidth: 1,
-                          borderColor: '#ccc',
-                          borderRadius: 4,
-                          padding: 8,
-                          flex: 1,
-                          ...(Platform.OS === 'web' ? { resize: 'vertical' } : {}),
-                        }}
-                      />
+                        borderWidth: 1,
+                        borderColor: '#ccc',
+                        borderRadius: 4,
+                        padding: 8,
+                        flex: 1,
+                        ...(Platform.OS === 'web' ? { resize: 'vertical' } : {}),
+                      }}
+                    />
                       <IconButton
                         icon="pencil"
                         size={20}
                         onPress={() => openItemDescriptionModal(index, item.description)}
                         style={{ marginLeft: 4 }}
                       />
-                    </View>
-                  </DataTable.Cell>
+                  </View>
+                </DataTable.Cell>
                   <DataTable.Cell numeric style={{ width: 80, justifyContent: 'center' }}>
-                    <TextInput
-                      value={safeToString(item.quantity)}
-                      onChangeText={(value) => handleUpdateItem(index, 'quantity', parseFloat(value) || 0)}
-                      keyboardType="numeric"
+                  <TextInput
+                    value={safeToString(item.quantity)}
+                    onChangeText={(value) => handleUpdateItem(index, 'quantity', parseFloat(value) || 0)}
+                    keyboardType="numeric"
                       style={{ textAlign: 'center', width: 50 }}
-                    />
-                  </DataTable.Cell>
+                  />
+                </DataTable.Cell>
                   <DataTable.Cell numeric style={{ width: 120 }}>
-                    <TextInput
-                      value={safeToString(item.unit_price)}
-                      onChangeText={(value) => handleUpdateItem(index, 'unit_price', parseFloat(value) || 0)}
-                      keyboardType="numeric"
-                      style={{ textAlign: 'right', width: 80 }}
-                    />
-                  </DataTable.Cell>
+                  <TextInput
+                    value={safeToString(item.unit_price)}
+                    onChangeText={(value) => handleUpdateItem(index, 'unit_price', parseFloat(value) || 0)}
+                    keyboardType="numeric"
+                    style={{ textAlign: 'right', width: 80 }}
+                  />
+                </DataTable.Cell>
                   <DataTable.Cell numeric style={{ width: 120 }}>
-                    {formatCurrency(item.amount)}
-                  </DataTable.Cell>
+                  {formatCurrency(item.amount)}
+                </DataTable.Cell>
                   <DataTable.Cell style={{ width: 50 }}>
-                    <IconButton
-                      icon="delete"
-                      size={20}
-                      onPress={() => handleRemoveItem(index)}
-                    />
-                  </DataTable.Cell>
-                </DataTable.Row>
+                  <IconButton
+                    icon="delete"
+                    size={20}
+                    onPress={() => handleRemoveItem(index)}
+                  />
+                </DataTable.Cell>
+              </DataTable.Row>
               ))
             )}
           </DataTable>
           
           <View style={{ marginTop: 24, backgroundColor: '#ffffff' }}>
             <View style={[combinedStyles.row, { justifyContent: 'flex-end', gap: 8 }]}>
-              <Text>Subtotal:</Text>
-              <Text>{formatCurrency(formData.subtotal)}</Text>
-            </View>
-            
-            <View style={[combinedStyles.row, { justifyContent: 'space-between', alignItems: 'center' }]}>
-              <Text>Tax Rate:</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <TextInput
-                  value={formData.tax_rate.toString()}
-                  onChangeText={(value) => handleChange('tax_rate', value)}
-                  keyboardType="numeric"
-                  style={{ width: 60, height: 40 }}
-                />
-                <Text>%</Text>
+                <Text>Subtotal:</Text>
+                <Text>{formatCurrency(formData.subtotal)}</Text>
               </View>
-            </View>
-            
+              
+            <View style={[combinedStyles.row, { justifyContent: 'space-between', alignItems: 'center' }]}>
+                <Text>Tax Rate:</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <TextInput
+                    value={formData.tax_rate.toString()}
+                    onChangeText={(value) => handleChange('tax_rate', value)}
+                    keyboardType="numeric"
+                    style={{ width: 60, height: 40 }}
+                  />
+                  <Text>%</Text>
+                </View>
+              </View>
+              
             <View style={[combinedStyles.row, { justifyContent: 'space-between' }]}>
-              <Text>Tax Amount:</Text>
-              <Text>{formatCurrency(formData.tax_amount)}</Text>
-            </View>
-            
-            <Divider style={{ marginVertical: 8 }} />
-            
+                <Text>Tax Amount:</Text>
+                <Text>{formatCurrency(formData.tax_amount)}</Text>
+              </View>
+              
+              <Divider style={{ marginVertical: 8 }} />
+              
             <View style={[combinedStyles.row, { justifyContent: 'space-between' }]}>
-              <Text variant="titleMedium">Total:</Text>
-              <Text variant="titleMedium">{formatCurrency(formData.total)}</Text>
+                <Text variant="titleMedium">Total:</Text>
+                <Text variant="titleMedium">{formatCurrency(formData.total)}</Text>
             </View>
           </View>
           
