@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Image, ScrollView } from 'react-native';
-import { TextInput, Button, Text, Card, ActivityIndicator, IconButton } from 'react-native-paper';
+import { TextInput, Button, Text, Card, ActivityIndicator, IconButton, Snackbar } from 'react-native-paper';
 import { supabase } from '../lib/api';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
@@ -15,7 +15,17 @@ interface CompanyData {
   logo_url: string | null;
 }
 
-const PLACEHOLDER_LOGO = 'https://i.imgur.com/Ixu6WiQ.png'; // or any other placeholder URL
+// Added attachment interface
+interface CompanyAttachment {
+  id?: string;
+  company_id: string;
+  name: string;
+  file_type: string;
+  file_data: string;
+  created_at?: string;
+  is_logo?: boolean;
+}
+
 const DEFAULT_LOGO_URL = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMjAwIiB2aWV3Qm94PSIwIDAgNDAwIDIwMCI+PHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSIyMDAiIGZpbGw9IiM0Q0FGNTAiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjI0IiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPllvdXIgQ29tcGFueSBMb2dvPC90ZXh0Pjwvc3ZnPg==';
 
 export default function AdminPage() {
@@ -30,6 +40,8 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
   const router = useRouter();
 
   useEffect(() => {
@@ -100,6 +112,11 @@ export default function AdminPage() {
     }
   };
 
+  const showSnackbar = (message: string) => {
+    setSnackbarMessage(message);
+    setSnackbarVisible(true);
+  };
+
   const handleSubmit = async () => {
     try {
       // Validate required fields
@@ -125,14 +142,16 @@ export default function AdminPage() {
       if (data) {
         setCompany(data);
         setError(''); // Clear any existing errors
-        alert('Company information saved successfully!');
+        showSnackbar('Company information saved successfully!');
       }
     } catch (err) {
       console.error('Error saving company:', err);
       setError('Error saving company information. Please try again.');
+      showSnackbar('Error saving company information');
     }
   };
 
+  // Modified function to save logo URL to company table
   const handleLogoSubmit = async (url: string) => {
     try {
       const { data, error } = await supabase
@@ -149,92 +168,163 @@ export default function AdminPage() {
 
       if (data) {
         setCompany(data);
-        alert('Logo URL saved successfully!');
+        setLogoUrl(url);
+        showSnackbar('Logo URL saved successfully!');
       }
     } catch (err) {
       console.error('Error saving logo URL:', err);
       setError('Error saving logo URL');
+      showSnackbar('Error saving logo URL');
     }
   };
 
+  // New function to convert file to base64
+  const fileToBase64 = async (uri: string): Promise<string> => {
+    try {
+      // For web, we need to fetch the file and convert to base64
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          // We want just the base64 data part
+          const base64String = reader.result as string;
+          // Remove the data:image/jpeg;base64, part if it exists
+          const base64Data = base64String.includes(',') 
+            ? base64String.split(',')[1] 
+            : base64String;
+          resolve(base64Data);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.error('Error converting to base64:', error);
+      throw error;
+    }
+  };
+
+  // Modified function to pick image and save to company_attachments
   const pickImage = async () => {
     try {
+      // Launch image picker
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [4, 3],
-        quality: 1,
+        quality: 0.8, // Lower quality to reduce size
       });
 
-      if (!result.canceled) {
-        setLoading(true);
-        const file = result.assets[0];
-        const fileExt = file.uri.split('.').pop();
-        const fileName = `logo-${Date.now()}.${fileExt}`;
-        const filePath = `logos/${fileName}`;
-
-        // Upload to Supabase Storage
-        const { data, error } = await supabase.storage
-          .from('public')
-          .upload(filePath, {
-            uri: file.uri,
-            type: file.type || 'image/jpeg', // Provide a default type if undefined
-            name: fileName,
-          });
-
-        if (error) throw error;
-
-        // Get public URL
-        const { data: publicUrlData } = supabase.storage
-          .from('public')
-          .getPublicUrl(filePath);
-
-        const publicUrl = publicUrlData.publicUrl;
-
-        // Update settings
-        await upsertSettings(publicUrl);
-        setLogoUrl(publicUrl);
-
-        // After uploading the image
-        console.log("Logo URL saved:", publicUrl);
+      if (result.canceled) {
+        return;
       }
-    } catch (error) {
+
+      setLoading(true);
+      const file = result.assets[0];
+      
+      console.log("Selected image:", file.uri);
+      
+      // Get file extension
+      const fileExt = file.uri.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `company-logo-${Date.now()}.${fileExt}`;
+      
+      // Convert image to base64
+      const base64Data = await fileToBase64(file.uri);
+      
+      // Determine file type from extension
+      let fileType = 'image/jpeg';
+      if (fileExt === 'png') fileType = 'image/png';
+      if (fileExt === 'gif') fileType = 'image/gif';
+      if (fileExt === 'svg') fileType = 'image/svg+xml';
+      
+      // First, ensure we have a company ID
+      let companyId = company.uid;
+      
+      if (!companyId) {
+        // Create company record if it doesn't exist
+        const { data: newCompany, error: companyError } = await supabase
+          .from('company')
+          .upsert({
+            business_name: company.business_name || 'My Company',
+            address: company.address || '',
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+          
+        if (companyError) throw companyError;
+        
+        if (newCompany) {
+          companyId = newCompany.uid;
+          setCompany(newCompany);
+        } else {
+          throw new Error('Failed to create company record');
+        }
+      }
+      
+      // Insert into company_attachments with corrected field names
+      const attachment: CompanyAttachment = {
+        company_id: companyId as string,
+        name: fileName,
+        file_type: fileType,
+        file_data: base64Data,
+        is_logo: true
+      };
+      
+      console.log("Saving attachment with fields:", Object.keys(attachment));
+      
+      // Save attachment
+      const { data: savedAttachment, error: attachmentError } = await supabase
+        .from('company_attachments')
+        .insert(attachment)
+        .select()
+        .single();
+        
+      if (attachmentError) {
+        console.error('Attachment error details:', attachmentError);
+        
+        // Check if the table doesn't exist
+        if (attachmentError.message?.includes('relation "company_attachments" does not exist')) {
+          console.error('The company_attachments table does not exist. Please create it first.');
+          showSnackbar('The company_attachments table does not exist. Please contact the system administrator.');
+          setLoading(false);
+          return;
+        }
+        throw attachmentError;
+      }
+      
+      // Create a data URL for immediate display
+      const dataUrl = `data:${fileType};base64,${base64Data}`;
+      
+      // Update company with new logo URL
+      await handleLogoSubmit(dataUrl);
+      
+      showSnackbar('Logo uploaded and saved successfully!');
+      
+      // Force reload to update sidebar
+      setTimeout(() => window.location.reload(), 1500); // Give time to see the snackbar before reload
+    } catch (error: any) {
       console.error('Error uploading image:', error);
-      alert('Error uploading image. Please try again.');
+      showSnackbar('Error uploading image: ' + (error.message || 'Unknown error'));
     } finally {
       setLoading(false);
     }
   };
 
-  const upsertSettings = async (url: string) => {
+  // Function to use default logo
+  const useDefaultLogo = async () => {
     try {
       setLoading(true);
-      
-      // Update the company record with the new logo URL
-      const { error } = await supabase
-        .from('company')
-        .upsert({
-          ...company,
-          logo_url: url,
-          updated_at: new Date().toISOString()
-        });
-
-      if (error) {
-        console.error('Error updating company logo:', error);
-        throw error;
-      }
-      
-      // Update local state
-      setLogoUrl(url);
-      setCompany({...company, logo_url: url});
-      
-      alert('Logo URL saved successfully!');
+      await handleLogoSubmit(DEFAULT_LOGO_URL);
+      setLogoUrl(DEFAULT_LOGO_URL);
+      showSnackbar('Default logo set successfully!');
       
       // Force reload to update sidebar
-      window.location.reload();
+      setTimeout(() => window.location.reload(), 1500); // Give time to see the snackbar before reload
     } catch (error: any) {
-      console.error('Error saving logo URL:', error);
-      alert('Error saving logo URL: ' + (error.message || 'Unknown error'));
+      console.error('Error setting default logo:', error);
+      showSnackbar('Error setting default logo: ' + (error.message || 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -308,7 +398,7 @@ export default function AdminPage() {
               }}>
                 <Button 
                   mode="contained" 
-                  onPress={() => upsertSettings(logoUrl)}
+                  onPress={pickImage}
                   style={{ marginRight: 8 }}
                 >
                   Change Logo
@@ -316,27 +406,21 @@ export default function AdminPage() {
                 
                 <Button 
                   mode="outlined" 
-                  onPress={() => {
-                    setLogoUrl(DEFAULT_LOGO_URL);
-                    handleSubmit();
-                  }}
+                  onPress={useDefaultLogo}
                 >
                   Default
                 </Button>
               </View>
               
-              <TextInput
-                label="Logo URL"
-                value={logoUrl}
-                onChangeText={setLogoUrl}
-                placeholder="Enter logo image URL"
-                style={{ 
-                  marginTop: 8, 
-                  width: '100%',
-                  maxWidth: 500,
-                  backgroundColor: '#ffffff',
-                }}
-              />
+              <Text style={{ 
+                fontSize: 12, 
+                color: '#666',
+                textAlign: 'center', 
+                maxWidth: 400,
+                marginBottom: 8,
+              }}>
+                Upload an image to use as your company logo. The image will be stored in your company attachments.
+              </Text>
             </View>
             
             <Card style={{ 
@@ -420,6 +504,22 @@ export default function AdminPage() {
           </View>
         </View>
       </ScrollView>
+
+      <Snackbar
+        visible={snackbarVisible}
+        onDismiss={() => setSnackbarVisible(false)}
+        duration={3000}
+        style={{
+          backgroundColor: '#333333',
+          borderRadius: 4
+        }}
+        action={{
+          label: 'Dismiss',
+          onPress: () => setSnackbarVisible(false)
+        }}
+      >
+        {snackbarMessage}
+      </Snackbar>
     </View>
   );
 }

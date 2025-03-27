@@ -9,10 +9,10 @@ import * as XLSX from 'xlsx';
 import { MaterialIcons } from '@expo/vector-icons';
 
 type Job = {
-  uid: string;
+  uid: number;
   title: string;
   description: string;
-  client_id: string;
+  client_id: number;
   client_name: string;
   start_date: string;
   end_date: string;
@@ -47,6 +47,14 @@ export default function JobsScreen() {
   const [showClientDropdown, setShowClientDropdown] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedHour, setSelectedHour] = useState<string>("12");
+  const [selectedMinute, setSelectedMinute] = useState<string>("00");
+  const [selectedAmPm, setSelectedAmPm] = useState<"AM" | "PM">("AM");
+  const [datePickerMode, setDatePickerMode] = useState<'start' | 'end'>('start');
+  const [currentMonth, setCurrentMonth] = useState(new Date());
 
   useEffect(() => {
     fetchJobs();
@@ -135,7 +143,7 @@ export default function JobsScreen() {
   };
 
   const handleEditJob = (job) => {
-    router.push(`/jobs/${job.uid}`);
+    router.push(`/jobs/${job.uid.toString()}`);
   };
 
   const handleUpdateJob = async () => {
@@ -144,42 +152,82 @@ export default function JobsScreen() {
     try {
       setLoading(true);
       
-      // Create a clean update object with only the fields we want to update
-      const updateData = {
-        title: editingJob.title || '',
-        description: editingJob.description || '',
-        start_date: formatDateForDB(editingJob.start_date),
-        end_date: formatDateForDB(editingJob.end_date),
-        status: editingJob.status || 'pending',
-        client_id: editingJob.client_id // Add client_id to the update data
-      };
+      // Ensure uid and client_id are proper numbers (bigint8)
+      let jobId = 0;
+      let clientId = 0;
       
-      console.log('Updating job with data:', updateData);
-      
-      const { data, error } = await supabase
-        .from('jobs')
-        .update(updateData)
-        .eq('uid', editingJob.uid)
-        .select();
-      
-      if (error) {
-        console.error('Supabase error:', error);
-        throw error;
+      if (editingJob.uid !== undefined && editingJob.uid !== null) {
+        jobId = typeof editingJob.uid === 'number' ? 
+          editingJob.uid : Number(editingJob.uid);
+          
+        if (isNaN(jobId)) {
+          throw new Error(`Invalid job ID format: "${editingJob.uid}"`);
+        }
+      } else {
+        throw new Error('Job ID is required');
       }
       
-      console.log('Update response:', data);
+      if (editingJob.client_id !== undefined && editingJob.client_id !== null) {
+        clientId = typeof editingJob.client_id === 'number' ? 
+          editingJob.client_id : Number(editingJob.client_id);
+          
+        if (isNaN(clientId)) {
+          throw new Error(`Invalid client ID format: "${editingJob.client_id}"`);
+        }
+      } else {
+        throw new Error('Client ID is required');
+      }
       
-      // Close the edit dialog
-      setShowEditDialog(false);
+      // Create a database-safe object with just the needed fields
+      const dbUpdateData = {
+        title: editingJob.title,
+        description: editingJob.description || '',
+        status: editingJob.status,
+        client_id: clientId, // Use the validated number
+        start_date: editingJob.start_date,
+        end_date: editingJob.end_date
+      };
+      
+      // Remove any undefined values
+      Object.keys(dbUpdateData).forEach(key => {
+        if (dbUpdateData[key] === undefined) {
+          delete dbUpdateData[key];
+        }
+      });
+      
+      console.log('Updating job with data:', JSON.stringify(dbUpdateData, null, 2));
+      
+      const { error } = await supabase
+        .from('jobs')
+        .update(dbUpdateData)
+        .eq('uid', jobId);  // Use the converted number for comparison
+      
+      if (error) {
+        console.error('Error updating job:', error);
+        alert(`Error: ${error.message}`);
+        return;
+      }
+      
+      // Find the client name for display purposes
+      const client = clients.find(c => c.uid === clientId.toString());
+      const updatedJobWithClientName = {
+        ...editingJob,
+        uid: jobId,           // Ensure uid is a number
+        client_id: clientId,  // Ensure client_id is a number
+        client_name: client ? client.name : 'Unknown Client'
+      };
+      
+      // Update the jobs list with the edited job
+      setJobs(jobs.map(job => 
+        job.uid === jobId ? updatedJobWithClientName : job
+      ));
+      
       setEditingJob(null);
-      
-      // Refresh the jobs list to get updated data including client names
-      await fetchJobs();
-      
+      setShowEditDialog(false);
       showSnackbar('Job updated successfully');
-    } catch (error: any) {
-      console.error('Error updating job:', error);
-      showSnackbar('Error updating job: ' + (error.message || 'Unknown error'));
+    } catch (error) {
+      console.error('Error in handleUpdateJob:', error);
+      alert(`Error: ${error.message || 'Failed to update job'}`);
     } finally {
       setLoading(false);
     }
@@ -189,25 +237,69 @@ export default function JobsScreen() {
     try {
       setLoading(true);
       
-      // Create the job in the database
+      console.log('Received job data for adding:', jobData);
+      
+      // Ensure client_id is a proper number (bigint8)
+      let clientId = 0;
+      
+      if (jobData.client_id !== undefined && jobData.client_id !== null) {
+        clientId = typeof jobData.client_id === 'number' ? 
+          jobData.client_id : Number(jobData.client_id);
+          
+        if (isNaN(clientId)) {
+          throw new Error(`Invalid client ID format: "${jobData.client_id}"`);
+        }
+      } else {
+        throw new Error('Client ID is required');
+      }
+      
+      // Create a clean object with only the needed fields
+      const dbJobData = {
+        title: jobData.title,
+        description: jobData.description || '',
+        client_id: clientId, // Use the validated number
+        status: jobData.status || 'pending',
+        start_date: jobData.start_date,
+        end_date: jobData.end_date
+      };
+      
+      // Remove any undefined values
+      Object.keys(dbJobData).forEach(key => {
+        if (dbJobData[key] === undefined) {
+          delete dbJobData[key];
+        }
+      });
+      
+      console.log('Adding job with data:', JSON.stringify(dbJobData, null, 2));
+      
       const { data, error } = await supabase
         .from('jobs')
-        .insert([jobData])
+        .insert(dbJobData)
         .select();
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error adding job:', error);
+        alert(`Error: ${error.message}`);
+        return;
+      }
       
-      // Update the jobs list
-      setJobs([...(data || []), ...jobs]);
+      // Find the client name from clients list for display purposes
+      const client = clients.find(c => c.uid === clientId.toString());
       
-      // Close the form
+      // Make sure the newly created job has numeric uid and client_id
+      const newJob = {
+        ...data[0],
+        uid: Number(data[0].uid),      // Ensure uid is a number
+        client_id: clientId,           // Ensure client_id is a number
+        client_name: client ? client.name : 'Unknown Client'
+      };
+      
+      setJobs([newJob, ...jobs]);
       setShowAddForm(false);
-      
-      // Show success message
-      showSnackbar('Job created successfully');
+      showSnackbar('Job added successfully');
     } catch (error) {
-      console.error('Error adding job:', error);
-      showSnackbar('Failed to create job');
+      console.error('Error in handleAddJob:', error);
+      alert(`Error: ${error.message || 'Failed to add job'}`);
     } finally {
       setLoading(false);
     }
@@ -229,28 +321,31 @@ export default function JobsScreen() {
   };
 
   const formatDate = (dateString: string | undefined) => {
-    if (!dateString || dateString.trim() === '') return '';
-    
-    // If it's already in MM/DD/YYYY format, return as is
-    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateString)) {
-      return dateString;
-    }
+    if (!dateString) return '';
     
     try {
+      // Create a Date object from the ISO string
       const date = new Date(dateString);
-      // Check if date is valid
-      if (isNaN(date.getTime())) {
-        return dateString; // Return the original string if it's not a valid date
-      }
+      if (isNaN(date.getTime())) return '';
       
-      return date.toLocaleDateString('en-US', {
+      // Adjust for timezone to prevent date shifting
+      // This creates a local date object that preserves the date as stored
+      const timezoneOffset = date.getTimezoneOffset() * 60000; // offset in milliseconds
+      const localDate = new Date(date.getTime() - timezoneOffset);
+      
+      // Format date in MM/DD/YYYY format with proper timezone consideration
+      const formattedDate = localDate.toLocaleDateString('en-US', {
+        year: 'numeric',
         month: '2-digit',
         day: '2-digit',
-        year: 'numeric'
+        timeZone: 'UTC' // Using UTC here prevents further shifting
       });
+      
+      console.log(`Original date: ${dateString}, Formatted: ${formattedDate}`);
+      return formattedDate;
     } catch (error) {
       console.error('Error formatting date:', error);
-      return dateString; // Return the original string on error
+      return dateString; // Return original if there's an error
     }
   };
 
@@ -344,48 +439,25 @@ export default function JobsScreen() {
     }
   };
 
-  // Helper function to ensure dates are in YYYY-MM-DD format for the database
+  // Also update formatDateForDB to ensure consistency with form submission
   const formatDateForDB = (dateString: string | undefined) => {
-    if (!dateString || dateString.trim() === '') return null;
-    
-    // If already in YYYY-MM-DD format, return as is
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-      return dateString;
-    }
-    
-    // If in MM/DD/YYYY format, convert to YYYY-MM-DD
-    const mmddyyyyPattern = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
-    const match = dateString.match(mmddyyyyPattern);
-    if (match) {
-      const month = match[1].padStart(2, '0');
-      const day = match[2].padStart(2, '0');
-      const year = match[3];
-      return `${year}-${month}-${day}`;
-    }
-    
-    // Check for MMDDYYYY format (8 digits with no separators)
-    const mmddyyyyNoSeparator = /^(\d{8})$/;
-    const noSepMatch = dateString.match(mmddyyyyNoSeparator);
-    if (noSepMatch) {
-      const fullDate = noSepMatch[1];
-      const month = fullDate.substring(0, 2);
-      const day = fullDate.substring(2, 4);
-      const year = fullDate.substring(4, 8);
-      return `${year}-${month}-${day}`;
-    }
+    if (!dateString) return null;
     
     try {
-      // Try to create a date object and format it
-    const date = new Date(dateString);
-      if (!isNaN(date.getTime())) {
-        return date.toISOString().split('T')[0];
-      }
+      // Create a date object from the string
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return null;
+      
+      // Adjust for timezone to maintain the correct date
+      const timezoneOffset = date.getTimezoneOffset() * 60000; // offset in milliseconds
+      const localDate = new Date(date.getTime() - timezoneOffset);
+      
+      // Format as ISO string but chop off time info if we only need date
+      return localDate.toISOString().split('T')[0];
     } catch (error) {
       console.error('Error formatting date for DB:', error);
+      return null;
     }
-    
-    // If we can't parse it, return as is
-    return dateString;
   };
 
   // Add this new function to format date input
@@ -660,7 +732,7 @@ export default function JobsScreen() {
   };
 
   // Add a function to update the job status
-  const updateJobStatus = async (jobId: string, newStatus: string) => {
+  const updateJobStatus = async (jobId: number, newStatus: string) => {
     try {
       console.log(`Updating job ${jobId} status to: ${newStatus}`);
       
@@ -693,6 +765,209 @@ export default function JobsScreen() {
       showSnackbar(`Error: ${error.message}`);
       return false;
     }
+  };
+
+  // Function to get days in month
+  const getDaysInMonth = (year: number, month: number) => {
+    return new Date(year, month + 1, 0).getDate();
+  };
+
+  // Function to get day of week (0 = Sunday, 6 = Saturday)
+  const getDayOfWeek = (year: number, month: number, day: number) => {
+    return new Date(year, month, day).getDay();
+  };
+
+  // Generate calendar days for current month view
+  const generateCalendarDays = () => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    
+    const daysInMonth = getDaysInMonth(year, month);
+    const firstDayOfMonth = getDayOfWeek(year, month, 1);
+    
+    // Previous month days to show
+    const daysFromPrevMonth = firstDayOfMonth;
+    const prevMonth = month === 0 ? 11 : month - 1;
+    const prevMonthYear = month === 0 ? year - 1 : year;
+    const daysInPrevMonth = getDaysInMonth(prevMonthYear, prevMonth);
+    
+    const days = [];
+    
+    // Add days from previous month
+    for (let i = daysInPrevMonth - daysFromPrevMonth + 1; i <= daysInPrevMonth; i++) {
+      days.push({
+        day: i,
+        month: prevMonth,
+        year: prevMonthYear,
+        isCurrentMonth: false
+      });
+    }
+    
+    // Add days from current month
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push({
+        day: i,
+        month: month,
+        year: year,
+        isCurrentMonth: true
+      });
+    }
+    
+    // Add days from next month
+    const totalDaysToShow = 42; // 6 rows of 7 days
+    const daysFromNextMonth = totalDaysToShow - days.length;
+    const nextMonth = month === 11 ? 0 : month + 1;
+    const nextMonthYear = month === 11 ? year + 1 : year;
+    
+    for (let i = 1; i <= daysFromNextMonth; i++) {
+      days.push({
+        day: i,
+        month: nextMonth,
+        year: nextMonthYear,
+        isCurrentMonth: false
+      });
+    }
+    
+    return days;
+  };
+
+  // Navigate to previous month
+  const goToPrevMonth = () => {
+    setCurrentMonth(prevMonth => {
+      const newMonth = new Date(prevMonth);
+      newMonth.setMonth(newMonth.getMonth() - 1);
+      return newMonth;
+    });
+  };
+
+  // Navigate to next month
+  const goToNextMonth = () => {
+    setCurrentMonth(prevMonth => {
+      const newMonth = new Date(prevMonth);
+      newMonth.setMonth(newMonth.getMonth() + 1);
+      return newMonth;
+    });
+  };
+
+  // Check if a date is today
+  const isToday = (day: number, month: number, year: number) => {
+    const today = new Date();
+    return day === today.getDate() && 
+           month === today.getMonth() && 
+           year === today.getFullYear();
+  };
+
+  // Check if a date is selected
+  const isSelectedDate = (day: number, month: number, year: number) => {
+    if (!selectedDate) return false;
+    return day === selectedDate.getDate() && 
+           month === selectedDate.getMonth() && 
+           year === selectedDate.getFullYear();
+  };
+
+  // Handle date selection
+  const handleDateSelect = (day: number, month: number, year: number) => {
+    const newDate = new Date(year, month, day);
+    setSelectedDate(newDate);
+  };
+
+  // Apply the selected date and time
+  const applyDateTime = () => {
+    if (!selectedDate) return;
+    
+    // Convert hour to 24-hour format if PM
+    let hour = parseInt(selectedHour);
+    if (selectedAmPm === "PM" && hour !== 12) {
+      hour += 12;
+    } else if (selectedAmPm === "AM" && hour === 12) {
+      hour = 0;
+    }
+    
+    // Create a formatted date string
+    const formattedDate = `${selectedDate.getMonth() + 1}/${selectedDate.getDate()}/${selectedDate.getFullYear()}`;
+    const formattedTime = `${hour.toString().padStart(2, '0')}:${selectedMinute}`;
+    const formattedDateTime = `${formattedDate} ${formattedTime} ${selectedAmPm}`;
+    
+    if (datePickerMode === 'start') {
+      setEditingJob({...editingJob, start_date: formattedDateTime});
+      setShowStartDatePicker(false);
+    } else {
+      setEditingJob({...editingJob, end_date: formattedDateTime});
+      setShowEndDatePicker(false);
+    }
+  };
+
+  // Open the date picker
+  const openDatePicker = (mode: 'start' | 'end') => {
+    setDatePickerMode(mode);
+    
+    // Set initial values based on current job dates
+    let initialDate: Date;
+    let initialHour = "12";
+    let initialMinute = "00";
+    let initialAmPm: "AM" | "PM" = "AM";
+    
+    const dateToUse = mode === 'start' ? editingJob?.start_date : editingJob?.end_date;
+    
+    if (dateToUse) {
+      try {
+        const date = new Date(dateToUse);
+        if (!isNaN(date.getTime())) {
+          initialDate = date;
+          
+          // Extract hour, minute, and AM/PM
+          let hours = date.getHours();
+          const minutes = date.getMinutes();
+          
+          // Convert to 12-hour format
+          if (hours >= 12) {
+            initialAmPm = "PM";
+            hours = hours === 12 ? 12 : hours - 12;
+          } else {
+            initialAmPm = "AM";
+            hours = hours === 0 ? 12 : hours;
+          }
+          
+          initialHour = hours.toString();
+          initialMinute = minutes.toString().padStart(2, '0');
+        } else {
+          initialDate = new Date();
+        }
+      } catch (e) {
+        initialDate = new Date();
+      }
+    } else {
+      initialDate = new Date();
+    }
+    
+    setSelectedDate(initialDate);
+    setCurrentMonth(initialDate);
+    setSelectedHour(initialHour);
+    setSelectedMinute(initialMinute);
+    setSelectedAmPm(initialAmPm);
+    
+    if (mode === 'start') {
+      setShowStartDatePicker(true);
+    } else {
+      setShowEndDatePicker(true);
+    }
+  };
+
+  // Generate time options
+  const generateHourOptions = () => {
+    const hours = [];
+    for (let i = 1; i <= 12; i++) {
+      hours.push(i.toString());
+    }
+    return hours;
+  };
+
+  const generateMinuteOptions = () => {
+    const minutes = [];
+    for (let i = 0; i < 60; i += 5) {
+      minutes.push(i.toString().padStart(2, '0'));
+    }
+    return minutes;
   };
 
   return (
@@ -783,7 +1058,7 @@ export default function JobsScreen() {
                 }
               }}
               iconColor="#fff"
-              containerColor="#2196F3"
+              containerColor="#fff"
               size={20}
               aria-label="Import"
             />
@@ -793,7 +1068,7 @@ export default function JobsScreen() {
                   position: 'absolute', 
                   bottom: -30, 
                   left: 0, 
-                  backgroundColor: '#333', 
+                  backgroundColor: '#fff', 
                   color: 'white', 
                   padding: '4px 8px', 
                   borderRadius: 4, 
@@ -827,8 +1102,9 @@ export default function JobsScreen() {
                     <Chip 
             selected={selectedStatuses.length === 0}
             onPress={() => setSelectedStatuses([])}
-            style={styles.filterChip}
-                      mode="outlined" 
+            style={[styles.filterChip, { borderRadius: 4 }]}
+                      mode="outlined"
+                      showSelectedCheck={false}
                     >
             All
                     </Chip>
@@ -836,8 +1112,9 @@ export default function JobsScreen() {
           <Chip
             selected={selectedStatuses.includes('pending')}
             onPress={() => toggleStatusFilter('pending')}
-            style={[styles.filterChip, { backgroundColor: selectedStatuses.includes('pending') ? '#FFF9C4' : undefined }]}
+            style={[styles.filterChip, { backgroundColor: selectedStatuses.includes('pending') ? '#FFF9C4' : undefined, borderRadius: 4 }]}
             mode="outlined"
+            showSelectedCheck={false}
           >
             Pending
           </Chip>
@@ -845,8 +1122,9 @@ export default function JobsScreen() {
           <Chip
             selected={selectedStatuses.includes('in_progress')}
             onPress={() => toggleStatusFilter('in_progress')}
-            style={[styles.filterChip, { backgroundColor: selectedStatuses.includes('in_progress') ? '#BBDEFB' : undefined }]}
+            style={[styles.filterChip, { backgroundColor: selectedStatuses.includes('in_progress') ? '#BBDEFB' : undefined, borderRadius: 4 }]}
             mode="outlined"
+            showSelectedCheck={false}
           >
             In Progress
           </Chip>
@@ -854,8 +1132,9 @@ export default function JobsScreen() {
           <Chip
             selected={selectedStatuses.includes('completed')}
             onPress={() => toggleStatusFilter('completed')}
-            style={[styles.filterChip, { backgroundColor: selectedStatuses.includes('completed') ? '#C8E6C9' : undefined }]}
+            style={[styles.filterChip, { backgroundColor: selectedStatuses.includes('completed') ? '#C8E6C9' : undefined, borderRadius: 4 }]}
             mode="outlined"
+            showSelectedCheck={false}
           >
             Completed
           </Chip>
@@ -863,8 +1142,9 @@ export default function JobsScreen() {
           <Chip
             selected={selectedStatuses.includes('cancelled')}
             onPress={() => toggleStatusFilter('cancelled')}
-            style={[styles.filterChip, { backgroundColor: selectedStatuses.includes('cancelled') ? '#FFCDD2' : undefined }]}
+            style={[styles.filterChip, { backgroundColor: selectedStatuses.includes('cancelled') ? '#FFCDD2' : undefined, borderRadius: 4 }]}
             mode="outlined"
+            showSelectedCheck={false}
           >
             Cancelled
           </Chip>
@@ -1051,33 +1331,27 @@ export default function JobsScreen() {
                       mode="outlined" 
                 />
                 
-                <Text style={styles.inputLabel}>Start Date</Text>
-                <TextInput
-                  defaultValue=""
-                  value={editingJob.start_date === null ? '' : editingJob.start_date}
-                  onChangeText={(text) => {
-                    // Format the input if it matches MMDDYYYY pattern
-                    const formattedText = formatDateInput(text);
-                    setEditingJob({...editingJob, start_date: formattedText});
-                  }}
-                  style={styles.input}
-                  placeholder="MM/DD/YYYY"
-                  mode="outlined"
-                />
+                <Text style={styles.inputLabel}>Start Date & Time</Text>
+                <TouchableOpacity onPress={() => openDatePicker('start')}>
+                  <TextInput
+                    value={editingJob.start_date === null ? '' : editingJob.start_date}
+                    style={[styles.input, { pointerEvents: 'none' }]}
+                    mode="outlined"
+                    editable={false}
+                    right={<TextInput.Icon icon="calendar" />}
+                  />
+                </TouchableOpacity>
                 
-                <Text style={styles.inputLabel}>End Date</Text>
-                <TextInput
-                  defaultValue=""
-                  value={editingJob.end_date === null ? '' : editingJob.end_date}
-                  onChangeText={(text) => {
-                    // Format the input if it matches MMDDYYYY pattern
-                    const formattedText = formatDateInput(text);
-                    setEditingJob({...editingJob, end_date: formattedText});
-                  }}
-                  style={styles.input}
-                  placeholder="MM/DD/YYYY"
-                  mode="outlined"
-                />
+                <Text style={styles.inputLabel}>End Date & Time</Text>
+                <TouchableOpacity onPress={() => openDatePicker('end')}>
+                  <TextInput
+                    value={editingJob.end_date === null ? '' : editingJob.end_date}
+                    style={[styles.input, { pointerEvents: 'none' }]}
+                    mode="outlined"
+                    editable={false}
+                    right={<TextInput.Icon icon="calendar" />}
+                  />
+                </TouchableOpacity>
                 
                 <Text style={styles.inputLabel}>Status</Text>
                 <View style={styles.dropdownContainer}>
@@ -1347,6 +1621,130 @@ export default function JobsScreen() {
         <></>
       )}
 
+      {/* Date & Time Picker Dropdown for Start Date */}
+      <Portal>
+        <Dialog visible={showStartDatePicker} onDismiss={() => setShowStartDatePicker(false)} style={styles.datePickerDialog}>
+          <Dialog.Title>Select Start Date & Time</Dialog.Title>
+          <Dialog.Content>
+            <View style={styles.datePickerContainer}>
+              {/* Month Navigation */}
+              <View style={styles.monthNavigation}>
+                <TouchableOpacity onPress={goToPrevMonth}>
+                  <Text style={styles.navButton}>{'<'}</Text>
+                </TouchableOpacity>
+                <Text style={styles.monthYearText}>
+                  {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                </Text>
+                <TouchableOpacity onPress={goToNextMonth}>
+                  <Text style={styles.navButton}>{'>'}</Text>
+                </TouchableOpacity>
+              </View>
+              
+              {/* Calendar */}
+              <View style={styles.calendar}>
+                {/* Weekday Headers */}
+                <View style={styles.weekdayHeader}>
+                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                    <Text key={index} style={styles.weekdayText}>{day}</Text>
+                  ))}
+                </View>
+                
+                {/* Calendar Days */}
+                <View style={styles.calendarDays}>
+                  {generateCalendarDays().map((dateObj, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={[
+                        styles.calendarDay,
+                        !dateObj.isCurrentMonth && styles.notCurrentMonth,
+                        isToday(dateObj.day, dateObj.month, dateObj.year) && styles.today,
+                        isSelectedDate(dateObj.day, dateObj.month, dateObj.year) && styles.selectedDay,
+                      ]}
+                      onPress={() => handleDateSelect(dateObj.day, dateObj.month, dateObj.year)}
+                    >
+                      <Text style={[
+                        styles.calendarDayText,
+                        !dateObj.isCurrentMonth && styles.notCurrentMonthText,
+                        isToday(dateObj.day, dateObj.month, dateObj.year) && styles.todayText,
+                        isSelectedDate(dateObj.day, dateObj.month, dateObj.year) && styles.selectedDayText,
+                      ]}>
+                        {dateObj.day}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </View>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setShowStartDatePicker(false)}>Cancel</Button>
+            <Button onPress={applyDateTime} mode="contained">OK</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+
+      {/* Date & Time Picker Dropdown for End Date */}
+      <Portal>
+        <Dialog visible={showEndDatePicker} onDismiss={() => setShowEndDatePicker(false)} style={styles.datePickerDialog}>
+          <Dialog.Title>Select End Date & Time</Dialog.Title>
+          <Dialog.Content>
+            <View style={styles.datePickerContainer}>
+              {/* Month Navigation */}
+              <View style={styles.monthNavigation}>
+                <TouchableOpacity onPress={goToPrevMonth}>
+                  <Text style={styles.navButton}>{'<'}</Text>
+                </TouchableOpacity>
+                <Text style={styles.monthYearText}>
+                  {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                </Text>
+                <TouchableOpacity onPress={goToNextMonth}>
+                  <Text style={styles.navButton}>{'>'}</Text>
+                </TouchableOpacity>
+              </View>
+              
+              {/* Calendar */}
+              <View style={styles.calendar}>
+                {/* Weekday Headers */}
+                <View style={styles.weekdayHeader}>
+                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                    <Text key={index} style={styles.weekdayText}>{day}</Text>
+                  ))}
+                </View>
+                
+                {/* Calendar Days */}
+                <View style={styles.calendarDays}>
+                  {generateCalendarDays().map((dateObj, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={[
+                        styles.calendarDay,
+                        !dateObj.isCurrentMonth && styles.notCurrentMonth,
+                        isToday(dateObj.day, dateObj.month, dateObj.year) && styles.today,
+                        isSelectedDate(dateObj.day, dateObj.month, dateObj.year) && styles.selectedDay,
+                      ]}
+                      onPress={() => handleDateSelect(dateObj.day, dateObj.month, dateObj.year)}
+                    >
+                      <Text style={[
+                        styles.calendarDayText,
+                        !dateObj.isCurrentMonth && styles.notCurrentMonthText,
+                        isToday(dateObj.day, dateObj.month, dateObj.year) && styles.todayText,
+                        isSelectedDate(dateObj.day, dateObj.month, dateObj.year) && styles.selectedDayText,
+                      ]}>
+                        {dateObj.day}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </View>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setShowEndDatePicker(false)}>Cancel</Button>
+            <Button onPress={applyDateTime} mode="contained">OK</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
@@ -1497,5 +1895,111 @@ const styles = StyleSheet.create({
   },
   jobName: {
     color: 'black',
+  },
+  datePickerDialog: {
+    width: '90%',
+    maxWidth: 400,
+    alignSelf: 'center',
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
+  },
+  datePickerContainer: {
+    marginTop: 10,
+  },
+  monthNavigation: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  navButton: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2196F3',
+    padding: 5,
+  },
+  monthYearText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  calendar: {
+    marginBottom: 20,
+  },
+  weekdayHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 10,
+  },
+  weekdayText: {
+    width: 30,
+    textAlign: 'center',
+    fontWeight: 'bold',
+    color: '#757575',
+  },
+  calendarDays: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+  },
+  calendarDay: {
+    width: '14.28%',
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  calendarDayText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  notCurrentMonth: {
+    opacity: 0.3,
+  },
+  notCurrentMonthText: {
+    color: '#999',
+  },
+  today: {
+    backgroundColor: '#E3F2FD',
+    borderRadius: 20,
+  },
+  todayText: {
+    color: '#2196F3',
+    fontWeight: 'bold',
+  },
+  selectedDay: {
+    backgroundColor: '#2196F3',
+    borderRadius: 20,
+  },
+  selectedDayText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  timeSelector: {
+    marginTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    paddingTop: 15,
+  },
+  timeInputRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  timeInputContainer: {
+    flex: 1,
+    marginHorizontal: 5,
+  },
+  timeLabel: {
+    fontSize: 14,
+    color: '#757575',
+    marginBottom: 5,
+  },
+  timeSelect: {
+    width: '100%',
+    height: 40,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 4,
+    paddingHorizontal: 10,
+    backgroundColor: '#fff',
   },
 }); 

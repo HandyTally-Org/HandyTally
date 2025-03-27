@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, ScrollView, Platform, Pressable, TouchableOpacity, Dimensions } from 'react-native';
-import { Text, Button, Card, SegmentedButtons, FAB, TextInput, Dialog, Portal, Divider, Chip, DataTable, ActivityIndicator, RadioButton, List, IconButton, Menu, Snackbar, Surface, Modal } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, Platform, Pressable, TouchableOpacity, Dimensions, Modal } from 'react-native';
+import { Text, Button, Card, SegmentedButtons, FAB, TextInput, Dialog, Portal, Divider, Chip, DataTable, ActivityIndicator, RadioButton, List, IconButton, Menu, Snackbar, Surface } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 import { formatCurrency, formatDate } from '../../../utils/formatting';
@@ -154,11 +154,11 @@ type JobCostItem = {
 };
 
 interface Job {
-  uid: string;
+  uid: number;  // Changed from string to number to match bigint8 in database
   title: string;
   description?: string;
   status: string;
-  client_id: string;
+  client_id: number;  // Changed from string to number to match bigint8 in database
   created_at: string;
   updated_at: string;
   start_date?: string;
@@ -180,6 +180,315 @@ interface Material {
   name: string;
   price: number;
 }
+
+// Add this new DateTimePicker component after the SimpleCalendar component
+interface DateTimePickerProps {
+  visible: boolean;
+  onDismiss: () => void;
+  onConfirm: (dateTime: string) => void;
+  initialDate?: string;
+  mode?: 'start' | 'end';
+  position?: { top: number; right: number };
+}
+
+const DateTimePicker: React.FC<DateTimePickerProps> = ({ 
+  visible, 
+  onDismiss, 
+  onConfirm, 
+  initialDate,
+  mode = 'start',
+  position = { top: 0, right: 0 }
+}) => {
+  if (!visible) return null;
+  
+  // Parse the initial date or use current date
+  const now = new Date();
+  const initialDateTime = initialDate ? new Date(initialDate) : now;
+  
+  const [year, setYear] = useState(initialDateTime.getFullYear());
+  const [month, setMonth] = useState(initialDateTime.getMonth());
+  const [selectedDate, setSelectedDate] = useState(initialDateTime.getDate());
+  const [selectedHour, setSelectedHour] = useState(initialDateTime.getHours() > 12 ? 
+    (initialDateTime.getHours() - 12).toString().padStart(2, '0') : 
+    initialDateTime.getHours().toString().padStart(2, '0'));
+  const [selectedMinute, setSelectedMinute] = useState(initialDateTime.getMinutes().toString().padStart(2, '0'));
+  const [selectedAmPm, setSelectedAmPm] = useState(initialDateTime.getHours() >= 12 ? 'PM' : 'AM');
+
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const monthName = monthNames[month];
+  
+  // Navigation functions
+  const goToPrevMonth = () => {
+    if (month === 0) {
+      setMonth(11);
+      setYear(year - 1);
+    } else {
+      setMonth(month - 1);
+    }
+  };
+  
+  const goToNextMonth = () => {
+    if (month === 11) {
+      setMonth(0);
+      setYear(year + 1);
+    } else {
+      setMonth(month + 1);
+    }
+  };
+  
+  // Calendar helper functions
+  const getDaysInMonth = (year: number, month: number) => {
+    return new Date(year, month + 1, 0).getDate();
+  };
+  
+  const getDayOfWeek = (year: number, month: number, day: number) => {
+    return new Date(year, month, day).getDay();
+  };
+  
+  const generateCalendarDays = () => {
+    const daysInMonth = getDaysInMonth(year, month);
+    const firstDayOfMonth = getDayOfWeek(year, month, 1);
+    
+    // Create array for all days in the month
+    const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+    
+    // Add empty slots for days before the first day of the month
+    const emptyStartSlots = Array.from({ length: firstDayOfMonth }, () => null);
+    const allDays = [...emptyStartSlots, ...days];
+    
+    // Create rows (weeks)
+    const weeks: (number | null)[][] = [];
+    let week: (number | null)[] = [];
+    
+    allDays.forEach((day, index) => {
+      week.push(day);
+      
+      // When we reach the end of a week or the end of all days
+      if ((index + 1) % 7 === 0 || index === allDays.length - 1) {
+        // If it's the last week and not complete, add empty slots
+        if (week.length < 7) {
+          const emptyEndSlots = Array.from({ length: 7 - week.length }, () => null);
+          week = [...week, ...emptyEndSlots];
+        }
+        weeks.push([...week]);
+        week = [];
+      }
+    });
+    
+    return weeks;
+  };
+  
+  const isToday = (day: number) => {
+    const today = new Date();
+    return day === today.getDate() && 
+           month === today.getMonth() && 
+           year === today.getFullYear();
+  };
+  
+  const isSelectedDate = (day: number) => {
+    return day === selectedDate;
+  };
+  
+  const handleDateSelect = (day: number) => {
+    setSelectedDate(day);
+  };
+  
+  // Time selection helpers
+  const generateHourOptions = () => {
+    return Array.from({ length: 12 }, (_, i) => `${i === 0 ? 12 : i}`.padStart(2, '0'));
+  };
+  
+  const generateMinuteOptions = () => {
+    return Array.from({ length: 60/5 }, (_, i) => `${i * 5}`.padStart(2, '0'));
+  };
+  
+  // Final confirmation function
+  const applyDateTime = () => {
+    try {
+      // Format the date components
+      const formattedMonth = String(month + 1).padStart(2, '0');
+      const formattedDay = String(selectedDate).padStart(2, '0');
+      
+      // Convert 12-hour format to 24-hour format
+      let hours = parseInt(selectedHour);
+      if (selectedAmPm === 'PM' && hours < 12) {
+        hours += 12;
+      } else if (selectedAmPm === 'AM' && hours === 12) {
+        hours = 0;
+      }
+      
+      const formattedHours = String(hours).padStart(2, '0');
+      const formattedMinutes = String(selectedMinute).padStart(2, '0');
+      
+      // Create the ISO date string
+      const formattedDateTime = `${year}-${formattedMonth}-${formattedDay}T${formattedHours}:${formattedMinutes}:00`;
+      
+      console.log('Formatted date time:', formattedDateTime);
+      onConfirm(formattedDateTime);
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      // Fallback to current date/time if there's an error
+      onConfirm(new Date().toISOString());
+    }
+  };
+  
+  // Inline styles for positioning
+  const pickerStyle = {
+    position: 'absolute' as 'absolute',
+    top: position.top,
+    right: position.right,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    zIndex: 9999,
+    width: 320
+  };
+  
+  // Render the date picker
+  return (
+    <View style={pickerStyle}>
+      <View style={styles.datePickerContainer}>
+        <View style={styles.calendarHeader}>
+          <View style={styles.monthYearContainer}>
+            <Text style={styles.monthYearText}>{`${monthName} ${year}`}</Text>
+          </View>
+          <View style={styles.navigationButtons}>
+            <IconButton icon="chevron-left" size={24} onPress={goToPrevMonth} />
+            <IconButton icon="chevron-right" size={24} onPress={goToNextMonth} />
+          </View>
+        </View>
+        
+        <View style={styles.calendarContainer}>
+          <View style={styles.weekdayHeader}>
+            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+              <Text key={index} style={styles.weekdayText}>{day}</Text>
+            ))}
+          </View>
+          
+          <View style={styles.daysContainer}>
+            {generateCalendarDays().map((week, weekIndex) => (
+              <View key={weekIndex} style={styles.weekRow}>
+                {week.map((day, dayIndex) => (
+                  <TouchableOpacity
+                    key={dayIndex}
+                    style={[
+                      styles.dayCell,
+                      day === null ? styles.emptyDay : {},
+                      isSelectedDate(day as number) ? styles.selectedDay : {},
+                      isToday(day as number) ? styles.todayDay : {}
+                    ]}
+                    onPress={() => day !== null ? handleDateSelect(day as number) : null}
+                    disabled={day === null}
+                  >
+                    {day !== null && (
+                      <Text style={[
+                        styles.dayText,
+                        isSelectedDate(day as number) ? styles.selectedDayText : {},
+                        isToday(day as number) ? styles.todayDayText : {}
+                      ]}>
+                        {day}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ))}
+          </View>
+        </View>
+        
+        {/* These are the time input fields with "HH:MM AM/PM" placeholders */}
+        <View style={styles.timePickerContainer}>
+          <View style={styles.timePickerColumn}>
+            <ScrollView style={styles.timeScrollView} showsVerticalScrollIndicator={true}>
+              {generateHourOptions().map((hour) => (
+                <TouchableOpacity
+                  key={hour}
+                  style={[
+                    styles.timeOption,
+                    selectedHour === hour ? styles.selectedTimeOption : {}
+                  ]}
+                  onPress={() => setSelectedHour(hour)}
+                >
+                  <Text style={[
+                    styles.timeOptionText,
+                    selectedHour === hour ? styles.selectedTimeOptionText : {}
+                  ]}>
+                    {hour}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+          
+          <View style={styles.timePickerColumn}>
+            <ScrollView style={styles.timeScrollView} showsVerticalScrollIndicator={true}>
+              {generateMinuteOptions().map((minute) => (
+                <TouchableOpacity
+                  key={minute}
+                  style={[
+                    styles.timeOption,
+                    selectedMinute === minute ? styles.selectedTimeOption : {}
+                  ]}
+                  onPress={() => setSelectedMinute(minute)}
+                >
+                  <Text style={[
+                    styles.timeOptionText,
+                    selectedMinute === minute ? styles.selectedTimeOptionText : {}
+                  ]}>
+                    {minute}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+          
+          <View style={styles.timePickerColumn}>
+            <TouchableOpacity
+              style={[
+                styles.timeOption,
+                selectedAmPm === 'AM' ? styles.selectedTimeOption : {}
+              ]}
+              onPress={() => setSelectedAmPm('AM')}
+            >
+              <Text style={[
+                styles.timeOptionText,
+                selectedAmPm === 'AM' ? { color: '#2196F3' } : {}
+              ]}>
+                AM
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[
+                styles.timeOption,
+                selectedAmPm === 'PM' ? styles.selectedTimeOption : {}
+              ]}
+              onPress={() => setSelectedAmPm('PM')}
+            >
+              <Text style={[
+                styles.timeOptionText,
+                selectedAmPm === 'PM' ? { color: '#2196F3' } : {}
+              ]}>
+                PM
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        
+        <View style={styles.dateTimePickerActions}>
+          <Button onPress={onDismiss}>Cancel</Button>
+          <Button onPress={applyDateTime}>OK</Button>
+        </View>
+      </View>
+    </View>
+  );
+};
 
 export default function JobDetailsScreen() {
   const { id } = useLocalSearchParams();
@@ -261,6 +570,16 @@ export default function JobDetailsScreen() {
   // First, update your state variables
   const [showServiceDialog, setShowServiceDialog] = useState(false);
   const [showMaterialDialog, setShowMaterialDialog] = useState(false);
+  // Add these state variables in the JobDetailsScreen component
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  // Add these state variables to track the position of the date picker
+  const [startDatePickerPosition, setStartDatePickerPosition] = useState({ top: 220, right: 20 });
+  const [endDatePickerPosition, setEndDatePickerPosition] = useState({ top: 300, right: 20 });
+  const [hasChanges, setHasChanges] = useState(false);
+  const [activeTab, setActiveTab] = useState(0);
+  const [startDatePickerVisible, setStartDatePickerVisible] = useState(false);
+  const [endDatePickerVisible, setEndDatePickerVisible] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -893,22 +1212,79 @@ export default function JobDetailsScreen() {
     try {
       setSubmitting(true);
       
+      console.log('Received job data for update:', updatedJobData);
+      
+      // Ensure uid and client_id are proper numbers (bigint8)
+      let jobId = 0;
+      let clientId = 0;
+      
+      if (updatedJobData.uid !== undefined && updatedJobData.uid !== null) {
+        jobId = typeof updatedJobData.uid === 'number' ? 
+          updatedJobData.uid : Number(updatedJobData.uid);
+          
+        if (isNaN(jobId)) {
+          throw new Error(`Invalid job ID format: "${updatedJobData.uid}"`);
+        }
+      } else {
+        throw new Error('Job ID is required');
+      }
+      
+      if (updatedJobData.client_id !== undefined && updatedJobData.client_id !== null) {
+        clientId = typeof updatedJobData.client_id === 'number' ? 
+          updatedJobData.client_id : Number(updatedJobData.client_id);
+          
+        if (isNaN(clientId)) {
+          throw new Error(`Invalid client ID format: "${updatedJobData.client_id}"`);
+        }
+      } else {
+        throw new Error('Client ID is required');
+      }
+      
+      // Extract just the data needed for the database update
+      const dbUpdateData = {
+        title: updatedJobData.title,
+        description: updatedJobData.description || '',
+        status: updatedJobData.status,
+        client_id: clientId, // Use the validated number
+        start_date: updatedJobData.start_date,
+        end_date: updatedJobData.end_date
+      };
+      
+      // Remove any undefined values
+      Object.keys(dbUpdateData).forEach(key => {
+        if (dbUpdateData[key] === undefined) {
+          delete dbUpdateData[key];
+        }
+      });
+      
+      console.log('Updating job with data:', JSON.stringify(dbUpdateData, null, 2));
+      
       const { error } = await supabase
         .from('jobs')
-        .update(updatedJobData)
-        .eq('uid', id);
-        
-      if (error) throw error;
+        .update(dbUpdateData)
+        .eq('uid', jobId);  // Use the converted number for comparison
       
-      // Refresh job data
-      fetchJobDetails();
+      if (error) {
+        console.error('Error updating job:', error);
+        alert(`Error updating job: ${error.message}`);
+        return false;
+      }
+      
+      // Make sure to update the job in state with the correct types
+      const updatedJob = {
+        ...updatedJobData,
+        uid: jobId,         // Ensure it's stored as a number
+        client_id: clientId  // Ensure it's stored as a number
+      };
+      
+      setJob(updatedJob);
       setShowEditForm(false);
-      setSnackbarMessage('Job updated successfully');
-      setSnackbarVisible(true);
-    } catch (error) {
-      console.error('Error updating job:', error);
-      setSnackbarMessage('Error updating job');
-      setSnackbarVisible(true);
+      setHasUnsavedChanges(false);
+      return true;
+    } catch (err) {
+      console.error('Error in handleUpdateJob:', err);
+      alert(`Error: ${err.message || 'Failed to update job'}`);
+      return false;
     } finally {
       setSubmitting(false);
     }
@@ -1087,7 +1463,7 @@ export default function JobDetailsScreen() {
 
   // Add a function to handle job form changes
   const handleJobFormChange = () => {
-    setHasUnsavedChanges(true);
+    setHasChanges(true);
   };
 
   // Add a function to handle form submission
@@ -1483,8 +1859,7 @@ export default function JobDetailsScreen() {
         return renderInvoicesTab();
       case 'costs':
         return renderCostsTab();
-      case 'calendar':
-        return renderCalendarTab();
+
       case 'attachments':
         return renderAttachmentsTab();
       case 'logs':
@@ -1494,14 +1869,14 @@ export default function JobDetailsScreen() {
     }
   };
 
-  const renderInfoTab = () => (
-    <View>
+  const renderInfoTab = () => {
+    return (
       <View style={styles.infoContainer}>
-        <View style={styles.infoHeader}>
-          <Text variant="titleLarge">Job Information</Text>
-          <Button
-            mode="contained"
-            icon="pencil"
+        {/* Add Edit Job button at the top right */}
+        <View style={styles.headerButtonContainer}>
+          <Button 
+            mode="contained" 
+            icon="pencil" 
             onPress={() => setEditMode(true)}
             style={styles.editButton}
           >
@@ -1509,65 +1884,36 @@ export default function JobDetailsScreen() {
           </Button>
         </View>
         
-        {/* Table with field names as column headers */}
-        <View style={styles.table}>
-          {/* Header row with field names */}
-          <View style={[styles.tableRow, { backgroundColor: '#f5f5f5' }]}>
-            <View style={[styles.tableHeaderCell, { width: '20%' }]}>
-              <Text style={styles.tableHeaderText}>Job Title</Text>
-            </View>
-            <View style={[styles.tableHeaderCell, { width: '20%' }]}>
-              <Text style={styles.tableHeaderText}>Client</Text>
-            </View>
-            <View style={[styles.tableHeaderCell, { width: '20%' }]}>
-              <Text style={styles.tableHeaderText}>Status</Text>
-            </View>
-            <View style={[styles.tableHeaderCell, { width: '20%' }]}>
-              <Text style={styles.tableHeaderText}>Start Date</Text>
-            </View>
-            <View style={[styles.tableHeaderCell, { width: '20%', borderRightWidth: 0 }]}>
-              <Text style={styles.tableHeaderText}>End Date</Text>
-            </View>
-          </View>
-          
-          {/* Data row with values */}
-          <View style={styles.tableRow}>
-            <View style={[styles.tableCell, { width: '20%' }]}>
-              <Text>{job?.title || 'N/A'}</Text>
-            </View>
-            <View style={[styles.tableCell, { width: '20%' }]}>
-              <Text>{job?.client?.name || 'N/A'}</Text>
-            </View>
-            <View style={[styles.tableCell, { width: '20%' }]}>
-              <Pressable onPress={() => setShowStatusDropdown(true)}>
-                <Chip style={{ backgroundColor: getStatusColor(job?.status) }}>
-                  {job?.status?.replace('_', ' ') || 'Not specified'}
-                </Chip>
-              </Pressable>
-            </View>
-            <View style={[styles.tableCell, { width: '20%' }]}>
-              <Text>{job?.start_date ? formatDate(job.start_date) : 'N/A'}</Text>
-            </View>
-            <View style={[styles.tableCell, { width: '20%', borderRightWidth: 0 }]}>
-              <Text>{job?.end_date ? formatDate(job.end_date) : 'N/A'}</Text>
-            </View>
-          </View>
-          
-          {/* Description row (if available) - as a separate row spanning all columns */}
-          {job?.description && (
-            <View style={styles.tableRow}>
-              <View style={[styles.tableCell, { width: '20%', backgroundColor: '#ffffff' }]}>
-                <Text style={styles.tableCellLabel}>Description</Text>
-              </View>
-              <View style={[styles.tableCell, { width: '80%', borderRightWidth: 0 }]}>
-                <Text>{job.description}</Text>
-              </View>
-            </View>
-          )}
-        </View>
+        {/* DataTable with border styling removed */}
+        <DataTable style={styles.detailsTable}>
+          <DataTable.Header>
+            <DataTable.Title>Title</DataTable.Title>
+            <DataTable.Title>Description</DataTable.Title>
+            <DataTable.Title>Client</DataTable.Title>
+            <DataTable.Title>Status</DataTable.Title>
+            <DataTable.Title>Start</DataTable.Title>
+            <DataTable.Title>Finish</DataTable.Title>
+          </DataTable.Header>
+
+          <DataTable.Row>
+            <DataTable.Cell>{job?.title || 'N/A'}</DataTable.Cell>
+            <DataTable.Cell>{job?.description || 'No description'}</DataTable.Cell>
+            <DataTable.Cell>{job?.client?.name || 'No client'}</DataTable.Cell>
+            <DataTable.Cell>
+              <Chip 
+                style={{backgroundColor: getStatusColor(job?.status)}}
+                textStyle={{color: job?.status === 'Completed' ? '#000' : '#fff'}}
+              >
+                {job?.status || 'Unknown'}
+              </Chip>
+            </DataTable.Cell>
+            <DataTable.Cell>{job?.start_date ? formatDate(job.start_date) : 'Not set'}</DataTable.Cell>
+            <DataTable.Cell>{job?.end_date ? formatDate(job.end_date) : 'Not set'}</DataTable.Cell>
+          </DataTable.Row>
+        </DataTable>
       </View>
-    </View>
-  );
+    );
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -2360,6 +2706,45 @@ export default function JobDetailsScreen() {
     setShowMaterialDialog(true);
   };
 
+  // Add this function to open the date picker
+  const openDatePicker = (mode: 'start' | 'end') => {
+    console.log(`Opening ${mode} date picker`);
+    if (mode === 'start') {
+      setStartDatePickerVisible(true);
+    } else {
+      setEndDatePickerVisible(true);
+    }
+  };
+
+  // Add this function to handle date selection
+  const handleDateTimeConfirm = (dateTime: string, mode: 'start' | 'end') => {
+    console.log(`Selected ${mode} date:`, dateTime);
+    if (!job) return;
+    
+    const updatedJob = { ...job };
+    
+    if (mode === 'start') {
+      updatedJob.start_date = dateTime;
+      setStartDatePickerVisible(false);
+    } else {
+      updatedJob.end_date = dateTime;
+      setEndDatePickerVisible(false);
+    }
+    
+    setJob(updatedJob);
+    setHasChanges(true);
+  };
+
+  const applyDateTime = () => {
+    // Format the datetime
+    const hour12 = selectedHour === '12' ? 12 : parseInt(selectedHour);
+    const hour24 = selectedAmPm === 'PM' && hour12 < 12 ? hour12 + 12 : (selectedAmPm === 'AM' && hour12 === 12 ? 0 : hour12);
+    
+    const formattedDateTime = `${year}-${String(month + 1).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}T${String(hour24).padStart(2, '0')}:${selectedMinute}:00.000Z`;
+    
+    onConfirm(formattedDateTime);
+  };
+
   return (
     <View style={styles.container}>
       <View style={[styles.navigationPane, { display: 'flex', flexDirection: 'column', height: '100%' }]}>
@@ -2419,25 +2804,7 @@ export default function JobDetailsScreen() {
               (editMode && hasUnsavedChanges) ? { color: '#cccccc' } : {}
             ]}>Costs</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.navigationItem,
-              selectedTab === 'calendar' && styles.selectedItem
-            ]}
-            onPress={() => handleNavigationItemClick('calendar')}
-            disabled={editMode && hasUnsavedChanges}
-          >
-            <MaterialCommunityIcons
-              name="calendar"
-              size={24}
-              color={selectedTab === 'calendar' ? '#000000' : '#666666'}
-            />
-            <Text style={[
-              styles.navigationText,
-              selectedTab === 'calendar' && styles.selectedText,
-              (editMode && hasUnsavedChanges) ? { color: '#cccccc' } : {}
-            ]}>Calendar</Text>
-          </TouchableOpacity>
+         
           
           {/* Spacer that takes up all available space */}
           <View style={{ flex: 1 }} />
@@ -3031,12 +3398,7 @@ const styles = StyleSheet.create({
   divider: {
     marginVertical: 8,
   },
-  calendarCard: {
-    backgroundColor: '#ffffff',
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
+  
   calendarHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -3378,5 +3740,184 @@ const styles = StyleSheet.create({
     width: '100%',
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
+  },
+  // Date Picker Styles
+  datePickerWrapper: {
+    position: 'relative',
+    width: '100%',
+  },
+  datePickerContainer: {
+    padding: 16,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  monthYearContainer: {
+    flex: 1,
+  },
+  monthYearText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  navigationButtons: {
+    flexDirection: 'row',
+  },
+  calendarContainer: {
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    paddingBottom: 16,
+  },
+  weekdayHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 8,
+  },
+  weekdayText: {
+    width: 32,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  daysContainer: {
+  },
+  weekRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginVertical: 4,
+  },
+  dayCell: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 16,
+  },
+  emptyDay: {
+    backgroundColor: 'transparent',
+  },
+  selectedDay: {
+    backgroundColor: '#2196F3',
+    borderRadius: 16,
+  },
+  todayDay: {
+    borderWidth: 1,
+    borderColor: '#2196F3',
+  },
+  dayText: {
+    textAlign: 'center',
+  },
+  selectedDayText: {
+    color: 'white',
+  },
+  todayDayText: {
+    fontWeight: 'bold',
+  },
+  timePickerContainer: {
+    flexDirection: 'row',
+    paddingTop: 16,
+  },
+  timePickerColumn: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  timeScrollView: {
+    maxHeight: 150,
+    width: '100%',
+  },
+  timeOption: {
+    padding: 8,
+    width: '100%',
+    alignItems: 'center',
+  },
+  selectedTimeOption: {
+    backgroundColor: '#f0f0f0',
+  },
+  timeOptionText: {
+    fontSize: 16,
+  },
+  selectedTimeOptionText: {
+    fontWeight: 'bold',
+    color: '#2196F3',
+  },
+  dateTimePickerActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 16,
+  },
+  saveButtonContainer: {
+    marginTop: 20,
+    marginBottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+  },
+  saveButton: {
+    flex: 1,
+    marginRight: 10,
+    paddingVertical: 8,
+  },
+  cancelButton: {
+    flex: 1,
+    marginLeft: 10,
+    paddingVertical: 8,
+  },
+  editButton: {
+    margin: 20,
+    paddingVertical: 8,
+  },
+  dateInput: {
+    flex: 1,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 4,
+    backgroundColor: '#fff',
+  },
+  disabledInput: {
+    backgroundColor: '#f0f0f0',
+    borderColor: '#ddd',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  datePickerModal: {
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 20,
+    width: '90%',
+    maxWidth: 400,
+  },
+  datePickerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  modalContainer: {
+    backgroundColor: 'white',
+    padding: 20,
+    margin: 20,
+    borderRadius: 10,
+    maxHeight: '80%',
+  },
+  detailsTable: {
+    marginBottom: 20,
+    backgroundColor: 'transparent', // Make background transparent
+    borderWidth: 0, // Remove border
+  },
+  headerButtonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    width: '100%',
+    marginBottom: 15,
+  },
+  editButton: {
+    alignSelf: 'flex-end',
   },
 }); 

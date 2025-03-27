@@ -1,7 +1,7 @@
 import { Link } from 'expo-router';
 import { View } from 'react-native';
 
-const links = ['dashboard', 'clients', 'jobs', 'services', 'materials', 'invoices', 'admin'] as const;
+const links = ['dashboard', 'clients', 'jobs', 'calendar', 'invoices', 'labor', 'inventory', 'admin'] as const;
 
 export function Navigation() {
   const getHref = (link: string) => {

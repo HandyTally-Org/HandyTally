@@ -197,7 +197,7 @@ const generateInvoiceHTML = (invoice, items, companyInfo) => {
   `;
 };
 
-type InvoiceDetailsProps = {
+export interface InvoiceDetailsProps {
   invoice: Invoice;
   items: InvoiceItem[];
   onClose: () => void;
@@ -206,7 +206,8 @@ type InvoiceDetailsProps = {
   onStatusChange?: (status: Invoice['status']) => void;
   isEditable?: boolean;
   isEditing?: boolean;
-};
+  companyLogo?: string | null;
+}
 
 export function InvoiceDetails({ 
   invoice, 
@@ -216,7 +217,8 @@ export function InvoiceDetails({
   onDelete, 
   onStatusChange,
   isEditable = true,
-  isEditing = false
+  isEditing = false,
+  companyLogo
 }: InvoiceDetailsProps) {
   const [loading, setLoading] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -314,9 +316,24 @@ export function InvoiceDetails({
   return (
     <ScrollView style={styles.container}>
       <View style={styles.contentWrapper}>
-        <Text variant="headlineMedium" style={styles.title}>
-          Invoice #{safeInvoice.invoice_number}
-        </Text>
+        <View style={styles.headerContainer}>
+          {companyLogo ? (
+            <Image 
+              source={{ uri: `data:image/png;base64,${companyLogo}` }} 
+              style={styles.logo} 
+              resizeMode="contain"
+            />
+          ) : (
+            <View style={styles.logoPlaceholder} />
+          )}
+          
+          <View style={styles.invoiceNumberContainer}>
+            <Text style={styles.invoiceNumberLabel}>
+              {invoice.status === 'estimate' ? 'ESTIMATE' : 'INVOICE'} #
+            </Text>
+            <Text style={styles.invoiceNumber}>{invoice.invoice_number}</Text>
+          </View>
+        </View>
 
         <View style={styles.section}>
           <Text>{safeInvoice.client ? safeInvoice.client.name : 'No client'}</Text>
@@ -677,5 +694,29 @@ const styles = StyleSheet.create({
   logo: {
     width: 100,
     height: 100,
+  },
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+    paddingHorizontal: 10,
+  },
+  logoPlaceholder: {
+    width: 150,
+    height: 80,
+  },
+  invoiceNumberContainer: {
+    alignItems: 'flex-end',
+  },
+  invoiceNumberLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#666',
+  },
+  invoiceNumber: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
   },
 }); 

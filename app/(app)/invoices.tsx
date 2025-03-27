@@ -91,6 +91,7 @@ export default function InvoicesScreen() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showInvoiceList, setShowInvoiceList] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [companyLogo, setCompanyLogo] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -102,6 +103,19 @@ export default function InvoicesScreen() {
     checkDatabaseSchema();
     checkAndCreateInvoiceItemsTable();
     updateDraftToEstimate();
+    checkAndFixDatabase();
+    checkDatabaseSchema()
+      .then(async () => {
+        await checkInvoicesTables();
+        await checkJobsTable();
+        fetchInvoices();
+        fetchJobs();
+        fetchClients();
+        fetchCompanyLogo();
+      })
+      .catch(error => {
+        console.error("Error in database checks:", error);
+      });
   }, []);
 
   useEffect(() => {
@@ -134,7 +148,26 @@ export default function InvoicesScreen() {
       if (createNew === 'true') {
         // Set up a new invoice with the specified job
         setShowInvoiceList(false);
-        setInvoiceToEdit(null);
+        
+        // Create a default invoice object
+        const newInvoice = {
+          uid: '',
+          invoice_number: getLastInvoiceNumber() ? (parseInt(getLastInvoiceNumber()) + 1).toString() : '1001',
+          client_id: '',
+          job_id: null,
+          issue_date: new Date().toISOString().split('T')[0],
+          due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          subtotal: 0,
+          tax_rate: 0,
+          tax_amount: 0,
+          total: 0,
+          notes: '',
+          status: 'estimate',
+          invoice_items: [],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          user_id: 0
+        };
         
         // If a job ID was provided, pre-select that job
         if (jobId) {
@@ -143,16 +176,12 @@ export default function InvoicesScreen() {
             // Pre-select the job's client as well if available
             const selectedClient = clients.find(client => client.uid === selectedJob.client_id);
             
-            // Create a partial invoice object with the pre-selected job and client
-            const newInvoice = {
-              job_id: selectedJob.uid,
-              client_id: selectedClient?.uid || '',
-              status: 'estimate'
-            };
-            
-            setInvoiceToEdit(newInvoice);
+            newInvoice.job_id = selectedJob.uid;
+            newInvoice.client_id = selectedClient?.uid || '';
           }
         }
+        
+        setInvoiceToEdit(newInvoice);
       }
     }
   }, [jobs, clients]);
@@ -165,75 +194,42 @@ export default function InvoicesScreen() {
         // Clear the localStorage item
         localStorage.removeItem('createInvoiceForJob');
         
+        // Create a default invoice object
+        const newInvoice = {
+          uid: '',
+          invoice_number: getLastInvoiceNumber() ? (parseInt(getLastInvoiceNumber()) + 1).toString() : '1001',
+          client_id: '',
+          job_id: null,
+          issue_date: new Date().toISOString().split('T')[0],
+          due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          subtotal: 0,
+          tax_rate: 0,
+          tax_amount: 0,
+          total: 0,
+          notes: '',
+          status: 'estimate',
+          invoice_items: [],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          user_id: 0
+        };
+        
         // Find the job
         const selectedJob = jobs.find(job => job.uid === jobId);
         if (selectedJob) {
           // Pre-select the job's client as well if available
           const selectedClient = clients.find(client => client.uid === selectedJob.client_id);
           
-          // Create a partial invoice object with the pre-selected job and client
-          const newInvoice = {
-            job_id: selectedJob.uid,
-            client_id: selectedClient?.uid || '',
-            status: 'estimate'
-          };
-          
-          // Show the invoice form
-          setShowInvoiceList(false);
-          setInvoiceToEdit(newInvoice);
+          newInvoice.job_id = selectedJob.uid;
+          newInvoice.client_id = selectedClient?.uid || '';
         }
+        
+        // Show the invoice form
+        setShowInvoiceList(false);
+        setInvoiceToEdit(newInvoice);
       }
     }
   }, [jobs, clients]);
-
-  useEffect(() => {
-    // Check if we have new invoice data in localStorage with timestamp
-    if (typeof window !== 'undefined') {
-      try {
-        // Find any keys that start with newInvoiceData_
-        const keys = Object.keys(localStorage);
-        const newInvoiceKeys = keys.filter(key => key.startsWith('newInvoiceData_'));
-        
-        if (newInvoiceKeys.length > 0) {
-          // Use the most recent one (highest timestamp)
-          const mostRecentKey = newInvoiceKeys.sort().pop();
-          const newInvoiceDataString = localStorage.getItem(mostRecentKey);
-          
-          // Clear all newInvoiceData_ items
-          newInvoiceKeys.forEach(key => localStorage.removeItem(key));
-          
-          if (newInvoiceDataString) {
-            // Parse the new invoice data
-            const newInvoiceData = JSON.parse(newInvoiceDataString);
-            
-            // Create a properly structured invoice object
-            const newInvoice = {
-              job_id: newInvoiceData.job_id || '',
-              client_id: newInvoiceData.client_id || '',
-              status: newInvoiceData.status || 'draft',
-              invoice_number: '',
-              issue_date: new Date().toISOString().split('T')[0],
-              due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-              subtotal: 0,
-              tax_rate: 0,
-              tax_amount: 0,
-              total: 0,
-              notes: '',
-              invoice_items: []
-            };
-            
-            console.log('Created new invoice object from timestamped data:', newInvoice);
-            
-            // Show the invoice form with the new invoice data
-            setShowInvoiceList(false);
-            setInvoiceToEdit(newInvoice);
-          }
-        }
-      } catch (error) {
-        console.error('Error handling new invoice data with timestamp:', error);
-      }
-    }
-  }, []);
 
   useEffect(() => {
     // Check if we should show the invoice form
@@ -242,9 +238,29 @@ export default function InvoicesScreen() {
       // Clear the flag
       localStorage.removeItem('showInvoiceForm');
       
-      // Show the form
-      setInvoiceToEdit(null); // No invoice to edit (creating new)
-      setShowInvoiceList(false); // Show the form
+      // Create a default invoice object
+      const newInvoice = {
+        uid: '',
+        invoice_number: getLastInvoiceNumber() ? (parseInt(getLastInvoiceNumber()) + 1).toString() : '1001',
+        client_id: '',
+        job_id: null,
+        issue_date: new Date().toISOString().split('T')[0],
+        due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        subtotal: 0,
+        tax_rate: 0,
+        tax_amount: 0,
+        total: 0,
+        notes: '',
+        status: 'estimate',
+        invoice_items: [],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        user_id: 0
+      };
+      
+      // Show the form with the new invoice
+      setInvoiceToEdit(newInvoice);
+      setShowInvoiceList(false);
     }
   }, []);
 
@@ -729,21 +745,20 @@ export default function InvoicesScreen() {
   const getFilteredInvoices = () => {
     let filtered = [...invoices];
     
-    // Apply status filter with special handling for estimate/draft
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(invoice => {
-        if (statusFilter === 'estimate') {
-          // Match both 'estimate' and 'draft' for backward compatibility
-          return invoice.status === 'estimate' || invoice.status === 'draft';
-        }
-        return invoice.status === statusFilter;
-      });
+    // Apply status filters with multi-select support
+    if (selectedStatuses.length > 0) {
+      filtered = filtered.filter(invoice => 
+        // Include this invoice if its status is in the selectedStatuses array
+        selectedStatuses.includes(invoice.status) ||
+        // Special case for 'estimate' to also match 'draft' for backward compatibility
+        (selectedStatuses.includes('estimate') && invoice.status === 'draft')
+      );
     }
     
     // Apply search filter
     if (searchQuery) {
       filtered = filtered.filter(invoice => 
-        invoice.invoice_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        invoice.invoice_number.toString().toLowerCase().includes(searchQuery.toLowerCase()) ||
         (invoice.client_name || '').toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
@@ -754,7 +769,7 @@ export default function InvoicesScreen() {
       
       switch (sortColumn) {
         case 'invoice_number':
-          comparison = a.invoice_number.localeCompare(b.invoice_number);
+          comparison = a.invoice_number.toString().localeCompare(b.invoice_number.toString());
           break;
         case 'client_name':
           comparison = (a.client_name || '').localeCompare(b.client_name || '');
@@ -1129,9 +1144,9 @@ export default function InvoicesScreen() {
             return {
               invoice_id: newInvoice.uid,
               description: item.description || '',
-              quantity: Number(item.quantity) || 0,
-              unit_price: Number(item.unit_price) || 0,
-              amount: Number(item.amount) || 0,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+              amount: item.amount,
               // Exclude material_id, service_id, and type if they're causing issues
             };
           });
@@ -1329,21 +1344,51 @@ export default function InvoicesScreen() {
     fetchInvoiceItems(invoice.uid);
   };
 
-  // Define all possible statuses
-  const allStatuses = ['draft', 'sent', 'paid', 'overdue', 'cancelled'];
-  
-  // Toggle a status filter
+  // Add a function to toggle status selection
   const toggleStatusFilter = (status: string) => {
+    if (status === 'all') {
+      // Clear all filters if 'all' is selected
+      setSelectedStatuses([]);
+      return;
+    }
+    
     if (selectedStatuses.includes(status)) {
+      // Remove the status if already selected
       setSelectedStatuses(selectedStatuses.filter(s => s !== status));
     } else {
+      // Add the status if not already selected
       setSelectedStatuses([...selectedStatuses, status]);
     }
   };
   
-  // Clear all filters
-  const clearFilters = () => {
-    setSelectedStatuses([]);
+  // Get the background color for a status button
+  const getStatusButtonColor = (status: string): string => {
+    if (status === 'all' && selectedStatuses.length === 0) {
+      return '#2196F3'; // Blue for "All" when active
+    }
+    
+    if (selectedStatuses.includes(status)) {
+      switch (status) {
+        case 'estimate':
+          return '#9E9E9E'; // Gray
+        case 'work_order':
+          return '#9C27B0'; // Purple
+        case 'sent':
+          return '#2196F3'; // Blue
+        case 'partial_paid':
+          return '#FF9800'; // Orange
+        case 'paid':
+          return '#4CAF50'; // Green
+        case 'overdue':
+          return '#F44336'; // Red
+        case 'cancelled':
+          return '#607D8B'; // Blue gray
+        default:
+          return '#2196F3'; // Default blue
+      }
+    }
+    
+    return 'transparent'; // Transparent background when not selected
   };
 
   // Add a function to handle viewing invoice details
@@ -1431,6 +1476,35 @@ export default function InvoicesScreen() {
     }
   };
 
+  // Add a function to fetch the company logo from company_attachments
+  async function fetchCompanyLogo() {
+    try {
+      console.log('Fetching company logo...');
+      const { data, error } = await supabase
+        .from('company_attachments')
+        .select('file_data, file_type')
+        .eq('type', 'logo')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (error) {
+        console.error('Error fetching company logo:', error);
+        return;
+      }
+      
+      if (data && data.file_data) {
+        console.log('Company logo found');
+        // Store the base64 image data
+        setCompanyLogo(data.file_data);
+      } else {
+        console.log('No company logo found');
+      }
+    } catch (error) {
+      console.error('Error in fetchCompanyLogo:', error);
+    }
+  }
+
   return (
     <View style={styles.container}>
       <PageHeader title="Invoices" />
@@ -1448,7 +1522,25 @@ export default function InvoicesScreen() {
         <Button
           mode="contained"
               onPress={() => {
-                setInvoiceToEdit(null); // No invoice to edit (creating new)
+                // Instead of setting invoiceToEdit to null, create a default invoice object
+                setInvoiceToEdit({
+                  uid: '',
+                  invoice_number: getLastInvoiceNumber() ? (parseInt(getLastInvoiceNumber()) + 1).toString() : '1001',
+                  client_id: '',
+                  job_id: null,
+                  issue_date: new Date().toISOString().split('T')[0],
+                  due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                  subtotal: 0,
+                  tax_rate: 0,
+                  tax_amount: 0,
+                  total: 0,
+                  notes: '',
+                  status: 'estimate',
+                  invoice_items: [],
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                  user_id: 0
+                });
                 setShowInvoiceList(false); // Show the form
               }}
           style={styles.addButton}
@@ -1460,62 +1552,126 @@ export default function InvoicesScreen() {
           <View style={styles.filtersContainer}>
             <View style={{ flexDirection: 'row', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
               <Button
-                mode={statusFilter === 'all' ? 'contained' : 'outlined'}
-                onPress={() => setStatusFilter('all')}
-                style={{ marginRight: 8 }}
+                mode={selectedStatuses.length === 0 ? 'contained' : 'outlined'}
+                onPress={() => toggleStatusFilter('all')}
+                style={{ 
+                  marginRight: 8,
+                  backgroundColor: selectedStatuses.length === 0 ? '#2196F3' : undefined,
+                  borderRadius: 4,
+                }}
+                labelStyle={{
+                  color: selectedStatuses.length === 0 ? 'white' : '#000000',
+                  fontWeight: '500',
+                }}
               >
                 All
               </Button>
-                          <Button 
-                mode={statusFilter === 'estimate' ? 'contained' : 'outlined'}
-                onPress={() => setStatusFilter('estimate')}
-                style={{ marginRight: 8 }}
+              <Button 
+                mode={selectedStatuses.includes('estimate') ? 'contained' : 'outlined'}
+                onPress={() => toggleStatusFilter('estimate')}
+                style={{ 
+                  marginRight: 8,
+                  backgroundColor: selectedStatuses.includes('estimate') ? '#9E9E9E' : undefined,
+                  borderRadius: 4,
+                }}
+                labelStyle={{
+                  color: selectedStatuses.includes('estimate') ? 'white' : '#000000',
+                  fontWeight: '500',
+                }}
               >
                 Estimate
-                          </Button>
-                          <Button 
-                mode={statusFilter === 'work_order' ? 'contained' : 'outlined'}
-                onPress={() => setStatusFilter('work_order')}
-                style={{ marginRight: 8 }}
+              </Button>
+              <Button 
+                mode={selectedStatuses.includes('work_order') ? 'contained' : 'outlined'}
+                onPress={() => toggleStatusFilter('work_order')}
+                style={{ 
+                  marginRight: 8,
+                  backgroundColor: selectedStatuses.includes('work_order') ? '#9C27B0' : undefined,
+                  borderRadius: 4,
+                }}
+                labelStyle={{
+                  color: selectedStatuses.includes('work_order') ? 'white' : '#000000',
+                  fontWeight: '500',
+                }}
               >
                 Work Order
               </Button>
               <Button
-                mode={statusFilter === 'sent' ? 'contained' : 'outlined'}
-                onPress={() => setStatusFilter('sent')}
-                style={{ marginRight: 8 }}
+                mode={selectedStatuses.includes('sent') ? 'contained' : 'outlined'}
+                onPress={() => toggleStatusFilter('sent')}
+                style={{ 
+                  marginRight: 8,
+                  backgroundColor: selectedStatuses.includes('sent') ? '#2196F3' : undefined,
+                  borderRadius: 4,
+                }}
+                labelStyle={{
+                  color: selectedStatuses.includes('sent') ? 'white' : '#000000',
+                  fontWeight: '500',
+                }}
               >
                 Sent
               </Button>
               <Button
-                mode={statusFilter === 'partial_paid' ? 'contained' : 'outlined'}
-                onPress={() => setStatusFilter('partial_paid')}
-                style={{ marginRight: 8 }}
+                mode={selectedStatuses.includes('partial_paid') ? 'contained' : 'outlined'}
+                onPress={() => toggleStatusFilter('partial_paid')}
+                style={{ 
+                  marginRight: 8,
+                  backgroundColor: selectedStatuses.includes('partial_paid') ? '#FF9800' : undefined,
+                  borderRadius: 4,
+                }}
+                labelStyle={{
+                  color: selectedStatuses.includes('partial_paid') ? 'white' : '#000000',
+                  fontWeight: '500',
+                }}
               >
                 Partial Paid
               </Button>
               <Button
-                mode={statusFilter === 'paid' ? 'contained' : 'outlined'}
-                onPress={() => setStatusFilter('paid')}
-                style={{ marginRight: 8 }}
+                mode={selectedStatuses.includes('paid') ? 'contained' : 'outlined'}
+                onPress={() => toggleStatusFilter('paid')}
+                style={{ 
+                  marginRight: 8,
+                  backgroundColor: selectedStatuses.includes('paid') ? '#4CAF50' : undefined,
+                  borderRadius: 4,
+                }}
+                labelStyle={{
+                  color: selectedStatuses.includes('paid') ? 'white' : '#000000',
+                  fontWeight: '500',
+                }}
               >
                 Paid
               </Button>
               <Button
-                mode={statusFilter === 'overdue' ? 'contained' : 'outlined'}
-                onPress={() => setStatusFilter('overdue')}
-                style={{ marginRight: 8 }}
+                mode={selectedStatuses.includes('overdue') ? 'contained' : 'outlined'}
+                onPress={() => toggleStatusFilter('overdue')}
+                style={{ 
+                  marginRight: 8,
+                  backgroundColor: selectedStatuses.includes('overdue') ? '#F44336' : undefined,
+                  borderRadius: 4,
+                }}
+                labelStyle={{
+                  color: selectedStatuses.includes('overdue') ? 'white' : '#000000',
+                  fontWeight: '500',
+                }}
               >
                 Overdue
               </Button>
               <Button
-                mode={statusFilter === 'cancelled' ? 'contained' : 'outlined'}
-                onPress={() => setStatusFilter('cancelled')}
+                mode={selectedStatuses.includes('cancelled') ? 'contained' : 'outlined'}
+                onPress={() => toggleStatusFilter('cancelled')}
+                style={{ 
+                  backgroundColor: selectedStatuses.includes('cancelled') ? '#607D8B' : undefined,
+                  borderRadius: 4,
+                }}
+                labelStyle={{
+                  color: selectedStatuses.includes('cancelled') ? 'white' : '#000000',
+                  fontWeight: '500',
+                }}
               >
                 Cancelled
-                          </Button>
-                        </View>
-                    </View>
+              </Button>
+            </View>
+          </View>
 
           <Card style={{
             flex: 1,
@@ -1773,7 +1929,7 @@ export default function InvoicesScreen() {
                     }
                   }}
                   onCancel={() => {
-                    // Go back to the list view
+                    // Simply return to the list view
                     setShowInvoiceList(true);
                   }}
                   initialInvoice={invoiceToEdit}
@@ -1781,6 +1937,7 @@ export default function InvoicesScreen() {
                   isEditing={true}
                   lastInvoiceNumber={getLastInvoiceNumber()}
                   hideTitle={true}
+                  companyLogo={companyLogo}
                 />
           </View>
         </ScrollView>
@@ -1824,6 +1981,8 @@ export default function InvoicesScreen() {
                   setShowDetailsModal(false);
                   setSelectedInvoice(null);
                 }}
+                items={invoiceItems || []}
+                companyLogo={companyLogo}
               />
             </ScrollView>
           </Modal>
@@ -1844,41 +2003,63 @@ export default function InvoicesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
     backgroundColor: '#ffffff',
   },
   searchContainer: {
     flexDirection: 'row',
-    marginBottom: 16,
+    padding: 16,
     alignItems: 'center',
+    backgroundColor: '#ffffff',
   },
   searchBar: {
     flex: 1,
-    marginRight: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#f5f5f5',
   },
   addButton: {
-    minWidth: 150,
+    marginLeft: 16,
+    backgroundColor: '#4CAF50',
   },
   filtersContainer: {
-    marginBottom: 16,
-    flexDirection: 'row',
-  },
-  filtersScroll: {
-    flexGrow: 0,
-  },
-  filterChip: {
-    marginRight: 8,
-  },
-  tableCard: {
-    flex: 1,
-    marginBottom: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
     backgroundColor: '#ffffff',
-    borderRadius: 8,
-    elevation: 2,
-    shadowColor: 'rgba(0,0,0,0.1)',
+  },
+  tableHeader: {
+    backgroundColor: '#f5f5f5',
+  },
+  tableHeaderText: {
+    fontWeight: 'bold',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  tableRow: {
+    backgroundColor: '#ffffff',
+  },
+  tableCellActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  statusBadge: {
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  statusText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  formContainer: {
+    padding: 16,
+    backgroundColor: '#ffffff', 
+    borderRadius: 4,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.8,
+    shadowOpacity: 0.2,
     shadowRadius: 1,
   },
 });

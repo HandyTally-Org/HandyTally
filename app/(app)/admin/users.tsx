@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView, Alert } from 'react-native';
 import { Text, Button, TextInput, Card, DataTable, IconButton, Dialog, Portal, Snackbar, Chip } from 'react-native-paper';
 import { supabase } from '../../../lib/supabase';
 import { useRouter } from 'expo-router';
 
+// Make sure supabase.auth has the resetPasswordForEmail method
+// If you have TypeScript errors, you may need to add this type declaration
+// This comment ensures the correct type is recognized
 type User = {
   id: string;
   email: string;
@@ -39,8 +42,6 @@ export default function UsersScreen() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
-  const [editPassword, setEditPassword] = useState('');
-  const [changePassword, setChangePassword] = useState(false);
   const [showInviteInfo, setShowInviteInfo] = useState(false);
   const [inviteDetails, setInviteDetails] = useState({ 
     email: '', 
@@ -58,7 +59,7 @@ export default function UsersScreen() {
     try {
       setLoading(true);
       
-      // Query the profiles table directly instead of auth.users
+      // Query the profiles table directly
       const { data, error } = await supabase
         .from('profiles')
         .select('*');
@@ -66,27 +67,29 @@ export default function UsersScreen() {
       if (error) {
         throw error;
       } else if (data) {
+        // Add debugging to inspect what's coming from the database
+        console.log('Raw profiles data:', data);
+        
         // Transform the data to match our User type
-        // Use first_name and last_name fields, default role to 'user'
         const formattedUsers = data.map((profile: any) => {
-          // Combine first_name and last_name for display
-          const firstName = profile.first_name || '';
-          const lastName = profile.last_name || '';
-          const fullName = [firstName, lastName].filter(Boolean).join(' ');
+          // Log each profile to see if display_name exists
+          console.log(`Profile ${profile.id}:`, {
+            display_name: profile.display_name,
+            email: profile.email
+          });
           
           return {
             id: profile.id,
             email: profile.email || '',
             phone: profile.phone || '',
             user_metadata: { 
-              name: fullName, 
-              role: 'user' as 'admin' | 'user' // Cast to fix type issue
+              name: profile.display_name || '', // Use display_name directly
+              role: profile.role || 'user'
             },
             app_metadata: {},
-            // Use current date as fallback for timestamps that might not exist
-            created_at: new Date().toISOString(),
-            last_sign_in_at: undefined,
-            confirmed_at: undefined
+            created_at: profile.created_at || new Date().toISOString(),
+            last_sign_in_at: profile.last_sign_in_at,
+            confirmed_at: profile.email_confirmed_at
           };
         });
         
@@ -122,14 +125,18 @@ export default function UsersScreen() {
       // Generate a temporary password
       const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
       
-      // Use the standard signUp method instead of admin.createUser
+      // Combine name fields for display_name
+      const displayName = [newUserFirstName, newUserLastName].filter(Boolean).join(' ');
+      
+      console.log('Creating new user with display_name:', displayName);
+      
+      // Use the standard signUp method
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: newUserEmail,
         password: tempPassword,
         options: {
           data: {
-            first_name: newUserFirstName,
-            last_name: newUserLastName,
+            display_name: displayName, // Use display_name instead of first_name/last_name
             phone: newUserPhone,
             role: newUserRole
           }
@@ -144,6 +151,25 @@ export default function UsersScreen() {
         throw new Error('Failed to create user');
       }
       
+      // Explicitly create or update the profile record with display_name
+      if (authData.user.id) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .upsert({
+            id: authData.user.id,
+            email: newUserEmail,
+            display_name: displayName,
+            role: newUserRole,
+            phone: newUserPhone
+          });
+          
+        if (profileError) {
+          console.warn('Error saving profile:', profileError);
+        } else {
+          console.log('Profile created/updated with display_name:', displayName);
+        }
+      }
+      
       // The profile should be created automatically by a Supabase trigger
       // But we'll show the invitation details
         const inviteLink = `${window.location.origin}/login`;
@@ -151,7 +177,7 @@ export default function UsersScreen() {
           email: newUserEmail,
           password: tempPassword,
           link: inviteLink,
-        userId: authData.user.id
+          userId: authData.user.id
         });
         
         // Show the invitation details dialog
@@ -160,9 +186,9 @@ export default function UsersScreen() {
         // Close the add user dialog
         setShowAddDialog(false);
         setNewUserEmail('');
-      setNewUserFirstName('');
-      setNewUserLastName('');
-      setNewUserPhone('');
+        setNewUserFirstName('');
+        setNewUserLastName('');
+        setNewUserPhone('');
         setNewUserRole('user');
         setError('');
       
@@ -212,14 +238,13 @@ export default function UsersScreen() {
 
   const handleUpdateUserRole = async (user: User, newRole: 'admin' | 'user') => {
     try {
-      // Update the user's metadata
-      const { error } = await supabase.rpc('admin_update_user_metadata', {
-        user_id: user.id,
-        metadata: {
-          ...user.user_metadata,
-          role: newRole
-        }
-      });
+      // Update profiles table directly with role
+      const { error } = await supabase
+        .from('profiles')
+        .update({ 
+          role: newRole  // Update role directly in profiles table
+        })
+        .eq('id', user.id);
       
       if (error) throw error;
       
@@ -250,10 +275,9 @@ export default function UsersScreen() {
 
   const handleEditUser = (user: User) => {
     setEditingUser(user);
+    // Use user_metadata.name which comes from profile.display_name
     setEditName(user.user_metadata?.name || '');
     setEditEmail(user.email);
-    setEditPassword('');
-    setChangePassword(false);
     setShowEditDialog(true);
   };
 
@@ -270,36 +294,29 @@ export default function UsersScreen() {
         }
       }
       
-      // Update user metadata
-      const { error: updateMetadataError } = await supabase.rpc('admin_update_user_metadata', {
-        user_id: editingUser.id,
-        metadata: {
-          ...editingUser.user_metadata,
-          name: editName
-        }
+      // Log what we're about to update
+      console.log('Updating user profile:', {
+        id: editingUser.id,
+        current_name: editingUser.user_metadata?.name || '(none)',
+        new_name: editName,
+        current_email: editingUser.email,
+        new_email: editEmail
       });
       
-      if (updateMetadataError) throw updateMetadataError;
+      // Update profiles table directly
+      const { data, error: updateProfileError } = await supabase
+        .from('profiles')
+        .update({ 
+          display_name: editName,  // Save name directly to display_name field
+          email: editEmail  // Update email if changed
+        })
+        .eq('id', editingUser.id)
+        .select(); // Add select to get the updated record
       
-      // If email is changed, update it
-      if (editEmail !== editingUser.email) {
-        const { error: updateEmailError } = await supabase.rpc('admin_update_user_email', {
-          user_id: editingUser.id,
-          email: editEmail
-        });
-        
-        if (updateEmailError) throw updateEmailError;
-      }
+      if (updateProfileError) throw updateProfileError;
       
-      // If password is being changed, update it
-      if (changePassword && editPassword) {
-        const { error: updatePasswordError } = await supabase.rpc('admin_update_user_password', {
-          user_id: editingUser.id,
-          password: editPassword
-        });
-        
-        if (updatePasswordError) throw updatePasswordError;
-      }
+      // Log the result for debugging
+      console.log('Profile update result:', data);
       
       // Update the user in our list
       setUsers(users.map(u => 
@@ -317,6 +334,9 @@ export default function UsersScreen() {
       
       showSnackbar('User updated successfully');
       setShowEditDialog(false);
+      
+      // Refresh the users list to ensure we have the latest data
+      fetchUsers();
     } catch (error: any) {
       console.error('Error updating user:', error);
       setError(error.message || 'Error updating user');
@@ -431,9 +451,19 @@ export default function UsersScreen() {
           ) : (
                   users.map(user => {
                     const { providers, providerType } = getProviderInfo(user);
+                    
+                    // Extract and log name info for debugging
+                    const displayName = user.user_metadata?.name;
+                    console.log(`Rendering user ${user.id}:`, { 
+                      email: user.email,
+                      display_name_from_metadata: displayName
+                    });
+                    
                     return (
                       <DataTable.Row key={user.id} style={{ backgroundColor: '#ffffff' }}>
-                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{user.user_metadata?.name || '(No name)'}</DataTable.Cell>
+                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
+                          {displayName || '(No name)'}
+                        </DataTable.Cell>
                         <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{user.email}</DataTable.Cell>
                         <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{user.phone || '-'}</DataTable.Cell>
                         <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{providers}</DataTable.Cell>
@@ -442,25 +472,25 @@ export default function UsersScreen() {
                         <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(user.last_sign_in_at)}</DataTable.Cell>
                         <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
                           <View style={{ flexDirection: 'row', backgroundColor: '#ffffff' }}>
-                    <IconButton
-                      icon="pencil"
-                      size={20}
-                      onPress={() => handleEditUser(user)}
+                            <IconButton
+                              icon="pencil"
+                              size={20}
+                              onPress={() => handleEditUser(user)}
                               style={{ backgroundColor: '#ffffff' }}
-                    />
-                    <IconButton
-                      icon="delete"
-                      size={20}
+                            />
+                            <IconButton
+                              icon="delete"
+                              size={20}
                               iconColor="red"
-                      onPress={() => {
-                        setSelectedUser(user);
-                        setShowDeleteDialog(true);
-                      }}
+                              onPress={() => {
+                                setSelectedUser(user);
+                                setShowDeleteDialog(true);
+                              }}
                               style={{ backgroundColor: '#ffffff' }}
-                    />
-                  </View>
-                </DataTable.Cell>
-              </DataTable.Row>
+                            />
+                          </View>
+                        </DataTable.Cell>
+                      </DataTable.Row>
                     );
                   })
           )}
@@ -571,30 +601,44 @@ export default function UsersScreen() {
               autoCapitalize="none"
             />
             
-            <View style={[styles.passwordSection, { backgroundColor: '#ffffff' }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, backgroundColor: '#ffffff' }}>
-                <Text style={{ backgroundColor: '#ffffff' }}>Change Password:</Text>
-                <Button
-                  mode={changePassword ? 'contained' : 'outlined'}
-                  onPress={() => setChangePassword(!changePassword)}
-                  style={{ marginLeft: 8 }}
-                >
-                  {changePassword ? 'Yes' : 'No'}
-                </Button>
-              </View>
-              
-              {changePassword && (
-                <TextInput
-                  label="New Password"
-                  value={editPassword}
-                  onChangeText={setEditPassword}
-                  secureTextEntry
-                  style={[styles.input, { backgroundColor: '#ffffff' }]}
-                />
-              )}
-            </View>
+            {/* Add Send Password Reset button */}
+            <Button
+              mode="outlined"
+              icon="email-outline"
+              onPress={async () => {
+                try {
+                  console.log(`Attempting to send password reset to ${editEmail}`);
+                  
+                  // First show a confirmation dialog
+                  if (confirm(`Are you sure you want to send a password reset email to ${editEmail}?`)) {
+                    const { error } = await supabase.auth.resetPasswordForEmail(
+                      editEmail,
+                      { redirectTo: `${window.location.origin}/reset-password` }
+                    );
+                    
+                    if (error) {
+                      console.error('Password reset error:', error);
+                      throw error;
+                    }
+                    
+                    console.log('Password reset email sent successfully');
+                    showSnackbar('Password reset email sent successfully');
+                  }
+                } catch (error) {
+                  console.error('Error sending password reset:', error);
+                  showSnackbar(`Error sending password reset email: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                }
+              }}
+              style={{ marginTop: 8, marginBottom: 16 }}
+            >
+              Send Password Reset
+            </Button>
             
             {error ? <Text style={[styles.error, { backgroundColor: '#ffffff' }]}>{error}</Text> : null}
+            
+            <Text style={{ marginTop: 8, fontSize: 12, color: '#666', backgroundColor: '#ffffff' }}>
+              Note: The name will be saved to profiles.display_name
+            </Text>
           </Dialog.Content>
           <Dialog.Actions style={{ backgroundColor: '#ffffff' }}>
             <Button onPress={() => setShowEditDialog(false)}>Cancel</Button>
@@ -678,10 +722,6 @@ const styles = StyleSheet.create({
   },
   error: {
     color: 'red',
-    marginBottom: 8,
-  },
-  passwordSection: {
-    marginTop: 8,
     marginBottom: 8,
   },
   inviteDetails: {

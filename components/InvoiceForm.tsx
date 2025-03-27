@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, TouchableOpacity, FlatList, Platform, StyleSheet, Modal, ScrollView } from 'react-native';
+import { View, TouchableOpacity, FlatList, Platform, StyleSheet, Modal, ScrollView, Image } from 'react-native';
 import { TextInput, Button, Card, Text, Divider, Menu, IconButton, DataTable, HelperText, List, Portal, Dialog } from 'react-native-paper';
 import { styles as globalStyles } from '../styles';
 import { Invoice, InvoiceItem } from '../app/(app)/invoices';
@@ -47,6 +47,7 @@ type InvoiceFormProps = {
   isEditing?: boolean;
   hideTitle?: boolean;
   forceInvoiceNumber?: string | null;
+  companyLogo?: string | null;
 };
 
 const webStyles = Platform.OS === 'web' 
@@ -137,14 +138,15 @@ function safeParseNumber(value: any): number {
   return isNaN(num) ? 0 : num;
 }
 
-export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCancel, initialInvoice, initialItems = [], isEditing = false, hideTitle = false, forceInvoiceNumber = null }: InvoiceFormProps) {
+export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCancel, initialInvoice, initialItems = [], isEditing = false, hideTitle = false, forceInvoiceNumber = null, companyLogo }: InvoiceFormProps) {
   // DEBUGGING - Log all props received
   console.log('INVOICE FORM PROPS:', {
     initialInvoice: JSON.stringify(initialInvoice, null, 2),
     initialItems: JSON.stringify(initialItems, null, 2),
     jobs: JSON.stringify(jobs, null, 2),
     clients: JSON.stringify(clients, null, 2),
-    isEditing
+    isEditing,
+    companyLogo: companyLogo ? 'Logo data received' : 'No logo data'
   });
 
   const generateNextInvoiceNumber = () => {
@@ -657,7 +659,33 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
             titleStyle={{ fontSize: 20, fontWeight: 'bold' }}
           />
         )}
-      <Card.Content>
+        <Card.Content>
+          {/* Company Logo and Invoice Number Header */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+            {companyLogo ? (
+              <>
+                <Image 
+                  source={{ uri: `data:image/png;base64,${companyLogo}` }} 
+                  style={{ width: 150, height: 80, resizeMode: 'contain' }}
+                />
+                <Text style={{ position: 'absolute', top: 0, left: 0, fontSize: 10, color: 'red' }}>
+                  Logo loaded
+                </Text>
+              </>
+            ) : (
+              <View style={{ width: 150, height: 80, backgroundColor: '#f5f5f5' }} />
+            )}
+            
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#666' }}>
+                {initialInvoice?.status === 'estimate' ? 'ESTIMATE' : 'INVOICE'} #
+              </Text>
+              <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#333' }}>
+                {initialInvoice?.invoice_number}
+              </Text>
+            </View>
+          </View>
+
           <View style={{ flexDirection: 'row', gap: 16, marginBottom: 16 }}>
             <View style={{ flex: 1 }}>
               <Text>Invoice Number *</Text>

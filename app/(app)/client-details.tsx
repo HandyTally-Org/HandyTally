@@ -450,7 +450,7 @@ export default function ClientDetailsScreen() {
                           <IconButton 
                             icon="pencil" 
                             size={20}
-                            onPress={() => router.push(`/jobs/${job.uid}/edit`)} 
+                            onPress={() => router.push(`/clients/editjobsclient?id=${job.uid}&client_id=${id}`)}
                           />
                           <IconButton 
                             icon="delete" 
@@ -506,7 +506,7 @@ export default function ClientDetailsScreen() {
                           <IconButton 
                             icon="pencil" 
                             size={20}
-                            onPress={() => router.push(`/invoices/${invoice.uid}/edit`)} 
+                            onPress={() => router.push(`/clients/editinvoiceclients?id=${invoice.uid}&client_id=${id}`)} 
                           />
                           <IconButton 
                             icon="delete" 

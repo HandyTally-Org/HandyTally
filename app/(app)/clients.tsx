@@ -61,7 +61,7 @@ export default function ClientsScreen() {
   const [relatedInvoices, setRelatedInvoices] = useState<Invoice[]>([]);
   const [showRelatedItemsDialog, setShowRelatedItemsDialog] = useState(false);
   const [filteredClients, setFilteredClients] = useState<Client[]>([]);
-  const [tagFilter, setTagFilter] = useState('all');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showClientDetails, setShowClientDetails] = useState(false);
   const [activeDetailTab, setActiveDetailTab] = useState('info');
@@ -74,7 +74,7 @@ export default function ClientsScreen() {
     if (clients.length > 0) {
       filterClients();
     }
-  }, [searchQuery, clients, tagFilter, sortColumn, sortDirection]);
+  }, [searchQuery, clients, selectedTags, sortColumn, sortDirection]);
 
   async function fetchClients() {
     try {
@@ -376,39 +376,28 @@ export default function ClientsScreen() {
   };
 
   const filterClients = () => {
-    const filtered = clients.filter(client => {
-      // First apply search filter
-      const matchesSearch = 
-        searchQuery === '' || 
-        client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (client.email && client.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (client.phone && client.phone.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (client.address && client.address.toLowerCase().includes(searchQuery.toLowerCase()));
-      
-      // Then apply tag filter
-      const matchesTag = 
-        tagFilter === 'all' || 
-        (client.tag && client.tag.toLowerCase() === tagFilter.toLowerCase());
-      
-      return matchesSearch && matchesTag;
-    });
+    let filtered = [...clients];
     
-    // Apply sorting
-    filtered.sort((a, b) => {
-      if (sortColumn) {
-        const aValue = a[sortColumn] || '';
-        const bValue = b[sortColumn] || '';
-        
-        if (sortDirection === 'ascending') {
-          return aValue.localeCompare(bValue);
-        } else {
-          return bValue.localeCompare(aValue);
-        }
-      }
-      return 0;
-    });
+    // Apply tag filter (multi-select)
+    if (selectedTags.length > 0) {
+      filtered = filtered.filter(client => 
+        selectedTags.includes(client.tag?.toLowerCase() || '')
+      );
+    }
     
-    setFilteredClients(filtered);
+    // Apply search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(client => 
+        client.name.toLowerCase().includes(query) ||
+        client.email.toLowerCase().includes(query) ||
+        client.phone.toLowerCase().includes(query) ||
+        client.address.toLowerCase().includes(query)
+      );
+    }
+    
+    // Return filtered and sorted clients
+    return filtered;
   };
 
   const handleSearch = (query: string) => {
@@ -707,6 +696,14 @@ export default function ClientsScreen() {
     return bytes.buffer;
   };
 
+  const toggleTagFilter = (tag: string) => {
+    if (selectedTags.includes(tag)) {
+      setSelectedTags(selectedTags.filter(t => t !== tag));
+    } else {
+      setSelectedTags([...selectedTags, tag]);
+    }
+  };
+
   return (
     <View style={styles.container}>
       {!showClientDetails ? (
@@ -840,30 +837,42 @@ export default function ClientsScreen() {
             gap: 8
           }}>
             <Button
-              mode={tagFilter === 'all' ? 'contained' : 'outlined'}
-              onPress={() => setTagFilter('all')}
-              style={{ minWidth: 80 }}
+              mode={selectedTags.length === 0 ? 'contained' : 'outlined'}
+              onPress={() => setSelectedTags([])}
+              style={{ minWidth: 80, borderRadius: 4 }}
             >
               All
             </Button>
             <Button
-              mode={tagFilter === 'existing' ? 'contained' : 'outlined'}
-              onPress={() => setTagFilter('existing')}
-              style={{ minWidth: 80 }}
+              mode={selectedTags.includes('existing') ? 'contained' : 'outlined'}
+              onPress={() => toggleTagFilter('existing')}
+              style={{ 
+                minWidth: 80, 
+                borderRadius: 4,
+                backgroundColor: selectedTags.includes('existing') ? '#2196F3' : undefined 
+              }}
             >
               Existing
             </Button>
             <Button
-              mode={tagFilter === 'pending' ? 'contained' : 'outlined'}
-              onPress={() => setTagFilter('pending')}
-              style={{ minWidth: 80 }}
+              mode={selectedTags.includes('pending') ? 'contained' : 'outlined'}
+              onPress={() => toggleTagFilter('pending')}
+              style={{ 
+                minWidth: 80, 
+                borderRadius: 4,
+                backgroundColor: selectedTags.includes('pending') ? '#FFC107' : undefined 
+              }}
             >
               Pending
             </Button>
             <Button
-              mode={tagFilter === 'prospect' ? 'contained' : 'outlined'}
-              onPress={() => setTagFilter('prospect')}
-              style={{ minWidth: 80 }}
+              mode={selectedTags.includes('prospect') ? 'contained' : 'outlined'}
+              onPress={() => toggleTagFilter('prospect')}
+              style={{ 
+                minWidth: 80, 
+                borderRadius: 4,
+                backgroundColor: selectedTags.includes('prospect') ? '#4CAF50' : undefined 
+              }}
             >
               Prospect
             </Button>

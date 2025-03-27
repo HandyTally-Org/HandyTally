@@ -98,11 +98,10 @@ export default function EditInvoiceClientScreen() {
   };
 
   const fetchInvoiceData = async (invoiceId) => {
-    console.log('Starting to fetch invoice data for ID:', invoiceId);
     try {
       setLoading(true);
       
-      // Fetch the invoice with items
+      // Fetch invoice details
       const { data: invoiceData, error: invoiceError } = await supabase
         .from('invoices')
         .select('*')
@@ -110,12 +109,6 @@ export default function EditInvoiceClientScreen() {
         .single();
       
       if (invoiceError) throw invoiceError;
-      
-      if (!invoiceData) {
-        throw new Error('Invoice not found');
-      }
-      
-      console.log('Fetched invoice:', invoiceData);
       
       // Fetch invoice items
       const { data: invoiceItemsData, error: itemsError } = await supabase
@@ -125,20 +118,30 @@ export default function EditInvoiceClientScreen() {
       
       if (itemsError) throw itemsError;
       
-      console.log('Fetched invoice items:', invoiceItemsData);
+      // Transform the invoice items to have the expected field names
+      const transformedItems = invoiceItemsData?.map(item => ({
+        ...item,
+        // Map database field names to what the form expects
+        price: item.unit_price, // Map unit_price to price
+        total: item.amount,     // Map amount to total
+        // Keep the original fields too
+        unit_price: item.unit_price,
+        amount: item.amount
+      })) || [];
       
-      // Add the items to the invoice object
-      const completeInvoice = {
+      console.log('Transformed invoice items:', transformedItems);
+      
+      // Combine the data
+      setInvoice({
         ...invoiceData,
-        invoice_items: invoiceItemsData || []
-      };
+        invoice_items: transformedItems
+      });
       
-      setInvoice(completeInvoice);
-      
-      // Fetch jobs for the invoice's client
+      // If invoice has a client_id, fetch jobs for that client
       if (invoiceData.client_id) {
-        await fetchClientJobs(invoiceData.client_id);
+        fetchClientJobs(invoiceData.client_id);
       }
+      
     } catch (err) {
       console.error('Error fetching invoice details:', err);
       setError(err.message);
@@ -155,21 +158,23 @@ export default function EditInvoiceClientScreen() {
       const { error: invoiceError } = await supabase
         .from('invoices')
         .update({
-          job_id: updatedInvoice.job_id,
           client_id: updatedInvoice.client_id,
-          invoice_number: updatedInvoice.invoice_number,
-          invoice_date: updatedInvoice.invoice_date,
+          job_id: updatedInvoice.job_id,
+          issue_date: updatedInvoice.issue_date,
           due_date: updatedInvoice.due_date,
-          total_amount: updatedInvoice.total_amount,
           status: updatedInvoice.status,
           notes: updatedInvoice.notes,
+          total: updatedInvoice.total,
+          subtotal: updatedInvoice.subtotal,
+          tax: updatedInvoice.tax,
+          tax_rate: updatedInvoice.tax_rate,
           updated_at: new Date().toISOString()
         })
         .eq('uid', invoiceId);
       
       if (invoiceError) throw invoiceError;
       
-      // Delete existing invoice items
+      // Delete existing items
       const { error: deleteError } = await supabase
         .from('invoice_items')
         .delete()
@@ -183,8 +188,8 @@ export default function EditInvoiceClientScreen() {
           invoice_id: invoiceId,
           description: item.description,
           quantity: item.quantity,
-          unit_price: item.unit_price,
-          amount: item.amount
+          unit_price: item.price,
+          amount: item.total
         }));
         
         const { error: insertError } = await supabase
@@ -194,17 +199,10 @@ export default function EditInvoiceClientScreen() {
         if (insertError) throw insertError;
       }
       
-      // Show success message
       showSnackbar('Invoice updated successfully');
       
-      // Navigate back to the client detail page
-      setTimeout(() => {
-        if (clientId) {
-          router.push(`/clients/${clientId}`);
-        } else {
-          router.back();
-        }
-      }, 1500);
+      // Navigate back to client details page after successful save
+      router.push(`/client-details?id=${invoice.client_id}`);
       
     } catch (error) {
       console.error('Error updating invoice:', error);
@@ -217,55 +215,33 @@ export default function EditInvoiceClientScreen() {
     setSnackbarVisible(true);
   };
 
-  if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" />
-        <Text style={{ marginTop: 16 }}>Loading invoice details...</Text>
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-        <Text style={{ color: 'red' }}>Error: {error}</Text>
-        <Button mode="contained" onPress={() => router.back()} style={{ marginTop: 16 }}>
-          Go Back
-        </Button>
-      </View>
-    );
-  }
-
   return (
     <ScrollView style={{ flex: 1, backgroundColor: '#fff' }}>
-      {invoice ? (
-        <>
-          <View style={{ padding: 10, backgroundColor: '#ffffff', marginBottom: 10 }}>
-            <Text style={{ fontWeight: 'bold' }}>Debug Info:</Text>
-            <Text>Invoice UID: {invoice.uid}</Text>
-            <Text>Invoice #: {invoice.invoice_number}</Text>
-            <Text>Client ID: {invoice.client_id}</Text>
-            <Text>Last Invoice #: {lastInvoiceNumber}</Text>
-          </View>
-          
-          <ForcedInvoiceForm 
-            invoice={invoice}
-            jobs={jobs}
-            clients={clients}
-            onSubmit={handleSaveInvoice}
-            onCancel={() => clientId ? router.push(`/clients/${clientId}`) : router.back()}
-            onClientChange={onClientChange}
-          />
-        </>
+      {loading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" />
+          <Text style={{ marginTop: 16 }}>Loading invoice details...</Text>
+        </View>
+      ) : error ? (
+        <View style={{ padding: 20, alignItems: 'center' }}>
+          <Text style={{ color: 'red', marginBottom: 20 }}>{error}</Text>
+          <Button mode="contained" onPress={() => router.back()}>
+            Go Back
+          </Button>
+        </View>
+      ) : invoice ? (
+        <ForcedInvoiceForm
+          invoice={invoice}
+          jobs={jobs}
+          clients={clients}
+          onSubmit={handleSaveInvoice}
+          onCancel={() => router.push(`/client-details?id=${invoice.client_id}`)}
+          onClientChange={fetchClientJobs}
+        />
       ) : (
         <View style={{ padding: 20, alignItems: 'center' }}>
-          <Text>No invoice data found</Text>
-          <Button 
-            mode="contained" 
-            onPress={() => router.back()}
-            style={{ marginTop: 16 }}
-          >
+          <Text style={{ marginBottom: 20 }}>Invoice not found</Text>
+          <Button mode="contained" onPress={() => router.back()}>
             Go Back
           </Button>
         </View>
@@ -287,11 +263,6 @@ export default function EditInvoiceClientScreen() {
 }
 
 function ForcedInvoiceForm({ invoice, jobs, clients, onSubmit, onCancel, onClientChange }) {
-  // Enhanced logging when component mounts
-  useEffect(() => {
-    console.log('DETAILED INVOICE DATA:', JSON.stringify(invoice, null, 2));
-  }, []);
-
   // Create a clean custom submit handler to ensure we preserve the values
   const handleSubmit = (formData, items) => {
     // Ensure the uid and invoice_number are preserved
@@ -300,18 +271,16 @@ function ForcedInvoiceForm({ invoice, jobs, clients, onSubmit, onCancel, onClien
       uid: invoice.uid,
       invoice_number: invoice.invoice_number
     };
-    console.log('Submitting with preserved data:', preservedData);
     onSubmit(preservedData, items);
   };
 
   return (
     <View style={{ padding: 0 }}>
-      {/* Added header to show we're definitely editing the right invoice */}
+      {/* Simplify header to show we're editing the invoice */}
       <View style={{ backgroundColor: '#ffffff', padding: 16, marginBottom: 16 }}>
         <Text style={{ fontSize: 18, fontWeight: 'bold' }}>
           Editing Invoice #{invoice.invoice_number}
         </Text>
-        <Text>ID: {invoice.uid}</Text>
       </View>
       
       <InvoiceForm

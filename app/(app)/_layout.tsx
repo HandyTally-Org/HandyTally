@@ -186,6 +186,28 @@ function CustomDrawerContent(props: any) {
             )}
           </TouchableOpacity>
 
+          {/* Schedule */}
+          <TouchableOpacity
+            onPress={() => router.push('/schedule')}
+            style={[
+              styles.drawerItem,
+              isPathActive('/schedule') && styles.drawerItemFocused,
+              isCollapsed && styles.drawerItemCollapsed
+            ]}
+          >
+            <View style={styles.drawerItemIcon}>
+              <Ionicons name="calendar-outline" size={24} color={isPathActive('/schedule') ? '#333' : '#666'} />
+            </View>
+            {!isCollapsed && (
+              <Text style={[
+                styles.drawerItemLabel,
+                isPathActive('/schedule') && styles.drawerItemLabelFocused
+              ]}>
+                Schedule
+              </Text>
+            )}
+          </TouchableOpacity>
+
           {/* Admin with submenu */}
           <View>
             <TouchableOpacity
@@ -348,6 +370,14 @@ export default function AppLayout() {
         }}
       />
       <Drawer.Screen
+        name="calendar"
+        options={{
+          drawerLabel: "Calendar",
+          title: "Calendar",
+          drawerIcon: ({ color }) => <Ionicons name="calendar-outline" size={22} color={color} />,
+        }}
+      />
+      <Drawer.Screen
         name="invoices"
         options={{
           drawerLabel: 'Invoices',
@@ -369,6 +399,14 @@ export default function AppLayout() {
           drawerLabel: 'Inventory',
           title: 'Inventory',
           drawerIcon: ({ color }) => <Ionicons name="cube-outline" size={22} color={color} />,
+        }}
+      />
+      <Drawer.Screen
+        name="schedule"
+        options={{
+          drawerLabel: "Schedule",
+          title: "Schedule",
+          drawerIcon: ({ color }) => <Ionicons name="calendar-outline" size={22} color={color} />,
         }}
       />
       <Drawer.Screen

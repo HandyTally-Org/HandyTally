@@ -62,7 +62,7 @@ export default function DashboardScreen() {
   });
   const [timeRange, setTimeRange] = useState<TimeRange>('year_to_date');
   const [timeRangeMenuVisible, setTimeRangeMenuVisible] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<InvoiceStatus>('all');
+  const [selectedInvoiceStatuses, setSelectedInvoiceStatuses] = useState<string[]>(['all']);
   const [statusMenuVisible, setStatusMenuVisible] = useState(false);
   const [allInvoices, setAllInvoices] = useState<any[]>([]);
   const [invoicesByMonth, setInvoicesByMonth] = useState<InvoicesByMonth>({});
@@ -90,9 +90,9 @@ export default function DashboardScreen() {
   useEffect(() => {
     // When either time range or status filter changes, update the chart
     if (allInvoices.length > 0) {
-      processChartData(allInvoices, timeRange, selectedFilter);
+      processChartData(allInvoices, timeRange, selectedInvoiceStatuses);
     }
-  }, [timeRange, selectedFilter]);
+  }, [timeRange, selectedInvoiceStatuses]);
 
   const fetchAllData = async () => {
     try {
@@ -370,7 +370,7 @@ export default function DashboardScreen() {
         console.log("Total sales calculated:", total);
         
         // Process data for chart with default time range and status filter
-        processChartData(data, timeRange, selectedFilter);
+        processChartData(data, timeRange, selectedInvoiceStatuses);
       }
     } catch (error) {
       console.error('Error fetching sales data:', error);
@@ -385,9 +385,38 @@ export default function DashboardScreen() {
     setTimeRangeMenuVisible(false);
   };
 
-  const handleStatusFilterChange = (status: InvoiceStatus) => {
-    setStatusFilter(status);
-    setStatusMenuVisible(false);
+  const handleStatusFilterChange = (status: string) => {
+    // If 'all' is selected, clear other selections
+    if (status === 'all') {
+      setSelectedInvoiceStatuses(['all']);
+      return;
+    }
+    
+    // Make a copy of current selections
+    let newSelected = [...selectedInvoiceStatuses];
+    
+    // If 'all' is currently selected and user selects something else, remove 'all'
+    if (newSelected.includes('all')) {
+      newSelected = newSelected.filter(item => item !== 'all');
+    }
+    
+    // Toggle the selected status
+    if (newSelected.includes(status)) {
+      // If already selected, remove it (unless it's the last one)
+      if (newSelected.length > 1) {
+        newSelected = newSelected.filter(item => item !== status);
+      }
+    } else {
+      // If not selected, add it
+      newSelected.push(status);
+    }
+    
+    // If nothing is selected, default to 'all'
+    if (newSelected.length === 0) {
+      newSelected = ['all'];
+    }
+    
+    setSelectedInvoiceStatuses(newSelected);
   };
 
   const getTimeRangeLabel = (range: TimeRange): string => {
@@ -422,27 +451,42 @@ export default function DashboardScreen() {
     }
   };
 
-  const processChartData = (invoices, timeRange, statusFilter) => {
+  const processChartData = (
+    invoices: any[],
+    range: TimeRange,
+    statuses: string[]
+  ) => {
     try {
       setSalesLoading(true);
+      console.log("Processing chart data with:", { range, statuses });
       
-      // Filter invoices by time range
-      const filteredInvoices = filterInvoicesByTimeRange(invoices, timeRange);
+      // Filter by time range
+      let filteredInvoices = filterInvoicesByTimeRange(invoices, range);
+      
+      // Filter by status
+      if (!statuses.includes('all')) {
+        filteredInvoices = filteredInvoices.filter(invoice => statuses.includes(invoice.status));
+      }
       
       // Group invoices by month and status
-      const invoicesByMonth = groupInvoicesByMonthAndStatus(filteredInvoices);
-      setInvoicesByMonth(invoicesByMonth);
+      const monthlyData = groupInvoicesByMonthAndStatus(filteredInvoices);
+      setInvoicesByMonth(monthlyData);
       
       // Create chart data
-      const chartData = createChartData(invoicesByMonth, statusFilter);
-      setChartData(chartData);
+      const newChartData = createChartData(monthlyData);
+      setChartData(newChartData);
       
       // Calculate total sales
-      const total = calculateTotalSales(filteredInvoices, statusFilter);
+      const total = calculateTotalSales(filteredInvoices);
       setTotalSales(total);
       
+      console.log("Chart data processed:", { 
+        filteredInvoices: filteredInvoices.length, 
+        months: Object.keys(monthlyData).length,
+        total 
+      });
     } catch (error) {
-      console.error('Error processing chart data:', error);
+      console.error("Error processing chart data:", error);
       setError('Failed to process sales data');
     } finally {
       setSalesLoading(false);
@@ -488,120 +532,98 @@ export default function DashboardScreen() {
   };
 
   const groupInvoicesByMonthAndStatus = (invoices) => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const statuses = ['estimate', 'work_order', 'sent', 'partial_paid', 'paid', 'overdue', 'cancelled'];
+    const result = {};
     
-    // Initialize data structure for invoices by month and status
-    const monthlyData = {};
-    months.forEach(month => {
-      monthlyData[month] = {};
-      statuses.forEach(status => {
-        monthlyData[month][status] = {
-          total: 0,
-          invoices: []
-        };
-      });
-    });
-    
-    // Populate data
     invoices.forEach(invoice => {
       if (!invoice.issue_date) return;
       
       const date = new Date(invoice.issue_date);
-      const month = months[date.getMonth()];
-      const status = invoice.status || 'estimate';
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const status = invoice.status || 'unknown';
       
-      // Make sure the status exists in our structure
-      if (!monthlyData[month][status]) {
-        monthlyData[month][status] = { total: 0, invoices: [] };
+      if (!result[monthKey]) {
+        result[monthKey] = {
+          month: monthKey,
+          label: new Date(date.getFullYear(), date.getMonth(), 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+          total: 0,
+          invoices: [],
+          byStatus: {}
+        };
       }
       
-      monthlyData[month][status].total += invoice.total || 0;
-      monthlyData[month][status].invoices.push(invoice);
+      if (!result[monthKey].byStatus[status]) {
+        result[monthKey].byStatus[status] = {
+          count: 0,
+          total: 0,
+          invoices: []
+        };
+      }
+      
+      // Add invoice to the month data
+      result[monthKey].invoices.push(invoice);
+      result[monthKey].total += invoice.total || 0;
+      
+      // Add invoice to the status-specific data
+      result[monthKey].byStatus[status].invoices.push(invoice);
+      result[monthKey].byStatus[status].count += 1;
+      result[monthKey].byStatus[status].total += invoice.total || 0;
     });
     
-    return monthlyData;
+    return result;
   };
 
-  const createChartData = (invoicesByMonth, statusFilter) => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const statuses = ['estimate', 'work_order', 'sent', 'partial_paid', 'paid', 'overdue', 'cancelled'];
+  const createChartData = (invoicesByMonth) => {
+    const months = Object.keys(invoicesByMonth).sort();
     
-    const statusColors = {
-      estimate: '#9b59b6',    // Purple
-      work_order: '#f39c12',  // Orange
-      sent: '#3498db',        // Blue
-      partial_paid: '#2ecc71', // Light Green
-      paid: '#27ae60',        // Green
-      overdue: '#e74c3c',     // Red
-      cancelled: '#95a5a6'    // Gray
-    };
+    if (months.length === 0) {
+      return { labels: [], datasets: [] };
+    }
     
-    // If a specific status filter is selected, only show that status
-    const statusesToShow = statusFilter === 'all' ? statuses : [statusFilter];
+    // Get all possible statuses across all months
+    const allStatuses = new Set();
+    months.forEach(month => {
+      Object.keys(invoicesByMonth[month].byStatus).forEach(status => {
+        allStatuses.add(status);
+      });
+    });
     
-    // Prepare datasets for the stacked bar chart
-    const datasets = statusesToShow.map(status => {
+    // Create a dataset for each status
+    const datasets = Array.from(allStatuses).map(status => {
+      // Get color for this status
+      const color = getStatusColor(status);
+      
       return {
-        label: status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' '),
+        label: status.charAt(0).toUpperCase() + status.slice(1),
         data: months.map(month => {
-          // Make sure we handle the case where the status might not exist in the data
-          if (!invoicesByMonth[month] || !invoicesByMonth[month][status]) {
-            return 0;
-          }
-          return invoicesByMonth[month][status].total || 0;
+          return invoicesByMonth[month].byStatus[status] 
+            ? invoicesByMonth[month].byStatus[status].total 
+            : 0;
         }),
-        backgroundColor: statusColors[status] || '#999999'
+        backgroundColor: color
       };
     });
     
     return {
-      labels: months,
+      labels: months.map(month => invoicesByMonth[month].label),
       datasets
     };
   };
 
-  const calculateTotalSales = (invoices, statusFilter) => {
-    // If status filter is 'all', sum all invoices, otherwise only sum those matching the filter
-    if (statusFilter === 'all') {
-      return invoices.reduce((sum, invoice) => sum + (invoice.total || 0), 0);
-    } else {
-      return filterInvoicesByStatus(invoices, statusFilter)
-        .reduce((sum, invoice) => sum + (invoice.total || 0), 0);
-    }
+  const calculateTotalSales = (invoices) => {
+    return invoices.reduce((sum, invoice) => sum + (invoice.total || 0), 0);
   };
 
-  const filterInvoicesByStatus = (invoices, statusFilter) => {
-    if (statusFilter === 'all') {
-      return invoices;
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'paid': return '#4CAF50';
+      case 'partial_paid': return '#8BC34A';
+      case 'sent': return '#2196F3';
+      case 'overdue': return '#F44336';
+      case 'estimate': return '#9C27B0';
+      case 'work_order': return '#FF9800';
+      case 'cancelled': return '#9E9E9E';
+      default: return '#607D8B';
     }
-    
-    return invoices.filter(invoice => {
-      // Handle special case for 'estimate' which might be stored as 'draft'
-      if (statusFilter === 'estimate' && (invoice.status === 'estimate' || invoice.status === 'draft')) {
-        return true;
-      }
-      
-      // Handle special case for 'work_order'
-      if (statusFilter === 'work_order' && invoice.status === 'work_order') {
-        return true;
-      }
-      
-      // Handle special case for 'partial_paid'
-      if (statusFilter === 'partial_paid' && invoice.status === 'partial_paid') {
-        return true;
-      }
-      
-      return invoice.status === statusFilter;
-    });
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2
-    }).format(amount);
   };
 
   // Function to retry loading if there was an error
@@ -794,14 +816,12 @@ export default function DashboardScreen() {
     );
   };
   
-  const getStatusColor = (status: string): string => {
-    switch (status) {
-      case 'paid': return '#71AF24'; // Green
-      case 'sent': return '#3498db'; // Blue
-      case 'draft': return '#9b59b6'; // Purple
-      case 'overdue': return '#e74c3c'; // Red
-      default: return '#95a5a6'; // Gray
-    }
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2
+    }).format(amount);
   };
 
   const showSnackbar = (message: string) => {
@@ -1305,103 +1325,30 @@ export default function DashboardScreen() {
                 </View>
                 
                 <View style={styles.filterContainer}>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <TouchableOpacity
-                      style={[
-                        styles.filterButton,
-                        selectedFilter === 'all' && styles.filterButtonActive
-                      ]}
-                      onPress={() => setSelectedFilter('all')}
-                    >
-                      <Text style={selectedFilter === 'all' ? styles.filterTextActive : styles.filterText}>
-                        All
-                      </Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity
-                      style={[
-                        styles.filterButton,
-                        selectedFilter === 'estimate' && styles.filterButtonActive
-                      ]}
-                      onPress={() => setSelectedFilter('estimate')}
-                    >
-                      <Text style={selectedFilter === 'estimate' ? styles.filterTextActive : styles.filterText}>
-                        Estimate
-                      </Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity
-                      style={[
-                        styles.filterButton,
-                        selectedFilter === 'work_order' && styles.filterButtonActive
-                      ]}
-                      onPress={() => setSelectedFilter('work_order')}
-                    >
-                      <Text style={selectedFilter === 'work_order' ? styles.filterTextActive : styles.filterText}>
-                        Work Order
-                      </Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity
-                      style={[
-                        styles.filterButton,
-                        selectedFilter === 'sent' && styles.filterButtonActive
-                      ]}
-                      onPress={() => setSelectedFilter('sent')}
-                    >
-                      <Text style={selectedFilter === 'sent' ? styles.filterTextActive : styles.filterText}>
-                        Sent
-                      </Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity
-                      style={[
-                        styles.filterButton,
-                        selectedFilter === 'partial_paid' && styles.filterButtonActive
-                      ]}
-                      onPress={() => setSelectedFilter('partial_paid')}
-                    >
-                      <Text style={selectedFilter === 'partial_paid' ? styles.filterTextActive : styles.filterText}>
-                        Partial Paid
-                      </Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity
-                      style={[
-                        styles.filterButton,
-                        selectedFilter === 'paid' && styles.filterButtonActive
-                      ]}
-                      onPress={() => setSelectedFilter('paid')}
-                    >
-                      <Text style={selectedFilter === 'paid' ? styles.filterTextActive : styles.filterText}>
-                        Paid
-                      </Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity
-                      style={[
-                        styles.filterButton,
-                        selectedFilter === 'overdue' && styles.filterButtonActive
-                      ]}
-                      onPress={() => setSelectedFilter('overdue')}
-                    >
-                      <Text style={selectedFilter === 'overdue' ? styles.filterTextActive : styles.filterText}>
-                        Overdue
-                      </Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity
-                      style={[
-                        styles.filterButton,
-                        selectedFilter === 'cancelled' && styles.filterButtonActive
-                      ]}
-                      onPress={() => setSelectedFilter('cancelled')}
-                    >
-                      <Text style={selectedFilter === 'cancelled' ? styles.filterTextActive : styles.filterText}>
-                        Cancelled
-                      </Text>
-                    </TouchableOpacity>
-                  </ScrollView>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 }}>
+                    {['all', 'estimate', 'work_order', 'sent', 'partial_paid', 'paid', 'overdue', 'cancelled'].map((status) => (
+                      <TouchableOpacity
+                        key={status}
+                        style={[
+                          styles.filterButton, 
+                          selectedInvoiceStatuses.includes(status) && styles.filterButtonActive
+                        ]}
+                        onPress={() => handleStatusFilterChange(status)}
+                      >
+                        <Text 
+                          style={[
+                            styles.filterButtonText, 
+                            selectedInvoiceStatuses.includes(status) && styles.selectedFilterButtonText
+                          ]}
+                        >
+                          {status === 'all' ? 'All' : 
+                           status === 'work_order' ? 'Work Order' :
+                           status === 'partial_paid' ? 'Partial Paid' :
+                           status.charAt(0).toUpperCase() + status.slice(1)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
                 
                 <View style={{ marginTop: 16, marginBottom: 8 }}>

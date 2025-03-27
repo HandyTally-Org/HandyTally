@@ -1,4 +1,4 @@
-import { View, StyleSheet, Image, ScrollView, Text, Pressable } from 'react-native';
+import { View, StyleSheet, Image, ScrollView, Text, Pressable, TouchableOpacity } from 'react-native';
 import { Button, Icon } from 'react-native-paper';
 import { Link, usePathname } from 'expo-router';
 import { supabase } from '../lib/api';
@@ -52,6 +52,16 @@ export function Sidebar() {
     router.push(path);
   };
 
+  const navItems = [
+    { label: 'Dashboard', icon: 'dashboard', href: '/' },
+    { label: 'Clients', icon: 'people', href: '/clients' },
+    { label: 'Jobs', icon: 'work', href: '/jobs' },
+    { label: 'Calendar', icon: 'calendar-today', href: '/calendar' },
+    { label: 'Invoices', icon: 'receipt', href: '/invoices' },
+    { label: 'Inventory', icon: 'inventory', href: '/inventory' },
+    // ... other items
+  ];
+
   return (
     <View style={{ backgroundColor: '#ffffff' }}>
       <Image 
@@ -68,85 +78,27 @@ export function Sidebar() {
       
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         <View style={styles.nav}>
-          <Link href="/" asChild>
-            <Button 
-              mode={pathname === '/' ? 'contained' : 'text'} 
-              style={styles.navButton}
-              contentStyle={styles.buttonContent}
-              labelStyle={[styles.buttonLabel, pathname === '/' ? styles.selectedButtonLabel : styles.unselectedButtonLabel]}
-              icon={({size}) => (
-                <MaterialCommunityIcons 
-                  name="view-dashboard" 
-                  size={size} 
-                  color={pathname === '/' ? 'white' : 'black'} 
-                />
-              )}
-              buttonColor={pathname === '/' ? '#444444' : undefined}
-              textColor={pathname === '/' ? 'white' : 'black'}
-            >
-              Dashboard
-            </Button>
-          </Link>
-          
-          <Link href="/clients" asChild>
-            <Button 
-              mode={pathname === '/clients' ? 'contained' : 'text'} 
-              style={styles.navButton}
-              contentStyle={styles.buttonContent}
-              labelStyle={[styles.buttonLabel, pathname === '/clients' ? styles.selectedButtonLabel : styles.unselectedButtonLabel]}
-              icon={({size}) => (
-                <MaterialCommunityIcons 
-                  name="account-group" 
-                  size={size} 
-                  color={pathname === '/clients' ? 'white' : 'black'} 
-                />
-              )}
-              buttonColor={pathname === '/clients' ? '#444444' : undefined}
-              textColor={pathname === '/clients' ? 'white' : 'black'}
-            >
-              Clients
-            </Button>
-          </Link>
-          
-          <Link href="/jobs" asChild>
-            <Button 
-              mode={pathname === '/jobs' ? 'contained' : 'text'} 
-              style={styles.navButton}
-              contentStyle={styles.buttonContent}
-              labelStyle={[styles.buttonLabel, pathname === '/jobs' ? styles.selectedButtonLabel : styles.unselectedButtonLabel]}
-              icon={({size}) => (
-                <MaterialCommunityIcons 
-                  name="briefcase" 
-                  size={size} 
-                  color={pathname === '/jobs' ? 'white' : 'black'} 
-                />
-              )}
-              buttonColor={pathname === '/jobs' ? '#444444' : undefined}
-              textColor={pathname === '/jobs' ? 'white' : 'black'}
-            >
-              Jobs
-            </Button>
-          </Link>
-          
-          <Link href="/invoices" asChild>
-            <Button 
-              mode={pathname === '/invoices' ? 'contained' : 'text'} 
-              style={styles.navButton}
-              contentStyle={styles.buttonContent}
-              labelStyle={[styles.buttonLabel, pathname === '/invoices' ? styles.selectedButtonLabel : styles.unselectedButtonLabel]}
-              icon={({size}) => (
-                <MaterialCommunityIcons 
-                  name="file-document" 
-                  size={size} 
-                  color={pathname === '/invoices' ? 'white' : 'black'} 
-                />
-              )}
-              buttonColor={pathname === '/invoices' ? '#444444' : undefined}
-              textColor={pathname === '/invoices' ? 'white' : 'black'}
-            >
-              Invoices
-            </Button>
-          </Link>
+          {navItems.map((item) => (
+            <Link key={item.href} href={item.href} asChild>
+              <Button 
+                mode={pathname === item.href ? 'contained' : 'text'} 
+                style={styles.navButton}
+                contentStyle={styles.buttonContent}
+                labelStyle={[styles.buttonLabel, pathname === item.href ? styles.selectedButtonLabel : styles.unselectedButtonLabel]}
+                icon={({size}) => (
+                  <MaterialCommunityIcons 
+                    name={item.icon} 
+                    size={size} 
+                    color={pathname === item.href ? 'white' : 'black'} 
+                  />
+                )}
+                buttonColor={pathname === item.href ? '#444444' : undefined}
+                textColor={pathname === item.href ? 'white' : 'black'}
+              >
+                {item.label}
+              </Button>
+            </Link>
+          ))}
           
           <Link href="/services" asChild>
             <Button 
@@ -165,26 +117,6 @@ export function Sidebar() {
               textColor={pathname === '/services' ? 'white' : 'black'}
             >
               Labor
-            </Button>
-          </Link>
-          
-          <Link href="/materials" asChild>
-            <Button 
-              mode={pathname === '/materials' ? 'contained' : 'text'} 
-              style={styles.navButton}
-              contentStyle={styles.buttonContent}
-              labelStyle={[styles.buttonLabel, pathname === '/materials' ? styles.selectedButtonLabel : styles.unselectedButtonLabel]}
-              icon={({size}) => (
-                <MaterialCommunityIcons 
-                  name="package-variant-closed" 
-                  size={size} 
-                  color={pathname === '/materials' ? 'white' : 'black'} 
-                />
-              )}
-              buttonColor={pathname === '/materials' ? '#444444' : undefined}
-              textColor={pathname === '/materials' ? 'white' : 'black'}
-            >
-              Inventory
             </Button>
           </Link>
           
@@ -266,6 +198,22 @@ export function Sidebar() {
               </View>
             )}
           </View>
+          
+          <TouchableOpacity 
+            style={[styles.navButton, isActive('/schedule') && styles.activeNavButton]} 
+            onPress={() => navigateTo('/schedule')}
+          >
+            <MaterialIcons name="schedule" size={24} color={isActive('/schedule') ? 'white' : 'black'} />
+            <Text style={[styles.navButtonLabel, isActive('/schedule') && styles.selectedButtonLabel]}>Schedule</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.navButton, isActive('/inventory') && styles.activeNavButton]} 
+            onPress={() => navigateTo('/inventory')}
+          >
+            <MaterialIcons name="inventory" size={24} color={isActive('/inventory') ? 'white' : 'black'} />
+            <Text style={[styles.navButtonLabel, isActive('/inventory') && styles.selectedButtonLabel]}>Inventory</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
       
@@ -415,5 +363,11 @@ const styles = StyleSheet.create({
   },
   darkGrayNavItem: {
     backgroundColor: '#444444',
+  },
+  activeNavButton: {
+    backgroundColor: '#444444',
+  },
+  navButtonLabel: {
+    marginLeft: 16,
   },
 }); 
