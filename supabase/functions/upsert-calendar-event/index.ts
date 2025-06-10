@@ -130,8 +130,8 @@ serve(async (req) => {
         if (type === 'UPDATE' && table === 'jobs') {
             // Handle job update
             console.log('Job updated uid:', record.uid);
-            const {startdate: old_startdate, enddate: old_enddate} = old_record;
-            const {startdate: startdate, enddate: enddate} = record
+            const {start_date: old_startdate, end_date: old_enddate} = old_record;
+            const {start_date: startdate, end_date: enddate} = record;
             // TODO - fetch and update calendar event
             // ...
         }
