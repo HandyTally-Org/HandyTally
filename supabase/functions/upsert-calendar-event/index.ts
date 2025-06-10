@@ -66,14 +66,14 @@ serve(async (req) => {
 
             // fetch client for client.email and client.address using supabase client
             const supabase = createClient(Deno.env.get('SUPABASE_URL') as string, Deno.env.get('SUPABASE_ANON_KEY') as string)
-            const {data, error} = await supabase.from('clients').select().eq('uid', record.client_id);
+            const {data: client, error} = await supabase.from('clients').select().eq('uid', record.client_id).single();
 
-            if (error || !data) {
+            if (error) {
                 console.error("Error fetching client data: ", error);
-                return new Response('Error fetching client data:' + error.message, {status: 400})
+                return new Response('Error fetching client data: ' + error.message, {status: 400});
             }
 
-            const client = data[0];
+            console.log('Client info:', client);
 
             console.log('Client info:', client)
 
