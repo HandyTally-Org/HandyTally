@@ -109,6 +109,7 @@ serve(async (req) => {
                                 email: client.email,
                                 status: "noreply",
                             }],
+                        notifyParticipants: true,
 
                     },
                     queryParams: {
@@ -118,6 +119,16 @@ serve(async (req) => {
                 })
 
                 console.log('Event:', event);
+                console.log('Event ID:', event.data.id);
+                // update job in supabase with nylas event id
+                const { error: updateError } = await supabase
+                    .from('jobs')
+                    .update({ calendar_event_id: event.data.id })
+                    .eq('uid', record.uid);
+                if (updateError) {
+                    console.error('Error updating job with calendar event ID:', updateError);
+                    return new Response('Error updating job with calendar event ID: ' + updateError.message, {status: 500})
+                }
                 return new Response(JSON.stringify(event.data), {headers: {'Content-Type': 'application/json'}});
             } catch (error) {
                 console.error('Error sending calendar invite:', error)
