@@ -33,6 +33,8 @@ const supabase = createClient(
 );
 
 // this edge function is triggered via database webhooks on the jobs table
+// Webhook: https://supabase.com/dashboard/project/evgopevhaapzyvqulwjb/integrations/webhooks/webhooks
+// Edge Function: https://supabase.com/dashboard/project/evgopevhaapzyvqulwjb/functions/upsert-calendar-event
 serve(async (req) => {
   try {
     // Check if the request method is OPTIONS (CORS preflight)
