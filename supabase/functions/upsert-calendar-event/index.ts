@@ -77,7 +77,7 @@ serve(async (req) => {
     if (type === "DELETE" && table === "jobs") {
       // Handle job update
       console.log("Job deleted uid:", old_record.uid);
-      // fetch and delete calendar event
+      // fetch and delete calendar event - old_record contains the previous state of the record
       if (!old_record.calendar_event_id) {
         return new Response("No calendar event ID to delete", { status: 400 });
       } else {
