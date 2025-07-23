@@ -4,6 +4,7 @@ import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions } from 'react-native';
 import { DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawer';
 import { useState, useEffect } from 'react';
+import {supabase} from "@/lib/supabase";
 
 // Custom drawer content component
 function CustomDrawerContent(props: any) {
@@ -34,6 +35,16 @@ function CustomDrawerContent(props: any) {
   const isPathPartOfRoute = (path: string) => {
     return pathname.startsWith(path) && path !== '/';
   };
+
+    const handleSignOut = async () => {
+        try {
+            const { error } = await supabase.auth.signOut();
+            if (error) throw error;
+            router.replace('/login');
+        } catch (error) {
+            console.error('Error signing out:', error);
+        }
+    };
 
   // Auto-expand admin menu if on an admin page
   useEffect(() => {
@@ -318,6 +329,11 @@ function CustomDrawerContent(props: any) {
               </View>
               <Text style={styles.copyrightText}>© HandyTally</Text>
               <Text style={styles.versionText}>v1.0</Text>
+                {/* Sign Out button at the very bottom */}
+                <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+                    <Ionicons name="log-out-outline" size={20} color="#333" />
+                    <Text style={styles.signOutText}>Sign Out</Text>
+                </TouchableOpacity>
             </View>
           )}
       </View>
@@ -453,6 +469,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+    signOutButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 15,
+        borderTopWidth: 1,
+        borderTopColor: '#e0e0e0',
+    },
+    signOutText: {
+        marginLeft: 10,
+        fontSize: 16,
+        color: '#333',
+    },
   drawerContent: {
     flex: 1,
     backgroundColor: '#ffffff',
