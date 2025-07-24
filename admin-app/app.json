@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "Admin App",
+    "slug": "expo-admin-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": ["web"],
+    "web": {
+      "bundler": "metro"
+    },
+    "assetBundlePatterns": ["**/*"]
+  }
+}
