@@ -82,7 +82,7 @@ function CustomDrawerContent(props: any) {
                 styles.drawerItemLabel,
                 isPathActive('/') && styles.drawerItemLabelFocused
               ]}>
-                Dashboard
+                Dashboard Text
               </Text>
             )}
           </TouchableOpacity>
