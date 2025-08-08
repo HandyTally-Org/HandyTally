@@ -146,7 +146,7 @@ export const OrganizationForm: React.FC<OrganizationFormProps> = ({
                 newErrors.subdomain = 'Subdomain must be less than 63 characters';
             } else {
                 // Check for reserved subdomains
-                const reserved = ['www', 'api', 'admin', 'app', 'mail', 'ftp', 'localhost', 'staging', 'test', 'dev', 'demo'];
+                const reserved = ['www', 'api', 'admin', 'app', 'mail', 'ftp', 'localhost', 'staging', 'test'];
                 if (reserved.includes(subdomain)) {
                     newErrors.subdomain = 'This subdomain is reserved and cannot be used';
                 } else if (subdomainCheck.available === false) {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Alert, Clipboard } from 'react-native';
+import {View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Alert, Clipboard, Platform} from 'react-native';
 import { OrganizationForm } from '../components/OrganizationForm';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -8,8 +8,8 @@ import { useAuth } from '../hooks/useAuth';
 import { Organization } from '../types';
 import { COLORS, SPACING, FONT_SIZES } from '../utils/constants';
 
-const BASE_DOMAIN = process.env.EXPO_PUBLIC_BASE_DOMAIN || 'yourdomain.com';
-const VERCEL_TEAM_ID = process.env.EXPO_PUBLIC_VERCEL_TEAM_ID || 'dylangolows-projects';
+const BASE_DOMAIN = process.env.EXPO_PUBLIC_BASE_DOMAIN || 'handytally.com';
+const VERCEL_TEAM_ID = process.env.EXPO_PUBLIC_VERCEL_TEAM_ID || 'handy-tally-d2726825';
 
 export const OrganizationsScreen: React.FC = () => {
     const [showForm, setShowForm] = useState(false);
@@ -46,15 +46,13 @@ export const OrganizationsScreen: React.FC = () => {
         );
     };
 
-    const openUrl = async (url: string, label: string) => {
+    const openUrl = (url: string, label: string) => {
         try {
-            const supported = await Linking.canOpenURL(url);
-            if (supported) {
-                await Linking.openURL(url);
-            } else {
-                Alert.alert('Error', `Cannot open ${label}`);
-            }
+            // Ensure URL has protocol
+            const fullUrl = url.startsWith('http') ? url : `https://${url}`;
+            window.open(fullUrl, '_blank', 'noopener,noreferrer');
         } catch (error) {
+            console.error('Error opening URL:', error);
             Alert.alert('Error', `Failed to open ${label}`);
         }
     };
@@ -164,10 +162,19 @@ export const OrganizationsScreen: React.FC = () => {
     );
 
     return (
-        <ScrollView
-            style={styles.container}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={true}
+        // <ScrollView
+        //     style={styles.container}
+        //     contentContainerStyle={[styles.scrollContent, {flexGrow: 1}]}
+        //     showsVerticalScrollIndicator={true}
+        //     scrollEnabled={true}
+        // >
+        <div
+            style={{
+                height: 'calc(100vh - 60px)',
+                overflow: 'auto',
+                backgroundColor: COLORS.gray100,
+                padding: SPACING.xl,
+            }}
         >
             <View style={styles.header}>
                 <Text style={styles.title}>Organization Management</Text>
@@ -194,8 +201,11 @@ export const OrganizationsScreen: React.FC = () => {
             <View style={styles.organizationsContainer}>
                 {organizations.map(renderOrganization)}
             </View>
-        </ScrollView>
+        {/*</ScrollView>*/}
+        {/*</View>*/}
+        </div>
     );
+
 };
 
 const styles = StyleSheet.create({
@@ -228,7 +238,7 @@ const styles = StyleSheet.create({
         fontSize: FONT_SIZES.lg,
         fontWeight: '600',
         color: COLORS.gray900,
-        marginBottom: SPACING.md,
+        marginBottom: SPACING.lg,
     },
     organizationsContainer: {
         // Container for all organization cards

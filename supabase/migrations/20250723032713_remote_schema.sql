@@ -539,10 +539,6 @@ ALTER TABLE ONLY "public"."user_roles"
 
 
 
-CREATE OR REPLACE TRIGGER "on-job-update" AFTER INSERT OR DELETE OR UPDATE ON "public"."jobs" FOR EACH ROW EXECUTE FUNCTION "supabase_functions"."http_request"('https://evgopevhaapzyvqulwjb.supabase.co/functions/v1/upsert-calendar-event', 'POST', '{"Content-type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2Z29wZXZoYWFwenl2cXVsd2piIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MDQzMTM4MywiZXhwIjoyMDU2MDA3MzgzfQ.t4o9hujb9DaV8Em-4hEfazhk_WzashFn4QnoxzZ9jSc"}', '{}', '5000');
-
-
-
 ALTER TABLE ONLY "public"."company_attachments"
     ADD CONSTRAINT "company_attachments_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."company"("uid") ON UPDATE CASCADE;
 
