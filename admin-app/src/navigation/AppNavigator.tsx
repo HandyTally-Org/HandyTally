@@ -1,5 +1,5 @@
 // src/navigation/AppNavigator.tsx
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { View, ActivityIndicator, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
@@ -13,21 +13,29 @@ import { COLORS, SPACING, FONT_SIZES, BREAKPOINTS } from '../utils/constants';
 const Stack = createStackNavigator();
 
 // Custom Top Navigation Component for Admin App
-const TopNavigation = ({ navigation, route }: any) => {
+const TopNavigation = React.memo(({ navigation, route }: any) => {
     const { signOut, user } = useAuth();
-    const screenWidth = Dimensions.get('window').width;
-    const isMobile = screenWidth < BREAKPOINTS.mobile;
 
-    // All navigation items for admin app
-    const navItems = [
+    // Memoize the mobile check to prevent unnecessary re-renders
+    const isMobile = useMemo(() => {
+        const screenWidth = Dimensions.get('window').width;
+        return screenWidth < BREAKPOINTS.mobile;
+    }, []);
+
+    // All navigation items for admin app - memoized to prevent recreation
+    const navItems = useMemo(() => [
         { name: 'Dashboard', title: 'Dashboard' },
         { name: 'Users', title: 'Users' },
         { name: 'Organizations', title: 'Organizations' },
-    ];
+    ], []);
 
-    const handleSignOut = async () => {
+    const handleSignOut = useCallback(async () => {
         await signOut();
-    };
+    }, [signOut]);
+
+    const handleNavigation = useCallback((screenName: string) => {
+        navigation.navigate(screenName);
+    }, [navigation]);
 
     return (
         <View style={[styles.topNav, isMobile && styles.topNavMobile]}>
@@ -43,7 +51,7 @@ const TopNavigation = ({ navigation, route }: any) => {
                                 route.name === item.name && styles.navItemActive,
                                 isMobile && styles.navItemMobile
                             ]}
-                            onPress={() => navigation.navigate(item.name)}
+                            onPress={() => handleNavigation(item.name)}
                         >
                             <Text style={[
                                 styles.navItemText,
@@ -70,31 +78,41 @@ const TopNavigation = ({ navigation, route }: any) => {
             </View>
         </View>
     );
-};
+});
 
-const AdminStack = () => {
+TopNavigation.displayName = 'TopNavigation';
+
+const AdminStack = React.memo(() => {
+    // Memoize the screen options function to prevent recreation
+    const screenOptions = useCallback(({ navigation, route }: any) => ({
+        header: () => <TopNavigation navigation={navigation} route={route} />,
+    }), []);
+
     return (
-        <Stack.Navigator
-            screenOptions={({ navigation, route }) => ({
-                header: () => <TopNavigation navigation={navigation} route={route} />,
-            })}
-        >
+        <Stack.Navigator screenOptions={screenOptions}>
             <Stack.Screen name="Dashboard" component={DashboardScreen} />
             <Stack.Screen name="Users" component={UsersScreen} />
             <Stack.Screen name="Organizations" component={OrganizationsScreen} />
         </Stack.Navigator>
     );
-};
+});
 
-const LoadingScreen = () => (
+AdminStack.displayName = 'AdminStack';
+
+const LoadingScreen = React.memo(() => (
     <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
         <Text style={styles.loadingText}>Loading Admin Panel...</Text>
     </View>
-);
+));
+
+LoadingScreen.displayName = 'LoadingScreen';
 
 export const AppNavigator: React.FC = () => {
     const { user, loading } = useAuth();
+
+    // Memoize the screen options to prevent recreation
+    const screenOptions = useMemo(() => ({ headerShown: false }), []);
 
     if (loading) {
         return <LoadingScreen />;
@@ -102,7 +120,7 @@ export const AppNavigator: React.FC = () => {
 
     return (
         <NavigationContainer>
-            <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Navigator screenOptions={screenOptions}>
                 {user ? (
                     <Stack.Screen name="AdminStack" component={AdminStack} />
                 ) : (
