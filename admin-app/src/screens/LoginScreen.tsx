@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, Alert, ScrollView, Dimensions } from 'react-native';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
@@ -40,19 +40,8 @@ export const LoginScreen: React.FC = () => {
     const screenWidth = Dimensions.get('window').width;
     const isMobile = screenWidth < BREAKPOINTS.mobile;
 
-    // Create a proper form element for web
-    const FormWrapper = ({ children }: { children: React.ReactNode }) => {
-        // On web, use actual form element
-        if (typeof window !== 'undefined') {
-            return React.createElement('form', {
-                onSubmit: handleLogin,
-                style: { width: '100%' },
-                autoComplete: 'on',
-            }, children);
-        }
-        // On mobile, use View
-        return <View style={{ width: '100%' }}>{children}</View>;
-    };
+    // Memoize the platform check to prevent re-renders
+    const isWeb = useMemo(() => typeof window !== 'undefined', []);
 
     // Test in your login screen
     const testDB = async () => {
@@ -77,7 +66,7 @@ export const LoginScreen: React.FC = () => {
                     <Text style={styles.subtitle}>Sign in to access the admin panel</Text>
 
                     <Card style={[styles.formCard, isMobile && styles.mobileFormCard]}>
-                        <FormWrapper>
+                        <View style={{ width: '100%' }}>
                             <Input
                                 label="Email"
                                 value={email}
@@ -85,6 +74,7 @@ export const LoginScreen: React.FC = () => {
                                 placeholder="admin@example.com"
                                 type="email"
                                 error={!email.includes('@') && email.length > 0 ? 'Please enter a valid email' : ''}
+                                autoComplete="email"
                             />
 
                             <Input
@@ -94,6 +84,7 @@ export const LoginScreen: React.FC = () => {
                                 placeholder="Enter your password"
                                 secureTextEntry
                                 type="password"
+                                autoComplete="current-password"
                             />
 
                             <Button
@@ -103,8 +94,8 @@ export const LoginScreen: React.FC = () => {
                                 style={styles.loginButton}
                                 fullWidth
                             />
-                        </FormWrapper>
-                        <Button title="Test DB" onPress={testDB} />
+                        </View>
+                        {/*<Button title="Test DB" onPress={testDB} />*/}
                     </Card>
                 </View>
             </View>
