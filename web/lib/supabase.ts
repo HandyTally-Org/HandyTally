@@ -2,9 +2,9 @@ import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
 import { customStorage } from './customStorage';
 
-// Replace with your Supabase URL and anon key
-const supabaseUrl = 'https://evgopevhaapzyvqulwjb.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2Z29wZXZoYWFwenl2cXVsd2piIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDA0MzEzODMsImV4cCI6MjA1NjAwNzM4M30.asYGfJtuoNoJ6s3sOYUc0FRAwHLAVTq1XWqLdGsOZdA';
+// Self-hosted Supabase instance
+const supabaseUrl = 'https://supabase.axiappm.com';
+const supabaseAnonKey = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc2NTc3MDAwMCwiZXhwIjo0OTIxNDQzNjAwLCJyb2xlIjoiYW5vbiJ9.gO1H0XzlOU2T9ayabs3A5k6RsNLqqCUv93IG8k3wflk';
 
 // Check if we're in a browser environment
 const isServer = typeof window === 'undefined';
