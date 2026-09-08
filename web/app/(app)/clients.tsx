@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Platform } from 'react-native';
-import { Text, Button, Searchbar, Card, DataTable, IconButton, Dialog, Portal, Snackbar, List, FAB, ActivityIndicator, TextInput, Menu } from 'react-native-paper';
+import { Text, Button, Searchbar, Card, DataTable, IconButton, Dialog, Portal, Snackbar, List, FAB, ActivityIndicator, TextInput } from 'react-native-paper';
 import { supabase } from '../../lib/api';
 import { styles as globalStyles } from '../../styles';
 import { ClientForm } from '../../app/components/clientform';
@@ -43,11 +43,11 @@ type Invoice = {
   due_date?: string;
 };
 
-// Tags a client can be assigned, with the colours used by the tag filter buttons.
-const CLIENT_TAGS: { value: string; label: string; color: string }[] = [
-  { value: 'existing', label: 'Existing', color: '#2196F3' },
-  { value: 'pending', label: 'Pending', color: '#FFC107' },
-  { value: 'prospect', label: 'Prospect', color: '#4CAF50' },
+// Tags a client can be assigned, matching the tag filter buttons.
+const CLIENT_TAGS: { value: string; label: string }[] = [
+  { value: 'existing', label: 'Existing' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'prospect', label: 'Prospect' },
 ];
 
 export default function ClientsScreen() {
@@ -72,8 +72,6 @@ export default function ClientsScreen() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showClientDetails, setShowClientDetails] = useState(false);
   const [activeDetailTab, setActiveDetailTab] = useState('info');
-  // uid of the client whose inline tag dropdown is currently open
-  const [tagMenuClientId, setTagMenuClientId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchClients();
@@ -366,8 +364,7 @@ export default function ClientsScreen() {
   const handleTagChange = async (clientUid: string, tag: string) => {
     const previousClients = clients;
 
-    // Update locally first so the dropdown closes onto the new value immediately.
-    setTagMenuClientId(null);
+    // Update locally first so the dropdown lands on the new value immediately.
     setClients(clients.map(client =>
       client.uid === clientUid ? { ...client, tag } : client
     ));
@@ -389,9 +386,6 @@ export default function ClientsScreen() {
       showSnackbar(error instanceof Error ? error.message : 'Error updating tag');
     }
   };
-
-  const getTagColor = (tag: string | null | undefined): string =>
-    CLIENT_TAGS.find(t => t.value === tag)?.color ?? '#999999';
 
   const getStatusColor = (status: string | null | undefined): string => {
     if (!status) return '#999999'; // Default gray for null/undefined
@@ -985,55 +979,25 @@ export default function ClientsScreen() {
                 <DataTable.Cell>{client.phone || '-'}</DataTable.Cell>
                 <DataTable.Cell>{client.address || '-'}</DataTable.Cell>
                 <DataTable.Cell>
-                  <Menu
-                    visible={tagMenuClientId === client.uid}
-                    onDismiss={() => setTagMenuClientId(null)}
-                    anchor={
-                      <TouchableOpacity
-                        onPress={(e: any) => {
-                          // Keep the row's navigation from firing on the dropdown
-                          e?.stopPropagation?.();
-                          setTagMenuClientId(client.uid);
-                        }}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          paddingVertical: 4,
-                          paddingHorizontal: 8,
-                          borderRadius: 4,
-                          borderWidth: 1,
-                          borderColor: '#e0e0e0',
-                        }}
-                      >
-                        <View style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: 4,
-                          backgroundColor: getTagColor(client.tag),
-                          marginRight: 6,
-                        }} />
-                        <Text style={{ fontSize: 13, color: '#333333' }}>
-                          {CLIENT_TAGS.find(t => t.value === client.tag)?.label ?? 'Set tag'}
-                        </Text>
-                        <MaterialIcons name="arrow-drop-down" size={18} color="#666666" />
-                      </TouchableOpacity>
-                    }
+                  {/* onClick stops the row's navigation firing when the dropdown is used */}
+                  <select
+                    value={client.tag || ''}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => handleTagChange(client.uid, e.target.value)}
+                    style={{
+                      padding: 8,
+                      borderRadius: 4,
+                      borderColor: '#ccc',
+                      backgroundColor: '#ffffff',
+                      color: '#000000',
+                      fontWeight: 'bold'
+                    }}
                   >
+                    <option value="">No Tag</option>
                     {CLIENT_TAGS.map(tag => (
-                      <Menu.Item
-                        key={tag.value}
-                        onPress={() => handleTagChange(client.uid, tag.value)}
-                        title={tag.label}
-                        leadingIcon={client.tag === tag.value ? 'check' : undefined}
-                      />
+                      <option key={tag.value} value={tag.value}>{tag.label}</option>
                     ))}
-                    {!!client.tag && (
-                      <Menu.Item
-                        onPress={() => handleTagChange(client.uid, '')}
-                        title="Clear tag"
-                      />
-                    )}
-                  </Menu>
+                  </select>
                 </DataTable.Cell>
                 <DataTable.Cell>
                   <View style={styles.actionButtons}>

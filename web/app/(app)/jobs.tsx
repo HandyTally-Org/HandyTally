@@ -41,7 +41,6 @@ export default function JobsScreen() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [showEditDialog, setShowEditDialog] = useState(false);
-  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [sortColumn, setSortColumn] = useState<string>('name');
   const [sortDirection, setSortDirection] = useState<'ascending' | 'descending'>('ascending');
   const [showClientDropdown, setShowClientDropdown] = useState(false);
@@ -305,21 +304,6 @@ export default function JobsScreen() {
     }
   };
 
-  const getStatusChip = (status: string | undefined) => {
-    switch (status) {
-      case 'pending':
-        return <Chip mode="outlined" style={{ backgroundColor: '#FFF9C4' }}>Pending</Chip>;
-      case 'in_progress':
-        return <Chip mode="outlined" style={{ backgroundColor: '#BBDEFB' }}>In Progress</Chip>;
-      case 'completed':
-        return <Chip mode="outlined" style={{ backgroundColor: '#C8E6C9' }}>Completed</Chip>;
-      case 'cancelled':
-        return <Chip mode="outlined" style={{ backgroundColor: '#FFCDD2' }}>Cancelled</Chip>;
-      default:
-        return <Chip mode="outlined">Unknown</Chip>;
-    }
-  };
-
   const formatDate = (dateString: string | undefined) => {
     if (!dateString) return '';
     
@@ -421,21 +405,6 @@ export default function JobsScreen() {
     } else {
       // If not selected, add it
       setSelectedStatuses([...selectedStatuses, status]);
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return '#FFF9C4';
-      case 'in_progress':
-        return '#BBDEFB';
-      case 'completed':
-        return '#C8E6C9';
-      case 'cancelled':
-        return '#FFCDD2';
-      default:
-        return '#FFFFFF';
     }
   };
 
@@ -1203,7 +1172,24 @@ export default function JobsScreen() {
               <DataTable.Row key={job.uid} style={{ backgroundColor: '#ffffff' }}>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{job.title}</DataTable.Cell>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{job.client_name}</DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{getStatusChip(job.status)}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
+                  <select
+                    value={job.status}
+                    onChange={(e) => updateJobStatus(job.uid, e.target.value)}
+                    style={{
+                      padding: 8,
+                      borderRadius: 4,
+                      borderColor: '#ccc',
+                      backgroundColor: '#ffffff',
+                      color: '#000000',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    {statusOptions.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </DataTable.Cell>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(job.start_date)}</DataTable.Cell>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(job.end_date)}</DataTable.Cell>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
@@ -1354,67 +1340,22 @@ export default function JobsScreen() {
                 </TouchableOpacity>
                 
                 <Text style={styles.inputLabel}>Status</Text>
-                <View style={styles.dropdownContainer}>
-                  <TextInput
-                    value={statusOptions.find(option => option.value === editingJob.status)?.label || ''}
-                    style={[styles.input, { cursor: 'pointer' }]}
-                    mode="outlined"
-                    right={
-                      <TextInput.Icon 
-                        icon="menu-down" 
-                        onPress={() => setShowStatusDropdown(!showStatusDropdown)} 
-                      />
-                    }
-                    onTouchStart={() => setShowStatusDropdown(!showStatusDropdown)}
-                    onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                    editable={false}
-                    pointerEvents="auto"
-                  />
-                  {showStatusDropdown && (
-                    <View style={styles.dropdown}>
-                      {statusOptions.map(option => (
-                        <TouchableOpacity
-                          key={option.value}
-                      style={{ 
-                            padding: 12,
-                            borderBottomWidth: 1,
-                            borderBottomColor: '#f0f0f0',
-                            backgroundColor: option.value === editingJob.status 
-                              ? getStatusColor(option.value) 
-                              : 'white',
-                            borderLeftWidth: 4,
-                            borderLeftColor: getStatusColor(option.value),
-                            width: '100%',
-                            display: 'flex',
-                            flexDirection: 'row',
-                            alignItems: 'center'
-                          }}
-                          onPress={() => {
-                            setEditingJob({...editingJob, status: option.value as Job['status']});
-                            setShowStatusDropdown(false);
-                          }}
-                          onMouseEnter={(e) => {
-                            // @ts-ignore - Add hover effect
-                            e.currentTarget.style.backgroundColor = getStatusColor(option.value);
-                            // @ts-ignore - Add hover effect
-                            e.currentTarget.style.opacity = 0.8;
-                          }}
-                          onMouseLeave={(e) => {
-                            // @ts-ignore - Remove hover effect
-                            e.currentTarget.style.backgroundColor = 
-                              option.value === editingJob.status 
-                                ? getStatusColor(option.value) 
-                                : 'white';
-                            // @ts-ignore - Remove hover effect
-                            e.currentTarget.style.opacity = 1;
-                          }}
-                        >
-                          <Text style={{ flex: 1, fontSize: 16, fontWeight: '500', marginLeft: 8 }}>{option.label}</Text>
-                        </TouchableOpacity>
-                      ))}
-                  </View>
-                )}
-                </View>
+                <select
+                  value={editingJob.status}
+                  onChange={(e) => setEditingJob({...editingJob, status: e.target.value as Job['status']})}
+                  style={{
+                    padding: 8,
+                    borderRadius: 4,
+                    borderColor: '#ccc',
+                    backgroundColor: '#ffffff',
+                    color: '#000000',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  {statusOptions.map(option => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
               </View>
             )}
           </Dialog.Content>
