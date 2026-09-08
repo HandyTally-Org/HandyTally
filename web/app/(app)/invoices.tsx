@@ -1835,7 +1835,10 @@ export default function InvoicesScreen() {
                   console.log('Invoice items to save:', invoiceItems);
                   console.log('Status to save:', updatedInvoice.status);
                   
-                  if (invoiceToEdit) {
+                  // "Create New Invoice" seeds invoiceToEdit with a template
+                  // whose uid is '', so its truthiness does not mean editing.
+                  // Only a real uid selects the update path.
+                  if (invoiceToEdit?.uid) {
                     // Update existing invoice
                     const { error: invoiceError } = await supabase
                       .from('invoices')
@@ -1968,7 +1971,7 @@ export default function InvoicesScreen() {
                   }}
                   initialInvoice={invoiceToEdit}
                   initialItems={invoiceToEdit?.invoice_items || []}
-                  isEditing={true}
+                  isEditing={!!invoiceToEdit?.uid}
                   lastInvoiceNumber={getLastInvoiceNumber()}
                   hideTitle={true}
                   companyLogo={companyLogo}
