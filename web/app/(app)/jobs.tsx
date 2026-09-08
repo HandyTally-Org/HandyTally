@@ -1058,7 +1058,7 @@ export default function JobsScreen() {
                 }
               }}
               iconColor="#fff"
-              containerColor="#fff"
+              containerColor="#2196F3"
               size={20}
               aria-label="Import"
             />
@@ -1068,7 +1068,7 @@ export default function JobsScreen() {
                   position: 'absolute', 
                   bottom: -30, 
                   left: 0, 
-                  backgroundColor: '#fff', 
+                  backgroundColor: '#333', 
                   color: 'white', 
                   padding: '4px 8px', 
                   borderRadius: 4, 
