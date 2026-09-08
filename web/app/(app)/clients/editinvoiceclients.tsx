@@ -187,6 +187,8 @@ export default function EditInvoiceClientScreen() {
         const itemsToInsert = updatedItems.map(item => ({
           invoice_id: invoiceId,
           description: item.description,
+          notes: item.notes || null,
+          photos: item.photos || [],
           quantity: item.quantity,
           unit_price: item.price,
           amount: item.total

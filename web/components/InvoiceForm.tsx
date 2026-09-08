@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, TouchableOpacity, Platform, StyleSheet, Modal, ScrollView, Image } from 'react-native';
 import { TextInput, Button, Text, IconButton } from 'react-native-paper';
+import * as ImagePicker from 'expo-image-picker';
 import { Invoice, InvoiceItem } from '../app/(app)/invoices';
 import { Job } from '../app/(app)/jobs';
 import { Client } from '../app/(app)/clients';
@@ -26,10 +27,12 @@ type InvoiceFormProps = {
 // is untouched everywhere else in the app.
 const GREEN = '#0b8a3d';
 const GREEN_DARK = '#0a7534';
+const NAVY = '#1b365d';
 const BORDER = '#d5d8dc';
 const LABEL = '#6b7280';
 const INK = '#1f2937';
 const PAGE_BG = '#e9ebee';
+const MAX_ITEM_PHOTOS = 4;
 
 const doc = StyleSheet.create({
   screen: {
@@ -108,11 +111,15 @@ const doc = StyleSheet.create({
   clientBoxEmpty: {
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 6,
+  },
+  addClientButton: {
+    backgroundColor: NAVY,
+    borderRadius: 3,
+    paddingVertical: 12,
+    paddingHorizontal: 28,
   },
   addClientText: {
-    color: GREEN,
+    color: '#ffffff',
     fontSize: 15,
     fontWeight: '600',
   },
@@ -222,6 +229,92 @@ const doc = StyleSheet.create({
     color: GREEN,
     fontSize: 13,
     fontWeight: '600',
+  },
+  itemNotesRow: {
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+    paddingHorizontal: 12,
+    paddingVertical: 2,
+  },
+  itemPhotosRow: {
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  uploadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderColor: NAVY,
+    borderRadius: 18,
+    paddingLeft: 14,
+    paddingRight: 10,
+    paddingVertical: 6,
+  },
+  uploadButtonText: {
+    color: NAVY,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  uploadHint: {
+    color: LABEL,
+    fontSize: 12,
+  },
+  thumb: {
+    width: 46,
+    height: 46,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  thumbWrap: {
+    position: 'relative',
+  },
+  thumbRemove: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+  },
+  addFeeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingVertical: 10,
+  },
+  addFeeText: {
+    color: GREEN,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  feeControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  feeToggle: {
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  feeToggleActive: {
+    backgroundColor: NAVY,
+    borderColor: NAVY,
+  },
+  feeToggleText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: LABEL,
+  },
+  feeToggleTextActive: {
+    color: '#ffffff',
   },
   removeButton: {
     width: 28,
@@ -404,6 +497,9 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
     issue_date: initialInvoice?.issue_date || new Date().toISOString().split('T')[0],
     due_date: initialInvoice?.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     subtotal: initialInvoice?.subtotal || 0,
+    fee_type: initialInvoice?.fee_type || 'fixed',
+    fee_value: initialInvoice?.fee_value || 0,
+    fee_amount: initialInvoice?.fee_amount || 0,
     tax_rate: initialInvoice?.tax_rate || 0,
     tax_amount: initialInvoice?.tax_amount || 0,
     total: initialInvoice?.total || 0,
@@ -415,6 +511,8 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
     Array.isArray(initialItems) && initialItems.length > 0
       ? initialItems.map(item => ({
           description: item.description || '',
+          notes: item.notes || '',
+          photos: Array.isArray(item.photos) ? item.photos : [],
           quantity: item.quantity || 0,
           unit_price: item.unit_price || 0,
           amount: item.amount || 0,
@@ -423,6 +521,9 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
           type: item.type || 'custom'
         }))
       : []
+  );
+  const [feeEnabled, setFeeEnabled] = useState(
+    safeParseNumber(initialInvoice?.fee_value) > 0
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [services, setServices] = useState<Service[]>([]);
@@ -447,23 +548,32 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
   }, []);
 
   useEffect(() => {
-    // Calculate totals whenever invoice items change
+    // Calculate totals whenever items, the fee, or the tax rate change.
     const subtotal = invoiceItems.reduce((sum, item) => {
       const itemAmount = safeParseNumber(item.amount);
       return sum + itemAmount;
     }, 0);
 
+    // An untouched or blank fee contributes nothing.
+    const feeValue = feeEnabled ? safeParseNumber(formData.fee_value) : 0;
+    const feeAmount = formData.fee_type === 'percent'
+      ? subtotal * (feeValue / 100)
+      : feeValue;
+
+    // Fees are taxable: they land in the base the tax rate applies to.
+    const taxableBase = subtotal + feeAmount;
     const taxRate = safeParseNumber(formData.tax_rate);
-    const taxAmount = subtotal * (taxRate / 100);
-    const total = subtotal + taxAmount;
+    const taxAmount = taxableBase * (taxRate / 100);
+    const total = taxableBase + taxAmount;
 
     setFormData(prev => ({
       ...prev,
       subtotal,
+      fee_amount: feeAmount,
       tax_amount: taxAmount,
       total
     }));
-  }, [invoiceItems, formData.tax_rate]);
+  }, [invoiceItems, formData.tax_rate, formData.fee_type, formData.fee_value, feeEnabled]);
 
   useEffect(() => {
     if (initialInvoice) {
@@ -626,6 +736,8 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
   const handleAddLineItem = () => {
     const newItem: Omit<InvoiceItem, 'id' | 'invoice_id'> = {
       description: '',
+      notes: '',
+      photos: [],
       quantity: 1,
       unit_price: 0,
       amount: 0,
@@ -633,6 +745,70 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
     };
     setInvoiceItems([...invoiceItems, newItem]);
     setErrors(prev => ({ ...prev, items: '' }));
+  };
+
+  // Photos are stored inline on the item as base64, matching how the company
+  // logo is stored in company_attachments.file_data. Items are deleted and
+  // re-inserted on every save, so a separate photos table keyed by item id
+  // would lose its rows each time.
+  const fileToBase64 = async (uri: string): Promise<string> => {
+    const response = await fetch(uri);
+    const blob = await response.blob();
+
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        resolve(base64String.includes(',') ? base64String.split(',')[1] : base64String);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  const handleAddItemPhoto = async (index: number) => {
+    const existing = invoiceItems[index]?.photos || [];
+    if (existing.length >= MAX_ITEM_PHOTOS) return;
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.6,
+      });
+
+      if (result.canceled) return;
+
+      const file = result.assets[0];
+      const fileExt = file.uri.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileType = fileExt === 'png' ? 'image/png' : 'image/jpeg';
+      const base64Data = await fileToBase64(file.uri);
+
+      const updatedItems = [...invoiceItems];
+      updatedItems[index] = {
+        ...updatedItems[index],
+        photos: [...existing, { file_type: fileType, file_data: base64Data }],
+      };
+      setInvoiceItems(updatedItems);
+    } catch (error) {
+      console.error('Error attaching photo:', error);
+    }
+  };
+
+  const handleRemoveItemPhoto = (index: number, photoIndex: number) => {
+    const updatedItems = [...invoiceItems];
+    updatedItems[index] = {
+      ...updatedItems[index],
+      photos: (updatedItems[index].photos || []).filter((_, i) => i !== photoIndex),
+    };
+    setInvoiceItems(updatedItems);
+  };
+
+  const handleToggleFee = () => {
+    if (feeEnabled) {
+      // Clearing the fee resets it to zero rather than leaving a stale value.
+      setFormData(prev => ({ ...prev, fee_value: 0, fee_amount: 0 }));
+    }
+    setFeeEnabled(!feeEnabled);
   };
 
   const handleUpdateItem = (index: number, field: keyof InvoiceItem, value: any) => {
@@ -852,13 +1028,14 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
                     ))}
                   </View>
                 ) : (
-                  <TouchableOpacity
-                    style={doc.clientBoxEmpty}
-                    onPress={() => setClientModalVisible(true)}
-                  >
-                    <IconButton icon="account-multiple" size={20} iconColor={GREEN} style={{ margin: 0 }} />
-                    <Text style={doc.addClientText}>+ Add Client</Text>
-                  </TouchableOpacity>
+                  <View style={doc.clientBoxEmpty}>
+                    <TouchableOpacity
+                      style={doc.addClientButton}
+                      onPress={() => setClientModalVisible(true)}
+                    >
+                      <Text style={doc.addClientText}>Add Client</Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
               </View>
               {errors.client_id && <Text style={doc.errorText}>{errors.client_id}</Text>}
@@ -1016,6 +1193,58 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
                     <Text style={{ fontSize: 14, color: INK }}>{formatCurrency(item.amount)}</Text>
                   </View>
                 </View>
+
+                {/* Per-item notes */}
+                <View style={doc.itemNotesRow}>
+                  <TextInput
+                    placeholder="Notes"
+                    value={item.notes || ''}
+                    onChangeText={(value) => handleUpdateItem(index, 'notes', value)}
+                    multiline
+                    style={{
+                      backgroundColor: 'transparent',
+                      fontSize: 14,
+                      minHeight: 44,
+                      ...(Platform.OS === 'web' ? { resize: 'vertical' } : {}),
+                    }}
+                    underlineColor="transparent"
+                    activeUnderlineColor="transparent"
+                  />
+                </View>
+
+                {/* Per-item photos */}
+                <View style={doc.itemPhotosRow}>
+                  <TouchableOpacity
+                    style={[
+                      doc.uploadButton,
+                      (item.photos || []).length >= MAX_ITEM_PHOTOS ? { opacity: 0.4 } : null,
+                    ]}
+                    disabled={(item.photos || []).length >= MAX_ITEM_PHOTOS}
+                    onPress={() => handleAddItemPhoto(index)}
+                  >
+                    <Text style={doc.uploadButtonText}>Upload Photos</Text>
+                    <IconButton icon="cloud-upload-outline" size={16} iconColor={NAVY} style={{ margin: 0 }} />
+                  </TouchableOpacity>
+                  <Text style={doc.uploadHint}>
+                    (Max {MAX_ITEM_PHOTOS})
+                  </Text>
+
+                  {(item.photos || []).map((photo: any, photoIndex: number) => (
+                    <View key={`photo-${index}-${photoIndex}`} style={doc.thumbWrap}>
+                      <Image
+                        source={{ uri: `data:${photo.file_type || 'image/jpeg'};base64,${photo.file_data}` }}
+                        style={doc.thumb}
+                      />
+                      <IconButton
+                        icon="close-circle"
+                        size={16}
+                        iconColor="#e2543a"
+                        style={doc.thumbRemove}
+                        onPress={() => handleRemoveItemPhoto(index, photoIndex)}
+                      />
+                    </View>
+                  ))}
+                </View>
               </View>
 
               {/* Reorder control, where the drag handle sits in the mock */}
@@ -1049,6 +1278,54 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
                 <Text style={doc.totalsLabel}>Subtotal</Text>
                 <Text style={doc.totalsValue}>{formatCurrency(formData.subtotal)}</Text>
               </View>
+
+              {/* Fees, charged either as a percentage of the subtotal or a
+                  fixed amount. Left off, the fee contributes nothing. */}
+              {feeEnabled ? (
+                <View style={doc.totalsRow}>
+                  <View style={doc.feeControls}>
+                    <Text style={doc.totalsLabel}>Fee</Text>
+                    <TouchableOpacity
+                      style={[doc.feeToggle, formData.fee_type === 'fixed' ? doc.feeToggleActive : null]}
+                      onPress={() => handleChange('fee_type', 'fixed')}
+                    >
+                      <Text style={[doc.feeToggleText, formData.fee_type === 'fixed' ? doc.feeToggleTextActive : null]}>
+                        $
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[doc.feeToggle, formData.fee_type === 'percent' ? doc.feeToggleActive : null]}
+                      onPress={() => handleChange('fee_type', 'percent')}
+                    >
+                      <Text style={[doc.feeToggleText, formData.fee_type === 'percent' ? doc.feeToggleTextActive : null]}>
+                        %
+                      </Text>
+                    </TouchableOpacity>
+                    <TextInput
+                      value={safeToString(formData.fee_value)}
+                      onChangeText={(value) => handleChange('fee_value', value)}
+                      keyboardType="numeric"
+                      style={{ width: 70, height: 36, backgroundColor: 'transparent', textAlign: 'right' }}
+                      underlineColor="transparent"
+                      activeUnderlineColor={GREEN}
+                      dense
+                    />
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={doc.totalsValue}>{formatCurrency(formData.fee_amount)}</Text>
+                    <IconButton
+                      icon="close"
+                      size={16}
+                      onPress={handleToggleFee}
+                      style={{ margin: 0 }}
+                    />
+                  </View>
+                </View>
+              ) : (
+                <TouchableOpacity style={doc.addFeeButton} onPress={handleToggleFee}>
+                  <Text style={doc.addFeeText}>+  Add Fee</Text>
+                </TouchableOpacity>
+              )}
 
               <View style={doc.totalsRow}>
                 <Text style={doc.totalsLabel}>Tax Rate</Text>

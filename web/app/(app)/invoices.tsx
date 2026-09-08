@@ -20,6 +20,9 @@ export type Invoice = {
   issue_date: string;
   due_date: string;
   subtotal: number;
+  fee_type?: 'fixed' | 'percent' | null;
+  fee_value?: number;
+  fee_amount?: number;
   tax_rate: number;
   tax_amount: number;
   total: number;
@@ -31,10 +34,17 @@ export type Invoice = {
   client?: Client;
 };
 
+export type InvoiceItemPhoto = {
+  file_type: string;
+  file_data: string;
+};
+
 export type InvoiceItem = {
   uid: string;
   invoice_id: number;
   description: string;
+  notes?: string | null;
+  photos?: InvoiceItemPhoto[];
   quantity: number;
   unit_price: number;
   amount: number;
@@ -483,6 +493,9 @@ export default function InvoicesScreen() {
           subtotal: Number(invoice.subtotal),
           tax_rate: Number(invoice.tax_rate),
           tax_amount: Number(invoice.tax_amount),
+          fee_type: invoice.fee_type || null,
+          fee_value: Number(invoice.fee_value) || 0,
+          fee_amount: Number(invoice.fee_amount) || 0,
           total: Number(invoice.total),
           notes: invoice.notes || '',
           status: invoice.status || 'draft'
@@ -511,6 +524,8 @@ export default function InvoicesScreen() {
         const itemsToInsert = items.map(item => ({
           invoice_id: numericInvoiceId,
           description: item.description,
+          notes: item.notes || null,
+          photos: item.photos || [],
           quantity: item.quantity,
           unit_price: item.unit_price,
           amount: item.amount
@@ -1092,6 +1107,8 @@ export default function InvoicesScreen() {
             return {
               invoice_id: editingInvoice.uid,
               description: item.description || '',
+              notes: item.notes || null,
+              photos: item.photos || [],
               quantity: Number(item.quantity) || 0,
               unit_price: Number(item.unit_price) || 0,
               amount: Number(item.amount) || 0,
@@ -1126,6 +1143,9 @@ export default function InvoicesScreen() {
             subtotal: updatedInvoice.subtotal,
             tax_rate: updatedInvoice.tax_rate,
             tax_amount: updatedInvoice.tax_amount,
+            fee_type: updatedInvoice.fee_type || null,
+            fee_value: updatedInvoice.fee_value || 0,
+            fee_amount: updatedInvoice.fee_amount || 0,
             total: updatedInvoice.total,
             notes: updatedInvoice.notes,
             status: updatedInvoice.status || 'estimate',
@@ -1144,6 +1164,8 @@ export default function InvoicesScreen() {
             return {
               invoice_id: newInvoice.uid,
               description: item.description || '',
+              notes: item.notes || null,
+              photos: item.photos || [],
               quantity: item.quantity,
               unit_price: item.unit_price,
               amount: item.amount,
@@ -1203,6 +1225,9 @@ export default function InvoicesScreen() {
           subtotal: invoice.subtotal,
           tax_rate: invoice.tax_rate,
           tax_amount: invoice.tax_amount,
+          fee_type: invoice.fee_type || null,
+          fee_value: invoice.fee_value || 0,
+          fee_amount: invoice.fee_amount || 0,
           total: invoice.total,
           notes: invoice.notes,
           status: invoice.status,
@@ -1226,6 +1251,8 @@ export default function InvoicesScreen() {
         const itemsToInsert = items.map(item => ({
           invoice_id: invoiceId,
           description: item.description,
+          notes: item.notes || null,
+          photos: item.photos || [],
           quantity: item.quantity,
           unit_price: item.unit_price,
           amount: item.amount
@@ -1821,6 +1848,9 @@ export default function InvoicesScreen() {
                         subtotal: updatedInvoice.subtotal,
                         tax_rate: updatedInvoice.tax_rate,
                         tax_amount: updatedInvoice.tax_amount,
+                        fee_type: updatedInvoice.fee_type || null,
+                        fee_value: updatedInvoice.fee_value || 0,
+                        fee_amount: updatedInvoice.fee_amount || 0,
                         total: updatedInvoice.total,
                         notes: updatedInvoice.notes,
                         status: updatedInvoice.status,
@@ -1848,6 +1878,8 @@ export default function InvoicesScreen() {
                         const itemsToInsert = invoiceItems.map(item => ({
                           invoice_id: invoiceToEdit.uid,
                           description: item.description,
+                          notes: item.notes || null,
+                          photos: item.photos || [],
                           quantity: item.quantity,
                           unit_price: item.unit_price,
                           amount: item.amount,
@@ -1880,6 +1912,9 @@ export default function InvoicesScreen() {
                           subtotal: updatedInvoice.subtotal,
                           tax_rate: updatedInvoice.tax_rate,
                           tax_amount: updatedInvoice.tax_amount,
+                          fee_type: updatedInvoice.fee_type || null,
+                          fee_value: updatedInvoice.fee_value || 0,
+                          fee_amount: updatedInvoice.fee_amount || 0,
                           total: updatedInvoice.total,
                           notes: updatedInvoice.notes,
                           status: updatedInvoice.status || 'estimate',
@@ -1894,6 +1929,8 @@ export default function InvoicesScreen() {
                           const itemsToInsert = invoiceItems.map(item => ({
                             invoice_id: newInvoice.uid,
                             description: item.description,
+                            notes: item.notes || null,
+                            photos: item.photos || [],
                             quantity: item.quantity,
                             unit_price: item.unit_price,
                             amount: item.amount,

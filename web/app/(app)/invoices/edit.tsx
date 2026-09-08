@@ -146,6 +146,9 @@ export default function EditInvoiceScreen() {
           subtotal: updatedInvoice.subtotal,
           tax_rate: updatedInvoice.tax_rate,
           tax_amount: updatedInvoice.tax_amount,
+          fee_type: updatedInvoice.fee_type || null,
+          fee_value: updatedInvoice.fee_value || 0,
+          fee_amount: updatedInvoice.fee_amount || 0,
           total: updatedInvoice.total,
           notes: updatedInvoice.notes,
           status: updatedInvoice.status,
@@ -168,6 +171,8 @@ export default function EditInvoiceScreen() {
         const itemsToInsert = updatedInvoice.invoice_items.map(item => ({
           invoice_id: id,
           description: item.description,
+          notes: item.notes || null,
+          photos: item.photos || [],
           quantity: item.quantity,
           unit_price: item.unit_price,
           amount: item.amount
