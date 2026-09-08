@@ -1797,11 +1797,8 @@ export default function InvoicesScreen() {
         </Card>
         </>
       ) : (
-        <ScrollView style={{ backgroundColor: '#ffffff' }}>
-          <View style={{ 
-            backgroundColor: '#ffffff',
-            padding: 16,
-          }}>
+        <ScrollView style={{ backgroundColor: '#e9ebee' }}>
+          <View style={{ backgroundColor: '#e9ebee' }}>
             <InvoiceForm
               jobs={jobs}
               clients={clients}

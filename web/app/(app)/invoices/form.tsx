@@ -62,7 +62,7 @@ export default function InvoiceFormScreen() {
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: '#fff' }}>
+    <ScrollView style={{ flex: 1, backgroundColor: '#e9ebee' }}>
       <InvoiceForm 
         invoice={invoice}
         onSave={async (updatedInvoice) => {

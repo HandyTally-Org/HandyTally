@@ -1,40 +1,12 @@
 import { useState, useEffect } from 'react';
-import { View, TouchableOpacity, FlatList, Platform, StyleSheet, Modal, ScrollView, Image } from 'react-native';
-import { TextInput, Button, Card, Text, Divider, Menu, IconButton, DataTable, HelperText, List, Portal, Dialog } from 'react-native-paper';
-import { styles as globalStyles } from '../styles';
+import { View, TouchableOpacity, Platform, StyleSheet, Modal, ScrollView, Image } from 'react-native';
+import { TextInput, Button, Text, IconButton } from 'react-native-paper';
 import { Invoice, InvoiceItem } from '../app/(app)/invoices';
 import { Job } from '../app/(app)/jobs';
 import { Client } from '../app/(app)/clients';
 import { supabase } from '../lib/supabase';
 import { Service } from '../app/(app)/services';
 import { Material } from '../app/(app)/materials';
-
-// Create a local styles object that extends the global styles
-const styles = {
-  ...globalStyles,
-  dropdown: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 4,
-    padding: 8,
-    paddingLeft: 12,
-    backgroundColor: '#fff',
-    height: 50,
-  },
-  
-  dropdownText: {
-    color: '#000',
-    fontSize: 16,
-  },
-  
-  dropdownPlaceholder: {
-    color: '#888',
-    fontSize: 16,
-  },
-};
 
 type InvoiceFormProps = {
   jobs: Job[];
@@ -50,80 +22,347 @@ type InvoiceFormProps = {
   companyLogo?: string | null;
 };
 
-const webStyles = Platform.OS === 'web' 
-  ? StyleSheet.create({
-      dropdownItemHover: {
-        ':hover': {
-          backgroundColor: '#e0e0e0',
-        },
-      },
-    })
-  : {};
+// Document palette. Kept local to the form so the global theme (primary #444)
+// is untouched everywhere else in the app.
+const GREEN = '#0b8a3d';
+const GREEN_DARK = '#0a7534';
+const BORDER = '#d5d8dc';
+const LABEL = '#6b7280';
+const INK = '#1f2937';
+const PAGE_BG = '#e9ebee';
 
-// Add the dropdown styles to the imported styles
-const formStyles = StyleSheet.create({
-  dropdown: {
+const doc = StyleSheet.create({
+  screen: {
+    minHeight: '100%',
+    backgroundColor: PAGE_BG,
+  },
+  actionBar: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: PAGE_BG,
+  },
+  sheet: {
+    backgroundColor: '#ffffff',
+    width: '100%',
+    maxWidth: 960,
+    alignSelf: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 40,
+    marginBottom: 32,
+    borderWidth: 1,
+    borderColor: '#e2e4e8',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 32,
+    marginBottom: 40,
+  },
+  headerLeft: {
+    flex: 1,
+    minWidth: 220,
+  },
+  headerRight: {
+    width: 300,
+  },
+  logo: {
+    width: 160,
+    height: 84,
+    resizeMode: 'contain',
+    marginBottom: 24,
+  },
+  logoPlaceholder: {
+    width: 160,
+    height: 84,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#eceef1',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  companyLine: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: '#33507a',
+  },
+  companyLink: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: '#2563eb',
+  },
+  clientBox: {
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 3,
+    minHeight: 110,
+    padding: 16,
+    marginBottom: 20,
+    justifyContent: 'center',
+  },
+  clientBoxEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  addClientText: {
+    color: GREEN,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  // Outlined field with a floating label sitting on the border, like the mock.
+  field: {
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 3,
+    height: 52,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    marginBottom: 16,
+    backgroundColor: '#ffffff',
+  },
+  fieldLabel: {
+    position: 'absolute',
+    top: -8,
+    left: 10,
+    paddingHorizontal: 4,
+    backgroundColor: '#ffffff',
+    fontSize: 11,
+    color: LABEL,
+  },
+  fieldError: {
+    borderColor: '#dc2626',
+  },
+  errorText: {
+    color: '#dc2626',
+    fontSize: 12,
+    marginTop: -12,
+    marginBottom: 12,
+  },
+  columnHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    borderBottomWidth: 2,
+    borderBottomColor: '#111827',
+    paddingBottom: 10,
+    marginBottom: 16,
+  },
+  columnHeaderText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: INK,
+  },
+  colDescription: {
+    flex: 1,
+    minWidth: 160,
+  },
+  colNumeric: {
+    width: 110,
+    alignItems: 'center',
+  },
+  colTotal: {
+    width: 110,
+    alignItems: 'center',
+  },
+  colGutter: {
+    width: 44,
+  },
+  // Line item card — the boxed row from the mock.
+  itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  itemCard: {
+    flex: 1,
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 4,
-    padding: 8,
+    borderColor: BORDER,
+    borderRadius: 3,
+    backgroundColor: '#ffffff',
+  },
+  itemCells: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    minHeight: 52,
+  },
+  cellDescription: {
+    flex: 1,
+    minWidth: 160,
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingLeft: 12,
-    backgroundColor: '#fff',
-    height: 50,
+    paddingRight: 4,
   },
-  
-  dropdownText: {
-    color: '#000',
-    fontSize: 16,
+  cell: {
+    width: 110,
+    borderLeftWidth: 1,
+    borderLeftColor: BORDER,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
   },
-  
-  dropdownPlaceholder: {
-    color: '#888',
-    fontSize: 16,
+  cellInput: {
+    height: 40,
+    backgroundColor: 'transparent',
+    fontSize: 14,
   },
-});
-
-// Merge the styles
-const combinedStyles = {
-  ...styles,
-  ...formStyles,
-  dropdownContainer: {
-    position: 'relative',
-    zIndex: 9999,
+  itemListButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
   },
-  dropdownMenu: {
-    position: 'absolute',
-    top: 50,
-    left: 0,
-    right: 0,
-    backgroundColor: 'white',
+  itemListText: {
+    color: GREEN,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  removeButton: {
+    width: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: -6,
+    zIndex: 2,
+  },
+  addLineItem: {
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 4,
-    maxHeight: 200,
-    zIndex: 9999,
-    elevation: 10,
+    borderColor: GREEN,
+    borderRadius: 3,
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 6,
+    marginBottom: 32,
+    marginLeft: 28,
+    marginRight: 44,
+  },
+  addLineItemText: {
+    color: GREEN,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  totalsWrap: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  totals: {
+    width: 320,
+  },
+  totalsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eceef1',
+  },
+  totalsLabel: {
+    fontSize: 14,
+    color: '#4b5563',
+  },
+  totalsValue: {
+    fontSize: 14,
+    color: INK,
+  },
+  grandTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 20,
+  },
+  grandTotalLabel: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#7a1f1f',
+  },
+  grandTotalValue: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#7a1f1f',
+  },
+  notesSection: {
+    marginTop: 40,
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: INK,
+    marginBottom: 8,
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalCard: {
+    width: '80%',
+    maxWidth: 640,
+    maxHeight: '80%',
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
+    elevation: 5,
   },
-  dropdownItem: {
-    padding: 12,
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 16,
+  },
+  pickerRow: {
+    paddingVertical: 12,
+    paddingHorizontal: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    backgroundColor: 'white',
+    borderBottomColor: '#f0f0f0',
   },
-  dropdownItemHovered: {
-    backgroundColor: '#f0f0f0',
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+  pickerGroupLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: LABEL,
+    marginTop: 12,
+    marginBottom: 4,
   },
-};
+});
+
+// Raw DOM controls are used for the date and select inputs, matching the
+// existing web-first approach in this screen.
+const nativeSelectStyle = {
+  width: '100%',
+  height: '100%',
+  border: 'none',
+  outline: 'none',
+  backgroundColor: 'transparent',
+  fontSize: 14,
+  color: INK,
+} as any;
+
+const nativeInputStyle = {
+  width: '100%',
+  height: '100%',
+  border: 'none',
+  outline: 'none',
+  backgroundColor: 'transparent',
+  fontSize: 14,
+  color: INK,
+} as any;
 
 // Helper function to safely convert values
 function safeToString(value: any): string {
@@ -139,32 +378,22 @@ function safeParseNumber(value: any): number {
 }
 
 export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCancel, initialInvoice, initialItems = [], isEditing = false, hideTitle = false, forceInvoiceNumber = null, companyLogo }: InvoiceFormProps) {
-  // DEBUGGING - Log all props received
-  console.log('INVOICE FORM PROPS:', {
-    initialInvoice: JSON.stringify(initialInvoice, null, 2),
-    initialItems: JSON.stringify(initialItems, null, 2),
-    jobs: JSON.stringify(jobs, null, 2),
-    clients: JSON.stringify(clients, null, 2),
-    isEditing,
-    companyLogo: companyLogo ? 'Logo data received' : 'No logo data'
-  });
-
   const generateNextInvoiceNumber = () => {
     if (!lastInvoiceNumber) {
       return '1001';
     }
-    
+
     const numericPart = parseInt(lastInvoiceNumber.replace(/\D/g, ''), 10);
     if (isNaN(numericPart)) {
       return '1001';
     }
-    
+
     return (numericPart + 1).toString().padStart(4, '0');
   };
 
-  const [invoiceNumber, setInvoiceNumber] = useState(
-    forceInvoiceNumber || 
-    (isEditing ? initialInvoice.invoice_number : 
+  const [invoiceNumber] = useState(
+    forceInvoiceNumber ||
+    (isEditing ? initialInvoice.invoice_number :
       generateNextInvoiceNumber())
   );
 
@@ -183,7 +412,7 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
     invoice_items: initialInvoice?.invoice_items || []
   });
   const [invoiceItems, setInvoiceItems] = useState<Omit<InvoiceItem, 'id' | 'invoice_id'>[]>(
-    Array.isArray(initialItems) && initialItems.length > 0 
+    Array.isArray(initialItems) && initialItems.length > 0
       ? initialItems.map(item => ({
           description: item.description || '',
           quantity: item.quantity || 0,
@@ -198,42 +427,23 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [services, setServices] = useState<Service[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
-  const [showServiceMenu, setShowServiceMenu] = useState(false);
-  const [showMaterialMenu, setShowMaterialMenu] = useState(false);
-  const [jobMenuVisible, setJobMenuVisible] = useState(false);
-  const [clientMenuVisible, setClientMenuVisible] = useState(false);
-  const [hoveredJobId, setHoveredJobId] = useState<string | null>(null);
-  const [hoveredClientId, setHoveredClientId] = useState<string | null>(null);
+  const [companyInfo, setCompanyInfo] = useState<any>(null);
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
-  const [descriptionModalVisible, setDescriptionModalVisible] = useState(false);
-  const [tempDescription, setTempDescription] = useState('');
   const [notesModalVisible, setNotesModalVisible] = useState(false);
   const [tempNotes, setTempNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [selectedService, setSelectedService] = useState(null);
-  const [selectedMaterial, setSelectedMaterial] = useState(null);
-  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [clientModalVisible, setClientModalVisible] = useState(false);
+  const [itemListModalVisible, setItemListModalVisible] = useState(false);
+  const [itemListTargetIndex, setItemListTargetIndex] = useState<number | null>(null);
   const [itemDescriptionModalVisible, setItemDescriptionModalVisible] = useState(false);
   const [editingItemDescription, setEditingItemDescription] = useState('');
 
   useEffect(() => {
-    // Ensure all arrays are initialized
-    if (!Array.isArray(invoiceItems)) {
-      setInvoiceItems([]);
-    }
-    if (!Array.isArray(services)) {
-      setServices([]);
-    }
-    if (!Array.isArray(materials)) {
-      setMaterials([]);
-    }
-  }, []);
-
-  useEffect(() => {
     fetchServices();
     fetchMaterials();
+    fetchCompanyInfo();
   }, []);
 
   useEffect(() => {
@@ -242,11 +452,11 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
       const itemAmount = safeParseNumber(item.amount);
       return sum + itemAmount;
     }, 0);
-    
+
     const taxRate = safeParseNumber(formData.tax_rate);
     const taxAmount = subtotal * (taxRate / 100);
     const total = subtotal + taxAmount;
-    
+
     setFormData(prev => ({
       ...prev,
       subtotal,
@@ -256,92 +466,32 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
   }, [invoiceItems, formData.tax_rate]);
 
   useEffect(() => {
-    console.log('Jobs received in InvoiceForm:', JSON.stringify(jobs, null, 2));
-    
-    if (Array.isArray(jobs) && jobs.length > 0) {
-      // Log the exact structure of the first job
-      console.log('First job keys:', Object.keys(jobs[0]));
-      console.log('First job values:', Object.values(jobs[0]));
-      
-      // Create job options for the dropdown using the exact field names
-      const jobOptions = jobs.map(job => {
-        // Log each job to see its structure
-        console.log('Job:', job);
-        
-        return {
-          // Use title if it exists, otherwise try name, otherwise use the ID
-          label: job.title || job.name || `Job ${job.uid || job.id}`,
-          // Use uid if it exists, otherwise use id
-          value: job.uid || job.id
-        };
-      });
-      
-      console.log('Job options for dropdown:', jobOptions);
-    }
-  }, [jobs]);
-
-  useEffect(() => {
-    console.log('Clients received in InvoiceForm:', JSON.stringify(clients, null, 2));
-    
-    if (Array.isArray(clients) && clients.length > 0) {
-      // Log the structure of the first client
-      console.log('First client keys:', Object.keys(clients[0]));
-      console.log('First client data:', clients[0]);
-    }
-  }, [clients]);
-
-  useEffect(() => {
     if (initialInvoice) {
-      console.log('INITIALIZING FORM WITH INVOICE:', JSON.stringify(initialInvoice, null, 2));
-      
-      // FORCE SET THE FORM DATA
       const formDataToSet = {
         ...initialInvoice,
         invoice_number: initialInvoice.invoice_number || '',
         job_id: initialInvoice.job_id || null,
         client_id: initialInvoice.client_id || null,
       };
-      console.log('SETTING FORM DATA TO:', formDataToSet);
       setFormData(formDataToSet);
-      
-      // FORCE SET THE SELECTED JOB
+
       if (initialInvoice.job_id) {
         const job = jobs.find(j => j.uid === initialInvoice.job_id || j.id === initialInvoice.job_id);
-        console.log('SETTING SELECTED JOB TO:', job);
         setSelectedJob(job || null);
       }
-      
-      // FORCE SET THE SELECTED CLIENT
+
       if (initialInvoice.client_id) {
         const client = clients.find(c => c.uid === initialInvoice.client_id || c.id === initialInvoice.client_id);
-        console.log('SETTING SELECTED CLIENT TO:', client);
         setSelectedClient(client || null);
       }
-      
-      // FORCE SET THE INVOICE ITEMS - Make sure this is working
-      console.log('CHECKING INVOICE ITEMS:');
-      console.log('initialInvoice.invoice_items:', initialInvoice.invoice_items);
-      console.log('initialItems:', initialItems);
-      
+
       if (initialInvoice.invoice_items && initialInvoice.invoice_items.length > 0) {
-        console.log('SETTING INVOICE ITEMS FROM initialInvoice.invoice_items:', initialInvoice.invoice_items);
         setInvoiceItems([...initialInvoice.invoice_items]);
       } else if (initialItems && initialItems.length > 0) {
-        console.log('SETTING INVOICE ITEMS FROM initialItems:', initialItems);
         setInvoiceItems([...initialItems]);
       }
     }
   }, [initialInvoice, initialItems, jobs, clients]);
-
-  useEffect(() => {
-    console.log('INVOICE ITEMS STATE:', invoiceItems);
-    console.log('INITIAL ITEMS PROP:', initialItems);
-    console.log('INITIAL INVOICE ITEMS:', initialInvoice?.invoice_items);
-  }, [invoiceItems]);
-
-  useEffect(() => {
-    console.log('Form data status changed:', formData.status);
-  }, [formData.status]);
 
   const fetchServices = async () => {
     try {
@@ -371,118 +521,118 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
     }
   };
 
+  const fetchCompanyInfo = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('company')
+        .select('*')
+        .single();
+
+      if (!error && data) {
+        setCompanyInfo(data);
+      }
+    } catch (error) {
+      console.error('Error fetching company info:', error);
+    }
+  };
+
   const handleChange = (field: keyof typeof formData, value: any) => {
-    console.log(`Changing ${field} to:`, value);
-    
-    // Use a callback to ensure we're working with the latest state
-    setFormData(prevData => {
-      const newData = { ...prevData, [field]: value };
-      console.log('New form data:', newData);
-      return newData;
-    });
-    
+    setFormData(prevData => ({ ...prevData, [field]: value }));
+
     // Clear error when field is edited
     if (errors[field as string]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
   };
 
-  const handleJobChange = (jobId: string) => {
-    console.log('handleJobChange called with jobId:', jobId);
-    
-    // Try to find the job using either uid or id
-    const job = jobs.find(j => (j.uid === jobId) || (j.id === jobId));
-    console.log('Found job:', job);
-    
-    if (job) {
-      console.log('Setting job_id to:', jobId);
-      console.log('Setting client_id to:', job.client_id);
-      
-      setFormData(prevData => ({
-        ...prevData,
-        job_id: jobId,
-        client_id: job.client_id || prevData.client_id
-      }));
-    } else {
-      console.log('Job not found, only updating job_id');
-      setFormData(prevData => ({
-        ...prevData,
-        job_id: jobId
-      }));
+  const handleSelectClient = (client: Client) => {
+    setSelectedClient(client);
+    setFormData(prev => ({ ...prev, client_id: (client.uid || client.id) as any }));
+    setErrors(prev => ({ ...prev, client_id: '' }));
+    setClientModalVisible(false);
+  };
+
+  const handleClearClient = () => {
+    setSelectedClient(null);
+    setFormData(prev => ({ ...prev, client_id: null as any }));
+  };
+
+  const handleJobSelect = (jobId: string) => {
+    const job = jobs.find(j => (j.uid || j.id) === jobId);
+    setSelectedJob(job || null);
+
+    setFormData(prevData => ({
+      ...prevData,
+      job_id: jobId || null,
+      // Selecting a job still pulls its client through, as before.
+      client_id: job?.client_id || prevData.client_id
+    }));
+
+    if (job?.client_id && !selectedClient) {
+      const client = clients.find(c => (c.uid || c.id) === job.client_id);
+      if (client) setSelectedClient(client);
     }
   };
 
-  const handleAddService = (service) => {
-    setShowServiceMenu(false);
-    setSelectedService(service);
-    
-    const newItem = {
-      description: `${service.name} - ${service.description || ''}`,
-      quantity: 1,
-      unit_price: service.rate || 0,
-      amount: service.rate || 0,
+  const handleStatusChange = (newStatus: string) => {
+    setFormData(prevData => ({ ...prevData, status: newStatus }));
+  };
+
+  // Applies a catalog service to an existing line item row.
+  const applyServiceToItem = (index: number, service: any) => {
+    const updatedItems = [...invoiceItems];
+    const quantity = safeParseNumber(updatedItems[index]?.quantity) || 1;
+    const rate = safeParseNumber(service.rate);
+
+    updatedItems[index] = {
+      ...updatedItems[index],
+      description: `${service.name}${service.description ? ` - ${service.description}` : ''}`,
+      quantity,
+      unit_price: rate,
+      amount: quantity * rate,
       type: 'service',
-      service_id: service.id || service.uid
+      service_id: service.id || service.uid,
+      material_id: null,
     };
-    
-    const updatedItems = [...invoiceItems, newItem];
+
     setInvoiceItems(updatedItems);
-    
-    // Calculate new totals
-    const subtotal = updatedItems.reduce((sum, item) => sum + (item.amount || 0), 0);
-    const taxRate = formData.tax_rate || 0;
-    const taxAmount = subtotal * (taxRate / 100);
-    const total = subtotal + taxAmount;
-    
-    // Update the form data with new totals
-    setFormData(prev => ({
-      ...prev,
-      subtotal,
-      tax_amount: taxAmount,
-      total
-    }));
   };
 
-  const handleAddMaterial = (material) => {
-    setShowMaterialMenu(false);
-    setSelectedMaterial(material);
-    
-    const newItem = {
-      description: `${material.name} - ${material.description || ''}`,
-      quantity: 1,
-      unit_price: material.cost || 0,
-      amount: material.cost || 0,
+  // Applies a catalog material to an existing line item row.
+  const applyMaterialToItem = (index: number, material: any) => {
+    const updatedItems = [...invoiceItems];
+    const quantity = safeParseNumber(updatedItems[index]?.quantity) || 1;
+    const cost = safeParseNumber(material.cost);
+
+    updatedItems[index] = {
+      ...updatedItems[index],
+      description: `${material.name}${material.description ? ` - ${material.description}` : ''}`,
+      quantity,
+      unit_price: cost,
+      amount: quantity * cost,
       type: 'material',
-      material_id: material.id || material.uid
+      material_id: material.id || material.uid,
+      service_id: null,
     };
-    
-    const updatedItems = [...invoiceItems, newItem];
+
     setInvoiceItems(updatedItems);
-    
-    // Calculate new totals
-    const subtotal = updatedItems.reduce((sum, item) => sum + (item.amount || 0), 0);
-    const taxRate = formData.tax_rate || 0;
-    const taxAmount = subtotal * (taxRate / 100);
-    const total = subtotal + taxAmount;
-    
-    // Update the form data with new totals
-    setFormData(prev => ({
-      ...prev,
-      subtotal,
-      tax_amount: taxAmount,
-      total
-    }));
   };
 
-  const handleAddCustomItem = () => {
+  const openItemList = (index: number) => {
+    setItemListTargetIndex(index);
+    setItemListModalVisible(true);
+  };
+
+  const handleAddLineItem = () => {
     const newItem: Omit<InvoiceItem, 'id' | 'invoice_id'> = {
-      description: 'Custom item',
+      description: '',
       quantity: 1,
       unit_price: 0,
       amount: 0,
       type: 'other'
     };
     setInvoiceItems([...invoiceItems, newItem]);
+    setErrors(prev => ({ ...prev, items: '' }));
   };
 
   const handleUpdateItem = (index: number, field: keyof InvoiceItem, value: any) => {
@@ -491,14 +641,14 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
       ...updatedItems[index],
       [field]: value
     };
-    
+
     // Recalculate amount if quantity or unit_price changes
     if (field === 'quantity' || field === 'unit_price') {
       const quantity = safeParseNumber(field === 'quantity' ? value : updatedItems[index].quantity);
       const unitPrice = safeParseNumber(field === 'unit_price' ? value : updatedItems[index].unit_price);
       updatedItems[index].amount = quantity * unitPrice;
     }
-    
+
     setInvoiceItems(updatedItems);
   };
 
@@ -506,81 +656,58 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
     setInvoiceItems(invoiceItems.filter((_, i) => i !== index));
   };
 
-  const validate = () => {
-    const newErrors: Record<string, string> = {};
-    
-    if (!formData.client_id) {
-      newErrors.client_id = 'Client is required';
-    }
-    
-    if (!formData.invoice_number) {
-      newErrors.invoice_number = 'Invoice number is required';
-    }
-    
-    if (!formData.issue_date) {
-      newErrors.issue_date = 'Issue date is required';
-    }
-    
-    if (!formData.due_date) {
-      newErrors.due_date = 'Due date is required';
-    }
-    
-    if (invoiceItems.length === 0) {
-      newErrors.items = 'At least one item is required';
-    }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+  const handleMoveItem = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= invoiceItems.length) return;
+
+    const updatedItems = [...invoiceItems];
+    const [moved] = updatedItems.splice(index, 1);
+    updatedItems.splice(target, 0, moved);
+    setInvoiceItems(updatedItems);
   };
 
   const handleSubmit = () => {
-    // Log the current form data before submission
-    console.log('SUBMITTING FORM WITH DATA:', {
-      ...formData,
-      status: formData.status
-    });
-    
-    // Validate form
     const validationErrors: Record<string, string> = {};
-    
+
     if (!formData.client_id) {
       validationErrors.client_id = 'Client is required';
     }
-    
+
     if (!formData.invoice_number) {
       validationErrors.invoice_number = 'Invoice number is required';
     }
-    
+
+    if (!formData.issue_date) {
+      validationErrors.issue_date = 'Issue date is required';
+    }
+
+    if (!formData.due_date) {
+      validationErrors.due_date = 'Due date is required';
+    }
+
     if (invoiceItems.length === 0) {
       validationErrors.items = 'At least one item is required';
     }
-    
+
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
       return;
     }
-    
+
     setSubmitting(true);
-    
+
     try {
-      // Create a copy of the form data to ensure we don't lose any fields
       const invoiceData = {
         ...formData,
-        status: formData.status || 'draft'  // Explicitly include status
+        status: formData.status || 'draft'
       };
-      
-      console.log('Final invoice data being submitted:', invoiceData);
-      console.log('Status being submitted:', invoiceData.status);
-      
-      // Call the onSubmit function with the invoice data and items
+
       onSubmit(invoiceData, invoiceItems);
-      
-      // Clear form
       setErrors({});
-      } catch (error) {
+    } catch (error) {
       console.error('Error submitting form:', error);
-      } finally {
-        setSubmitting(false);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -591,19 +718,6 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
     return `$${Number(value).toFixed(2)}`;
   };
 
-  const openDescriptionModal = (index: number) => {
-    setEditingItemIndex(index);
-    setTempDescription(invoiceItems[index].description);
-    setDescriptionModalVisible(true);
-  };
-
-  const saveDescription = () => {
-    if (editingItemIndex !== null) {
-      handleUpdateItem(editingItemIndex, 'description', tempDescription);
-    }
-    setDescriptionModalVisible(false);
-  };
-
   const openNotesModal = () => {
     setTempNotes(formData.notes);
     setNotesModalVisible(true);
@@ -612,28 +726,6 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
   const saveNotes = () => {
     handleChange('notes', tempNotes);
     setNotesModalVisible(false);
-  };
-
-  // Add this debugging function at the top of the component
-  const logFormData = () => {
-    console.log('CURRENT FORM DATA:', {
-      ...formData,
-      status: formData.status
-    });
-  };
-
-  // Add this function to directly update the status
-  const handleStatusChange = (newStatus) => {
-    console.log(`Changing status to: ${newStatus}`);
-    // Update the form data
-    setFormData(prevData => {
-      const updatedData = {
-        ...prevData,
-        status: newStatus
-      };
-      console.log('Updated form data with new status:', updatedData);
-      return updatedData;
-    });
   };
 
   const openItemDescriptionModal = (index: number, description: string) => {
@@ -650,525 +742,362 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
     }
   };
 
+  const documentLabel = (formData.status === 'estimate' || formData.status === 'work_order')
+    ? 'Estimate'
+    : 'Invoice';
+
+  const clientAddressLines = selectedClient
+    ? [
+        selectedClient.address,
+        [selectedClient.city, selectedClient.state].filter(Boolean).join(', '),
+        selectedClient.zip,
+        selectedClient.email,
+        selectedClient.phone,
+      ].filter(Boolean)
+    : [];
+
   return (
-    <View style={{ flex: 1 }}>
-      <Card style={{ backgroundColor: '#ffffff' }}>
-        {!hideTitle && (
-          <Card.Title 
-            title={isEditing ? "Edit Invoice" : "Create Invoice"} 
-            titleStyle={{ fontSize: 20, fontWeight: 'bold' }}
-          />
-        )}
-        <Card.Content>
-          {/* Company Logo and Invoice Number Header */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
-            {companyLogo ? (
-              <>
-                <Image 
-                  source={{ uri: `data:image/png;base64,${companyLogo}` }} 
-                  style={{ width: 150, height: 80, resizeMode: 'contain' }}
+    <View style={doc.screen}>
+      {/* Sticky-feeling action bar, matching the Cancel / Save pair in the mock */}
+      <View style={doc.actionBar}>
+        <Button
+          mode="contained"
+          onPress={onCancel}
+          buttonColor="#c9cdd2"
+          textColor={INK}
+          style={{ borderRadius: 4, minWidth: 120 }}
+          labelStyle={{ fontSize: 14, fontWeight: '600' }}
+        >
+          Cancel
+        </Button>
+        <Button
+          mode="contained"
+          onPress={handleSubmit}
+          disabled={submitting}
+          buttonColor={GREEN}
+          textColor="#ffffff"
+          style={{ borderRadius: 4, minWidth: 140 }}
+          labelStyle={{ fontSize: 14, fontWeight: '600' }}
+        >
+          Save
+        </Button>
+      </View>
+
+      {/* The parent screen owns vertical scrolling, so this is a plain View. */}
+      <View style={{ paddingHorizontal: 16 }}>
+        <View style={doc.sheet}>
+          {!hideTitle && (
+            <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 24 }}>
+              {isEditing ? `Edit ${documentLabel}` : `Create ${documentLabel}`}
+            </Text>
+          )}
+
+          {/* ── Header: company block on the left, document meta on the right ── */}
+          <View style={doc.headerRow}>
+            <View style={doc.headerLeft}>
+              {companyLogo ? (
+                <Image
+                  source={{ uri: `data:image/png;base64,${companyLogo}` }}
+                  style={doc.logo}
                 />
-                <Text style={{ position: 'absolute', top: 0, left: 0, fontSize: 10, color: 'red' }}>
-                  Logo loaded
-                </Text>
-              </>
-            ) : (
-              <View style={{ width: 150, height: 80, backgroundColor: '#f5f5f5' }} />
-            )}
-            
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#666' }}>
-                {initialInvoice?.status === 'estimate' ? 'ESTIMATE' : 'INVOICE'} #
-              </Text>
-              <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#333' }}>
-                {initialInvoice?.invoice_number}
-              </Text>
+              ) : (
+                <View style={doc.logoPlaceholder}>
+                  <Text style={{ color: '#b0b6bd', fontSize: 12 }}>Company logo</Text>
+                </View>
+              )}
+
+              {companyInfo?.address ? (
+                String(companyInfo.address)
+                  .split('\n')
+                  .map((line: string, i: number) => (
+                    <Text key={`addr-${i}`} style={doc.companyLine}>{line}</Text>
+                  ))
+              ) : null}
+              {companyInfo?.email ? (
+                <Text style={doc.companyLink}>{companyInfo.email}</Text>
+              ) : null}
+              {companyInfo?.phone ? (
+                <Text style={doc.companyLine}>{companyInfo.phone}</Text>
+              ) : null}
+            </View>
+
+            <View style={doc.headerRight}>
+              {/* Client */}
+              <View style={doc.clientBox}>
+                {selectedClient ? (
+                  <View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: INK, flex: 1 }}>
+                        {selectedClient.name}
+                      </Text>
+                      <View style={{ flexDirection: 'row' }}>
+                        <IconButton
+                          icon="pencil"
+                          size={16}
+                          onPress={() => setClientModalVisible(true)}
+                          style={{ margin: 0 }}
+                        />
+                        <IconButton
+                          icon="close"
+                          size={16}
+                          onPress={handleClearClient}
+                          style={{ margin: 0 }}
+                        />
+                      </View>
+                    </View>
+                    {clientAddressLines.map((line, i) => (
+                      <Text key={`client-line-${i}`} style={{ fontSize: 13, lineHeight: 19, color: '#4b5563' }}>
+                        {line}
+                      </Text>
+                    ))}
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={doc.clientBoxEmpty}
+                    onPress={() => setClientModalVisible(true)}
+                  >
+                    <IconButton icon="account-multiple" size={20} iconColor={GREEN} style={{ margin: 0 }} />
+                    <Text style={doc.addClientText}>+ Add Client</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              {errors.client_id && <Text style={doc.errorText}>{errors.client_id}</Text>}
+
+              {/* Invoice number */}
+              <View style={doc.field}>
+                <Text style={doc.fieldLabel}>{documentLabel} #</Text>
+                <Text style={{ fontSize: 14, color: INK }}>{formData.invoice_number}</Text>
+              </View>
+
+              {/* Issue date */}
+              <View style={[doc.field, errors.issue_date ? doc.fieldError : null]}>
+                <Text style={doc.fieldLabel}>Date</Text>
+                <input
+                  type="date"
+                  style={nativeInputStyle}
+                  value={formData.issue_date || ''}
+                  onChange={(e: any) => handleChange('issue_date', e.target.value)}
+                />
+              </View>
+              {errors.issue_date && <Text style={doc.errorText}>{errors.issue_date}</Text>}
+
+              {/* Due date */}
+              <View style={[doc.field, errors.due_date ? doc.fieldError : null]}>
+                <Text style={doc.fieldLabel}>Due Date</Text>
+                <input
+                  type="date"
+                  style={nativeInputStyle}
+                  value={formData.due_date || ''}
+                  onChange={(e: any) => handleChange('due_date', e.target.value)}
+                />
+              </View>
+              {errors.due_date && <Text style={doc.errorText}>{errors.due_date}</Text>}
+
+              {/* Job */}
+              <View style={doc.field}>
+                <Text style={doc.fieldLabel}>Job</Text>
+                <select
+                  style={nativeSelectStyle}
+                  value={formData.job_id || ''}
+                  onChange={(e: any) => handleJobSelect(e.target.value)}
+                >
+                  <option value="">Select a job</option>
+                  {(jobs || []).map((job) => (
+                    <option key={job.uid || job.id} value={job.uid || job.id}>
+                      {job.title || job.name || `Job #${job.uid || job.id}`}
+                    </option>
+                  ))}
+                </select>
+              </View>
+
+              {/* Status */}
+              <View style={doc.field}>
+                <Text style={doc.fieldLabel}>Status</Text>
+                <select
+                  style={nativeSelectStyle}
+                  value={formData.status || 'estimate'}
+                  onChange={(e: any) => handleStatusChange(e.target.value)}
+                >
+                  <option value="estimate">Estimate</option>
+                  <option value="work_order">Work Order</option>
+                  <option value="draft">Draft</option>
+                  <option value="sent">Sent</option>
+                  <option value="partial_paid">Partial Paid</option>
+                  <option value="paid">Paid</option>
+                  <option value="overdue">Overdue</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </View>
             </View>
           </View>
 
-          <View style={{ flexDirection: 'row', gap: 16, marginBottom: 16 }}>
-            <View style={{ flex: 1 }}>
-              <Text>Invoice Number *</Text>
-              <TextInput
-                value={formData.invoice_number}
-                style={{
-                  height: 50,
-                  borderWidth: 1,
-                  borderColor: '#ccc',
-                  borderRadius: 4,
-                  padding: 8,
-                  backgroundColor: '#f0f0f0',
-                }}
-                editable={false}
-                required
-              />
+          {/* ── Line items ── */}
+          <View style={doc.columnHeader}>
+            <View style={doc.colGutter} />
+            <View style={doc.colDescription}>
+              <Text style={doc.columnHeaderText}>Description</Text>
             </View>
-            
-            <View style={{ flex: 1 }}>
-              <Text>Status</Text>
-              <select
-                style={{
-                  width: '100%',
-                  height: 50,
-                  padding: 8,
-                  borderWidth: 1,
-                  borderColor: '#ccc',
-                  borderRadius: 4,
-                  backgroundColor: '#fff',
-                  fontSize: 16
-                }}
-                value={formData.status || 'estimate'}
-                onChange={(e) => handleStatusChange(e.target.value)}
-              >
-                <option value="estimate">Estimate</option>
-                <option value="work_order">Work Order</option>
-                <option value="sent">Sent</option>
-                <option value="partial_paid">Partial Paid</option>
-                <option value="paid">Paid</option>
-                <option value="overdue">Overdue</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
+            <View style={doc.colNumeric}>
+              <Text style={doc.columnHeaderText}>Rate</Text>
             </View>
-          </View>
-          
-          <View style={{ flexDirection: 'row', gap: 16, marginBottom: 16 }}>
-            <View style={{ flex: 1 }}>
-              <TextInput
-                label="Issue Date *"
-                value={formData.issue_date}
-                onChangeText={(value) => handleChange('issue_date', value)}
-                style={combinedStyles.input}
-                error={!!errors.issue_date}
-              />
-              {errors.issue_date && <Text style={combinedStyles.error}>{errors.issue_date}</Text>}
+            <View style={doc.colNumeric}>
+              <Text style={doc.columnHeaderText}>Quantity</Text>
             </View>
-            
-            <View style={{ flex: 1 }}>
-              <TextInput
-                label="Due Date *"
-                value={formData.due_date}
-                onChangeText={(value) => handleChange('due_date', value)}
-                style={combinedStyles.input}
-                error={!!errors.due_date}
-              />
-              {errors.due_date && <Text style={combinedStyles.error}>{errors.due_date}</Text>}
+            <View style={doc.colTotal}>
+              <Text style={doc.columnHeaderText}>Total</Text>
             </View>
+            <View style={doc.colGutter} />
           </View>
-          
-          <View style={combinedStyles.formGroup}>
-            <Text>Job (Optional)</Text>
-            <select
-              style={{
-                width: '100%',
-                height: 50,
-                padding: 8,
-                borderWidth: 1,
-                borderColor: '#ccc',
-                borderRadius: 4,
-                backgroundColor: '#fff',
-                fontSize: 16
-              }}
-              value={formData.job_id || ''}
-              onChange={(e) => {
-                const jobId = e.target.value;
-                console.log('Selected job ID:', jobId);
-                const selectedJob = jobs.find(j => (j.uid || j.id) === jobId);
-                console.log('Found job:', selectedJob);
-                setSelectedJob(selectedJob || null);
-                setFormData({
-                  ...formData,
-                  job_id: jobId || null
-                });
-              }}
-            >
-              <option value="">Select a job</option>
-              {(jobs || []).map((job) => (
-                <option 
-                  key={job.uid || job.id} 
-                  value={job.uid || job.id}
-                >
-                  {job.title || job.name || `Job #${job.uid || job.id}`}
-                </option>
-              ))}
-            </select>
-          </View>
-          
-          <View style={combinedStyles.formGroup}>
-            <Text>Client *</Text>
-            <select
-              style={{
-                width: '100%',
-                height: 50,
-                padding: 8,
-                borderWidth: 1,
-                borderColor: '#ccc',
-                borderRadius: 4,
-                backgroundColor: '#fff',
-                fontSize: 16
-              }}
-              value={formData.client_id || ''}
-              onChange={(e) => {
-                const clientId = e.target.value;
-                console.log('Selected client ID:', clientId);
-                const selectedClient = clients.find(c => (c.uid || c.id) === clientId);
-                console.log('Found client:', selectedClient);
-                setSelectedClient(selectedClient || null);
-                setFormData({
-                  ...formData,
-                  client_id: clientId || null
-                });
-              }}
-              required
-            >
-              <option value="">Select a client</option>
-              {(clients || []).map((client) => (
-                <option 
-                  key={client.uid || client.id} 
-                  value={client.uid || client.id}
-                >
-                  {client.name || `Client #${client.uid || client.id}`}
-                </option>
-              ))}
-            </select>
-            {errors.client_id && <Text style={combinedStyles.error}>{errors.client_id}</Text>}
-          </View>
-          
-          <View style={combinedStyles.formGroup}>
-            <Text>Status</Text>
-            <select
-              style={{
-                width: '100%',
-                height: 50,
-                padding: 8,
-                borderWidth: 1,
-                borderColor: '#ccc',
-                borderRadius: 4,
-                backgroundColor: '#fff',
-                fontSize: 16
-              }}
-              value={formData.status || 'draft'}
-              onChange={(e) => handleStatusChange(e.target.value)}
-            >
-              <option value="draft">Draft</option>
-              <option value="sent">Sent</option>
-              <option value="paid">Paid</option>
-              <option value="overdue">Overdue</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </View>
-          
-          <Divider style={{ marginVertical: 16 }} />
-          
-          <Text style={{ fontSize: 18, fontWeight: 'bold', marginTop: 24, marginBottom: 16, backgroundColor: '#ffffff' }}>
-            Invoice Items
-          </Text>
-          
-          <View style={{ marginBottom: 16, backgroundColor: '#ffffff' }}>
-            <Text style={{ fontSize: 16, marginBottom: 8 }}>Services</Text>
-            <View style={{ 
-              borderWidth: 1, 
-              borderColor: '#ccc', 
-              borderRadius: 4, 
-              backgroundColor: '#ffffff',
-              position: 'relative',
-              marginBottom: 16,
-              zIndex: 1000
-            }}>
-              <TouchableOpacity
-                onPress={() => setShowServiceMenu(!showServiceMenu)}
-                style={{ 
-                  padding: 12,
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                }}
-              >
-                <Text>
-                  {selectedService 
-                    ? `${selectedService.name} - ${formatCurrency(selectedService.rate)}/${selectedService.unit}`
-                    : "Select a service to add"}
-                </Text>
-                <IconButton icon={showServiceMenu ? "chevron-up" : "chevron-down"} size={20} />
-              </TouchableOpacity>
-              
-              {showServiceMenu && (
-                <View style={{
-                  position: 'absolute', 
-                  top: '100%',
-                  left: 0, 
-                  right: 0, 
-                  backgroundColor: '#ffffff',
-                  borderWidth: 1,
-                  borderColor: '#e0e0e0',
-                  borderRadius: 4,
-                  zIndex: 10000,
-                  elevation: 10,
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.2,
-                  shadowRadius: 4,
-                  overflow: 'visible',
-                }}>
-                  <ScrollView style={{ maxHeight: 200 }}>
-                    {(services || []).map((service) => (
-                      <TouchableOpacity
-                        key={service.id || service.uid}
-                        onPress={() => handleAddService(service)}
-                        style={{
-                          padding: 12,
-                          borderBottomWidth: 1,
-                          borderBottomColor: '#f0f0f0',
-                          backgroundColor: '#ffffff',
-                        }}
-                        className="dropdown-item"
-                        onMouseEnter={(e) => {
-                          if (Platform.OS === 'web') {
-                            e.currentTarget.style.backgroundColor = '#f5f5f5';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (Platform.OS === 'web') {
-                            e.currentTarget.style.backgroundColor = '#ffffff';
-                          }
-                        }}
-                      >
-                        <Text>{service.name} - {formatCurrency(service.rate)}/{service.unit}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-            )}
-          </View>
-          
-            <Text style={{ fontSize: 16, marginBottom: 8 }}>Materials</Text>
-            <View style={{ 
-              borderWidth: 1, 
-              borderColor: '#ccc', 
-              borderRadius: 4, 
-              backgroundColor: '#ffffff',
-              position: 'relative',
-              marginBottom: 16,
-              zIndex: 999
-            }}>
-            <TouchableOpacity 
-                onPress={() => setShowMaterialMenu(!showMaterialMenu)}
-                style={{
-                  padding: 12,
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-              }}
-            >
-              <Text>
-                  {selectedMaterial 
-                    ? `${selectedMaterial.name} - ${formatCurrency(selectedMaterial.cost)}/${selectedMaterial.unit}`
-                    : "Select a material to add"}
-              </Text>
-                <IconButton icon={showMaterialMenu ? "chevron-up" : "chevron-down"} size={20} />
-            </TouchableOpacity>
-            
-              {showMaterialMenu && (
-                <View style={{
-                  position: 'absolute', 
-                  top: '100%',
-                  left: 0, 
-                  right: 0, 
-                  backgroundColor: '#ffffff',
-                  borderWidth: 1,
-                  borderColor: '#e0e0e0',
-                  borderRadius: 4,
-                  zIndex: 9999,
-                  elevation: 9,
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.2,
-                  shadowRadius: 4,
-                  overflow: 'visible',
-                }}>
-                  <ScrollView style={{ maxHeight: 200 }}>
-                    {(materials || []).map((material) => (
-                        <TouchableOpacity
-                        key={material.id || material.uid}
-                        onPress={() => handleAddMaterial(material)}
-                        style={{
-                          padding: 12,
-                          borderBottomWidth: 1,
-                          borderBottomColor: '#f0f0f0',
-                          backgroundColor: '#ffffff',
-                        }}
-                        className="dropdown-item"
-                        onMouseEnter={(e) => {
-                          if (Platform.OS === 'web') {
-                            e.currentTarget.style.backgroundColor = '#f5f5f5';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (Platform.OS === 'web') {
-                            e.currentTarget.style.backgroundColor = '#ffffff';
-                          }
-                        }}
-                      >
-                        <Text>{material.name} - {formatCurrency(material.cost)}/{material.unit}</Text>
-                        </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-            )}
-          </View>
-            
-            <Button 
-              mode="outlined" 
-              onPress={handleAddCustomItem}
-              style={{ backgroundColor: '#ffffff' }}
-            >
-              Add Custom Item
-            </Button>
-          </View>
-          
-          {errors.items && <Text style={combinedStyles.error}>{errors.items}</Text>}
-          
-          <DataTable style={{ backgroundColor: '#ffffff' }}>
-            <DataTable.Header>
-              <DataTable.Title 
-                style={{ flex: 3 }}
-              >
-                <Text style={{ fontSize: 18, fontWeight: 'bold' }}>Description</Text>
-              </DataTable.Title>
-              <DataTable.Title 
-                numeric 
-                style={{ width: 80 }}
-              >
-                <Text style={{ fontSize: 18, fontWeight: 'bold', textAlign: 'center' }}>Qty</Text>
-              </DataTable.Title>
-              <DataTable.Title 
-                numeric 
-                style={{ width: 120 }}
-              >
-                <Text style={{ fontSize: 18, fontWeight: 'bold' }}>Price</Text>
-              </DataTable.Title>
-              <DataTable.Title 
-                numeric 
-                style={{ width: 120 }}
-              >
-                <Text style={{ fontSize: 18, fontWeight: 'bold' }}>Amount</Text>
-              </DataTable.Title>
-              <DataTable.Title 
-                style={{ width: 50 }}
-              >
-                <Text style={{ fontSize: 18, fontWeight: 'bold' }}></Text>
-              </DataTable.Title>
-            </DataTable.Header>
-            
-            {invoiceItems.length === 0 ? (
-              <DataTable.Row>
-                <DataTable.Cell style={{ flex: 1 }}>No items added yet</DataTable.Cell>
-              </DataTable.Row>
-            ) : (
-              invoiceItems.map((item, index) => (
-              <DataTable.Row key={`item-${index}`}>
-                <DataTable.Cell style={{ flex: 3 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+
+          {errors.items && <Text style={doc.errorText}>{errors.items}</Text>}
+
+          {invoiceItems.map((item, index) => (
+            <View key={`item-${index}`} style={doc.itemRow}>
+              {/* Remove control, sitting on the card edge like the mock */}
+              <View style={doc.removeButton}>
+                <IconButton
+                  icon="minus-circle"
+                  iconColor="#e2543a"
+                  size={20}
+                  onPress={() => handleRemoveItem(index)}
+                  style={{ margin: 0 }}
+                />
+              </View>
+
+              <View style={doc.itemCard}>
+                <View style={doc.itemCells}>
+                  <View style={doc.cellDescription}>
                     <TextInput
-                      multiline
+                      placeholder="Description"
                       value={item.description}
                       onChangeText={(value) => handleUpdateItem(index, 'description', value)}
-                      style={{
-                          minHeight: 40,
-                        borderWidth: 1,
-                        borderColor: '#ccc',
-                        borderRadius: 4,
-                        padding: 8,
-                        flex: 1,
-                        ...(Platform.OS === 'web' ? { resize: 'vertical' } : {}),
-                      }}
+                      style={[doc.cellInput, { flex: 1 }]}
+                      underlineColor="transparent"
+                      activeUnderlineColor="transparent"
+                      dense
                     />
-                      <IconButton
-                        icon="pencil"
-                        size={20}
-                        onPress={() => openItemDescriptionModal(index, item.description)}
-                        style={{ marginLeft: 4 }}
-                      />
+                    <IconButton
+                      icon="pencil"
+                      size={16}
+                      onPress={() => openItemDescriptionModal(index, item.description)}
+                      style={{ margin: 0 }}
+                    />
+                    <TouchableOpacity style={doc.itemListButton} onPress={() => openItemList(index)}>
+                      <IconButton icon="format-list-bulleted" size={16} iconColor={GREEN} style={{ margin: 0 }} />
+                      <Text style={doc.itemListText}>Item List</Text>
+                    </TouchableOpacity>
                   </View>
-                </DataTable.Cell>
-                  <DataTable.Cell numeric style={{ width: 80, justifyContent: 'center' }}>
-                  <TextInput
-                    value={safeToString(item.quantity)}
-                    onChangeText={(value) => handleUpdateItem(index, 'quantity', parseFloat(value) || 0)}
-                    keyboardType="numeric"
-                      style={{ textAlign: 'center', width: 50 }}
-                  />
-                </DataTable.Cell>
-                  <DataTable.Cell numeric style={{ width: 120 }}>
-                  <TextInput
-                    value={safeToString(item.unit_price)}
-                    onChangeText={(value) => handleUpdateItem(index, 'unit_price', parseFloat(value) || 0)}
-                    keyboardType="numeric"
-                    style={{ textAlign: 'right', width: 80 }}
-                  />
-                </DataTable.Cell>
-                  <DataTable.Cell numeric style={{ width: 120 }}>
-                  {formatCurrency(item.amount)}
-                </DataTable.Cell>
-                  <DataTable.Cell style={{ width: 50 }}>
-                  <IconButton
-                    icon="delete"
-                    size={20}
-                    onPress={() => handleRemoveItem(index)}
-                  />
-                </DataTable.Cell>
-              </DataTable.Row>
-              ))
-            )}
-          </DataTable>
-          
-          <View style={{ marginTop: 24, backgroundColor: '#ffffff' }}>
-            <View style={[combinedStyles.row, { justifyContent: 'flex-end', gap: 8 }]}>
-                <Text>Subtotal:</Text>
-                <Text>{formatCurrency(formData.subtotal)}</Text>
-              </View>
-              
-            <View style={[combinedStyles.row, { justifyContent: 'space-between', alignItems: 'center' }]}>
-                <Text>Tax Rate:</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <TextInput
-                    value={formData.tax_rate.toString()}
-                    onChangeText={(value) => handleChange('tax_rate', value)}
-                    keyboardType="numeric"
-                    style={{ width: 60, height: 40 }}
-                  />
-                  <Text>%</Text>
+
+                  <View style={doc.cell}>
+                    <TextInput
+                      value={safeToString(item.unit_price)}
+                      onChangeText={(value) => handleUpdateItem(index, 'unit_price', parseFloat(value) || 0)}
+                      keyboardType="numeric"
+                      style={[doc.cellInput, { textAlign: 'center' }]}
+                      underlineColor="transparent"
+                      activeUnderlineColor="transparent"
+                      dense
+                    />
+                  </View>
+
+                  <View style={doc.cell}>
+                    <TextInput
+                      value={safeToString(item.quantity)}
+                      onChangeText={(value) => handleUpdateItem(index, 'quantity', parseFloat(value) || 0)}
+                      keyboardType="numeric"
+                      style={[doc.cellInput, { textAlign: 'center' }]}
+                      underlineColor="transparent"
+                      activeUnderlineColor="transparent"
+                      dense
+                    />
+                  </View>
+
+                  <View style={[doc.cell, { alignItems: 'center' }]}>
+                    <Text style={{ fontSize: 14, color: INK }}>{formatCurrency(item.amount)}</Text>
+                  </View>
                 </View>
               </View>
-              
-            <View style={[combinedStyles.row, { justifyContent: 'space-between' }]}>
-                <Text>Tax Amount:</Text>
-                <Text>{formatCurrency(formData.tax_amount)}</Text>
+
+              {/* Reorder control, where the drag handle sits in the mock */}
+              <View style={{ width: 44, alignItems: 'center' }}>
+                <IconButton
+                  icon="chevron-up"
+                  size={18}
+                  disabled={index === 0}
+                  onPress={() => handleMoveItem(index, -1)}
+                  style={{ margin: 0, height: 24 }}
+                />
+                <IconButton
+                  icon="chevron-down"
+                  size={18}
+                  disabled={index === invoiceItems.length - 1}
+                  onPress={() => handleMoveItem(index, 1)}
+                  style={{ margin: 0, height: 24 }}
+                />
               </View>
-              
-              <Divider style={{ marginVertical: 8 }} />
-              
-            <View style={[combinedStyles.row, { justifyContent: 'space-between' }]}>
-                <Text variant="titleMedium">Total:</Text>
-                <Text variant="titleMedium">{formatCurrency(formData.total)}</Text>
+            </View>
+          ))}
+
+          <TouchableOpacity style={doc.addLineItem} onPress={handleAddLineItem}>
+            <Text style={doc.addLineItemText}>+  Add Line Item</Text>
+          </TouchableOpacity>
+
+          {/* ── Totals ── */}
+          <View style={doc.totalsWrap}>
+            <View style={doc.totals}>
+              <View style={doc.totalsRow}>
+                <Text style={doc.totalsLabel}>Subtotal</Text>
+                <Text style={doc.totalsValue}>{formatCurrency(formData.subtotal)}</Text>
+              </View>
+
+              <View style={doc.totalsRow}>
+                <Text style={doc.totalsLabel}>Tax Rate</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <TextInput
+                    value={safeToString(formData.tax_rate)}
+                    onChangeText={(value) => handleChange('tax_rate', value)}
+                    keyboardType="numeric"
+                    style={{ width: 64, height: 36, backgroundColor: 'transparent', textAlign: 'right' }}
+                    underlineColor="transparent"
+                    activeUnderlineColor={GREEN}
+                    dense
+                  />
+                  <Text style={doc.totalsValue}>%</Text>
+                </View>
+              </View>
+
+              <View style={doc.totalsRow}>
+                <Text style={doc.totalsLabel}>Tax</Text>
+                <Text style={doc.totalsValue}>{formatCurrency(formData.tax_amount)}</Text>
+              </View>
+
+              <View style={doc.grandTotalRow}>
+                <Text style={doc.grandTotalLabel}>Total (USD)</Text>
+                <Text style={doc.grandTotalValue}>{formatCurrency(formData.total)}</Text>
+              </View>
             </View>
           </View>
-          
-          <View style={{ marginTop: 16 }}>
-            <Text>Notes</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+
+          {/* ── Notes ── */}
+          <View style={doc.notesSection}>
+            <Text style={doc.sectionLabel}>Notes</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', width: '100%' }}>
               <TextInput
                 value={formData.notes}
                 onChangeText={(value) => handleChange('notes', value)}
                 multiline
                 style={{
-                  minHeight: 60,
+                  minHeight: 80,
                   borderWidth: 1,
-                  borderColor: '#ccc',
-                  borderRadius: 4,
+                  borderColor: BORDER,
+                  borderRadius: 3,
                   padding: 8,
                   flex: 1,
+                  backgroundColor: '#ffffff',
                   ...(Platform.OS === 'web' ? { resize: 'vertical' } : {}),
                 }}
+                underlineColor="transparent"
+                activeUnderlineColor="transparent"
               />
               <IconButton
                 icon="pencil"
@@ -1178,115 +1107,122 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
               />
             </View>
           </View>
-        </Card.Content>
-        
-        <View style={[
-          combinedStyles.row, 
-          { 
-            justifyContent: 'flex-end', 
-            gap: 8, 
-            marginTop: 16,
-            backgroundColor: '#ffffff',
-            padding: 16
-          }
-        ]}>
-          <Button mode="outlined" onPress={onCancel} style={{ backgroundColor: '#ffffff' }}>
-            Cancel
-          </Button>
-          <Button 
-            mode="contained" 
-            onPress={handleSubmit}
-            disabled={submitting}
-          >
-            {isEditing ? "Update Invoice" : "Create Invoice"}
-          </Button>
         </View>
-      </Card>
+      </View>
+
+      {/* ── Client picker ── */}
       <Modal
-        visible={descriptionModalVisible}
-        transparent={true}
+        visible={clientModalVisible}
+        transparent
         animationType="fade"
-        onRequestClose={() => setDescriptionModalVisible(false)}
+        onRequestClose={() => setClientModalVisible(false)}
       >
-        <View style={{
-          flex: 1,
-          justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        }}>
-          <View style={{
-            width: '80%',
-            height: '70%',
-            backgroundColor: 'white',
-            borderRadius: 10,
-            padding: 20,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.25,
-            shadowRadius: 3.84,
-            elevation: 5,
-          }}>
-            <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 16 }}>Edit Description</Text>
-            
-            <TextInput
-              multiline
-              value={tempDescription}
-              onChangeText={setTempDescription}
-              style={{
-                flex: 1,
-                borderWidth: 1,
-                borderColor: '#ccc',
-                borderRadius: 4,
-                padding: 10,
-                marginBottom: 16,
-                ...(Platform.OS === 'web' ? { resize: 'both' } : {}),
-              }}
-              autoFocus
-            />
-            
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
-              <Button 
-                mode="outlined" 
-                onPress={() => setDescriptionModalVisible(false)}
-              >
+        <View style={doc.modalBackdrop}>
+          <View style={doc.modalCard}>
+            <Text style={doc.modalTitle}>Select Client</Text>
+            <ScrollView style={{ maxHeight: 380 }}>
+              {(clients || []).length === 0 ? (
+                <Text style={{ color: LABEL, padding: 8 }}>No clients found.</Text>
+              ) : (
+                (clients || []).map((client) => (
+                  <TouchableOpacity
+                    key={client.uid || client.id}
+                    style={doc.pickerRow}
+                    onPress={() => handleSelectClient(client)}
+                  >
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: INK }}>
+                      {client.name || `Client #${client.uid || client.id}`}
+                    </Text>
+                    {client.address ? (
+                      <Text style={{ fontSize: 13, color: '#6b7280' }}>{client.address}</Text>
+                    ) : null}
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+            <View style={doc.modalActions}>
+              <Button mode="outlined" onPress={() => setClientModalVisible(false)}>
                 Cancel
-              </Button>
-              <Button 
-                mode="contained" 
-                onPress={saveDescription}
-              >
-                Save
               </Button>
             </View>
           </View>
         </View>
       </Modal>
+
+      {/* ── Item list picker (services + materials) ── */}
+      <Modal
+        visible={itemListModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setItemListModalVisible(false)}
+      >
+        <View style={doc.modalBackdrop}>
+          <View style={doc.modalCard}>
+            <Text style={doc.modalTitle}>Item List</Text>
+            <ScrollView style={{ maxHeight: 380 }}>
+              <Text style={doc.pickerGroupLabel}>SERVICES</Text>
+              {(services || []).length === 0 ? (
+                <Text style={{ color: LABEL, padding: 8 }}>No services found.</Text>
+              ) : (
+                (services || []).map((service: any) => (
+                  <TouchableOpacity
+                    key={`service-${service.id || service.uid}`}
+                    style={doc.pickerRow}
+                    onPress={() => {
+                      if (itemListTargetIndex !== null) {
+                        applyServiceToItem(itemListTargetIndex, service);
+                      }
+                      setItemListModalVisible(false);
+                    }}
+                  >
+                    <Text style={{ color: INK }}>
+                      {service.name} - {formatCurrency(service.rate)}/{service.unit}
+                    </Text>
+                  </TouchableOpacity>
+                ))
+              )}
+
+              <Text style={doc.pickerGroupLabel}>MATERIALS</Text>
+              {(materials || []).length === 0 ? (
+                <Text style={{ color: LABEL, padding: 8 }}>No materials found.</Text>
+              ) : (
+                (materials || []).map((material: any) => (
+                  <TouchableOpacity
+                    key={`material-${material.id || material.uid}`}
+                    style={doc.pickerRow}
+                    onPress={() => {
+                      if (itemListTargetIndex !== null) {
+                        applyMaterialToItem(itemListTargetIndex, material);
+                      }
+                      setItemListModalVisible(false);
+                    }}
+                  >
+                    <Text style={{ color: INK }}>
+                      {material.name} - {formatCurrency(material.cost)}/{material.unit}
+                    </Text>
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+            <View style={doc.modalActions}>
+              <Button mode="outlined" onPress={() => setItemListModalVisible(false)}>
+                Cancel
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Notes editor ── */}
       <Modal
         visible={notesModalVisible}
-        transparent={true}
+        transparent
         animationType="fade"
         onRequestClose={() => setNotesModalVisible(false)}
       >
-        <View style={{
-          flex: 1,
-          justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        }}>
-          <View style={{
-            width: '80%',
-            height: '70%',
-            backgroundColor: 'white',
-            borderRadius: 10,
-            padding: 20,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.25,
-            shadowRadius: 3.84,
-            elevation: 5,
-          }}>
-            <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 16 }}>Edit Notes</Text>
-            
+        <View style={doc.modalBackdrop}>
+          <View style={[doc.modalCard, { height: '70%' }]}>
+            <Text style={doc.modalTitle}>Edit Notes</Text>
             <TextInput
               multiline
               value={tempNotes}
@@ -1294,7 +1230,7 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
               style={{
                 flex: 1,
                 borderWidth: 1,
-                borderColor: '#ccc',
+                borderColor: BORDER,
                 borderRadius: 4,
                 padding: 10,
                 marginBottom: 16,
@@ -1302,58 +1238,37 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
               }}
               autoFocus
             />
-            
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
-              <Button 
-                mode="outlined" 
-                onPress={() => setNotesModalVisible(false)}
-              >
+            <View style={doc.modalActions}>
+              <Button mode="outlined" onPress={() => setNotesModalVisible(false)}>
                 Cancel
               </Button>
-              <Button 
-                mode="contained" 
-                onPress={saveNotes}
-              >
+              <Button mode="contained" buttonColor={GREEN} onPress={saveNotes}>
                 Save
               </Button>
             </View>
           </View>
         </View>
       </Modal>
+
+      {/* ── Line item description editor ── */}
       <Modal
         visible={itemDescriptionModalVisible}
-        transparent={true}
+        transparent
         animationType="fade"
         onRequestClose={() => setItemDescriptionModalVisible(false)}
       >
-        <View style={{
-          flex: 1,
-          justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        }}>
-          <View style={{
-            width: '90%',
-            height: '80%',
-            backgroundColor: 'white',
-            borderRadius: 10,
-            padding: 30,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.25,
-            shadowRadius: 3.84,
-            elevation: 5,
-          }}>
-            <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 20 }}>Edit Item Description</Text>
+        <View style={doc.modalBackdrop}>
+          <View style={[doc.modalCard, { width: '90%', height: '80%' }]}>
+            <Text style={doc.modalTitle}>Edit Item Description</Text>
             <TextInput
               multiline
               value={editingItemDescription}
               onChangeText={setEditingItemDescription}
               style={{
                 flex: 1,
-                minHeight: 300,
+                minHeight: 240,
                 borderWidth: 1,
-                borderColor: '#ccc',
+                borderColor: BORDER,
                 borderRadius: 4,
                 padding: 16,
                 marginBottom: 20,
@@ -1362,19 +1277,11 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
               }}
               autoFocus
             />
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 16 }}>
-              <Button 
-                mode="outlined" 
-                onPress={() => setItemDescriptionModalVisible(false)}
-                style={{ paddingHorizontal: 20 }}
-              >
+            <View style={doc.modalActions}>
+              <Button mode="outlined" onPress={() => setItemDescriptionModalVisible(false)}>
                 Cancel
               </Button>
-              <Button 
-                mode="contained" 
-                onPress={saveItemDescription}
-                style={{ paddingHorizontal: 20 }}
-              >
+              <Button mode="contained" buttonColor={GREEN} onPress={saveItemDescription}>
                 Save
               </Button>
             </View>
@@ -1383,4 +1290,4 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
       </Modal>
     </View>
   );
-} 
+}
