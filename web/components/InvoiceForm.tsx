@@ -873,12 +873,34 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
     setSubmitting(true);
 
     try {
+      // Empty selects and cleared number fields hold '', which Postgres
+      // rejects for bigint and numeric columns. Normalize before saving:
+      // ids become null, numbers become 0.
+      const toId = (value: any) => (value === '' || value === undefined ? null : value);
+
       const invoiceData = {
         ...formData,
+        job_id: toId(formData.job_id),
+        client_id: toId(formData.client_id),
+        subtotal: safeParseNumber(formData.subtotal),
+        fee_value: safeParseNumber(formData.fee_value),
+        fee_amount: safeParseNumber(formData.fee_amount),
+        tax_rate: safeParseNumber(formData.tax_rate),
+        tax_amount: safeParseNumber(formData.tax_amount),
+        total: safeParseNumber(formData.total),
         status: formData.status || 'draft'
       };
 
-      onSubmit(invoiceData, invoiceItems);
+      const normalizedItems = invoiceItems.map(item => ({
+        ...item,
+        quantity: safeParseNumber(item.quantity),
+        unit_price: safeParseNumber(item.unit_price),
+        amount: safeParseNumber(item.amount),
+        service_id: toId(item.service_id),
+        material_id: toId(item.material_id),
+      }));
+
+      onSubmit(invoiceData, normalizedItems);
       setErrors({});
     } catch (error) {
       console.error('Error submitting form:', error);

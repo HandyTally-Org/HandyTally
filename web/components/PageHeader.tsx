@@ -12,11 +12,12 @@ export function PageHeader({ title }: PageHeaderProps) {
 }
 
 const styles = StyleSheet.create({
+  // Matches the inline page title on the Jobs screen.
   title: {
     fontFamily: 'System',
     fontWeight: '600',
-    fontSize: 24,
+    fontSize: 26,
     marginBottom: 16,
-    color: '#000000',
+    color: '#333333',
   },
 }); 

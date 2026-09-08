@@ -1510,7 +1510,7 @@ export default function InvoicesScreen() {
       const { data, error } = await supabase
         .from('company_attachments')
         .select('file_data, file_type')
-        .eq('type', 'logo')
+        .eq('is_logo', true)
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
@@ -2037,11 +2037,12 @@ export default function InvoicesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    padding: 16,
     backgroundColor: '#ffffff',
   },
   searchContainer: {
     flexDirection: 'row',
-    padding: 16,
+    marginBottom: 12,
     alignItems: 'center',
     backgroundColor: '#ffffff',
   },
