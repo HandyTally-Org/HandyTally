@@ -1,5 +1,3 @@
-// Setup type definitions for built-in Supabase Runtime APIs
-import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 // Resend is used for outbound mail. Set these in the project's function secrets:
