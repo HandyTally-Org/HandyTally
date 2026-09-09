@@ -10,6 +10,11 @@ import { formatCurrency, formatDate } from '../utils/formatting';
 import { generateInvoiceHTML } from '../utils/invoiceHtml';
 
 
+// An invoice can only be emailed before it has gone out. 'estimate' is excluded
+// by design; 'sent' and the payment states are excluded so a send can never
+// overwrite a payment status. See HT-4.
+const SENDABLE_STATUSES: Invoice['status'][] = ['draft', 'work_order'];
+
 export interface InvoiceDetailsProps {
   invoice: Invoice;
   items: InvoiceItem[];
@@ -38,6 +43,8 @@ export function InvoiceDetails({
   const [statusMenuVisible, setStatusMenuVisible] = useState(false);
   const [companyInfo, setCompanyInfo] = useState(null);
   const [printLoading, setPrintLoading] = useState(false);
+  const [sendLoading, setSendLoading] = useState(false);
+  const [showSendDialog, setShowSendDialog] = useState(false);
   
   // Ensure invoice_items exists with a default empty array
   const safeInvoice = {
@@ -87,6 +94,55 @@ export function InvoiceDetails({
       onDelete(safeInvoice.uid);
     }
     setShowDeleteDialog(false);
+  };
+
+  // Only documents that are invoices but have not gone out yet can be sent.
+  // Estimates are excluded deliberately, and anything already paid or overdue
+  // is left alone so sending can never walk a payment state backwards.
+  const recipientEmail = safeInvoice.client?.email;
+  const isSendableStatus = SENDABLE_STATUSES.includes(safeInvoice.status);
+  const canSend = isSendableStatus && !!recipientEmail;
+
+  const sendDisabledReason = !isSendableStatus
+    ? `Only a Draft or Work Order can be sent. This invoice is "${safeInvoice.status}".`
+    : !recipientEmail
+      ? 'This client has no email address on file.'
+      : null;
+
+  const handleSend = async () => {
+    setShowSendDialog(false);
+
+    try {
+      setSendLoading(true);
+
+      // Render exactly what the Print action renders, so the client receives
+      // the same document the sender just looked at.
+      const html = generateInvoiceHTML(safeInvoice, items, companyInfo);
+
+      const { data, error } = await supabase.functions.invoke('send-invoice', {
+        body: {
+          to: recipientEmail,
+          subject: `Invoice #${safeInvoice.invoice_number} from ${companyInfo?.business_name || 'HandyTally'}`,
+          html,
+        },
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      // Only move the status once the provider has accepted the message.
+      onStatusChange?.('sent');
+      alert(`Invoice sent to ${recipientEmail}.`);
+    } catch (error) {
+      console.error('Error sending invoice:', error);
+      alert(`Failed to send the invoice: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setSendLoading(false);
+    }
   };
 
   const handlePrint = async () => {
@@ -253,7 +309,22 @@ export function InvoiceDetails({
             >
               Print Invoice
             </Button>
-            
+
+            {/* Send Button */}
+            <Button
+              mode="contained"
+              onPress={() => setShowSendDialog(true)}
+              style={styles.actionButton}
+              icon="email-send"
+              loading={sendLoading}
+              disabled={!canSend || sendLoading}
+            >
+              Send Invoice
+            </Button>
+            {sendDisabledReason && (
+              <Text style={styles.sendHint}>{sendDisabledReason}</Text>
+            )}
+
             <View style={styles.statusButtons}>
               <Button 
                 mode={safeInvoice.status === 'draft' ? 'contained' : 'outlined'} 
@@ -323,6 +394,22 @@ export function InvoiceDetails({
             <Button onPress={handleDelete}>Delete</Button>
           </Dialog.Actions>
         </Dialog>
+
+        <Dialog visible={showSendDialog} onDismiss={() => setShowSendDialog(false)}>
+          <Dialog.Title>Send Invoice</Dialog.Title>
+          <Dialog.Content>
+            <Text>
+              Email Invoice #{safeInvoice.invoice_number} to {recipientEmail}?
+            </Text>
+            <Text style={styles.sendHint}>
+              The invoice will be marked as Sent once it has gone out.
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setShowSendDialog(false)}>Cancel</Button>
+            <Button onPress={handleSend}>Send</Button>
+          </Dialog.Actions>
+        </Dialog>
       </Portal>
     </ScrollView>
   );
@@ -368,6 +455,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   actionButton: {
+    marginBottom: 8,
+  },
+  sendHint: {
+    fontSize: 12,
+    color: '#666666',
     marginBottom: 8,
   },
   statusButtons: {

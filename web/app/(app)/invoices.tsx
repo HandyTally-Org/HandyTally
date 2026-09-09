@@ -27,7 +27,9 @@ export type Invoice = {
   tax_amount: number;
   total: number;
   notes: string;
-  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
+  // Covers both document type (draft/estimate/work_order) and payment state.
+  // These are the values the status dropdown actually writes.
+  status: 'draft' | 'estimate' | 'work_order' | 'sent' | 'partial_paid' | 'paid' | 'overdue' | 'cancelled';
   created_at: string;
   updated_at: string;
   job?: Job;
@@ -1419,9 +1421,34 @@ export default function InvoicesScreen() {
   };
 
   // Add a function to handle viewing invoice details
-  const handleViewInvoiceDetails = (invoice) => {
+  const handleViewInvoiceDetails = async (invoice) => {
     setSelectedInvoice(invoice);
     setShowDetailsModal(true);
+
+    // Line items are not on the list row, so load them or the details view
+    // (and any invoice emailed from it) would show no work at all.
+    fetchInvoiceItems(invoice.uid);
+
+    // The list query only joins the client's name, but the details view needs
+    // the whole client record - its email is the recipient when sending.
+    if (invoice?.client_id) {
+      const { data: client, error } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('uid', invoice.client_id)
+        .single();
+
+      if (error) {
+        console.error('Error loading client for invoice details:', error);
+        return;
+      }
+
+      if (client) {
+        setSelectedInvoice(current =>
+          current && current.uid === invoice.uid ? { ...current, client } : current
+        );
+      }
+    }
   };
 
   // Add this right before rendering the InvoiceForm
@@ -1790,6 +1817,7 @@ export default function InvoicesScreen() {
                           fontWeight: 'bold'
                         }}
                       >
+                        <option value="draft">Draft</option>
                         <option value="estimate">Estimate</option>
                         <option value="work_order">Work Order</option>
                         <option value="sent">Sent</option>
@@ -1801,6 +1829,11 @@ export default function InvoicesScreen() {
                     </DataTable.Cell>
                     <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
                       <View style={{ flexDirection: 'row' }}>
+                        <IconButton
+                          icon="eye"
+                          size={20}
+                          onPress={() => handleViewInvoiceDetails(invoice)}
+                        />
                         <IconButton
                           icon="pencil"
                           size={20}
@@ -2020,6 +2053,14 @@ export default function InvoicesScreen() {
                 }}
                 items={invoiceItems || []}
                 companyLogo={companyLogo}
+                onStatusChange={async (status) => {
+                  const updated = await updateInvoiceStatus(selectedInvoice.uid, status);
+                  if (updated) {
+                    setSelectedInvoice(current =>
+                      current ? { ...current, status } : current
+                    );
+                  }
+                }}
               />
             </ScrollView>
           </Modal>
