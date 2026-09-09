@@ -10,10 +10,12 @@ import { formatCurrency, formatDate } from '../utils/formatting';
 import { generateInvoiceHTML } from '../utils/invoiceHtml';
 
 
-// An invoice can only be emailed before it has gone out. 'estimate' is excluded
-// by design; 'sent' and the payment states are excluded so a send can never
-// overwrite a payment status. See HT-4.
-const SENDABLE_STATUSES: Invoice['status'][] = ['draft', 'work_order'];
+// Documents that can be emailed to a client: the ones that have not yet turned
+// into money owed. Estimates are included deliberately - for a contractor,
+// emailing an estimate is usually how the job is won. The payment states are
+// excluded because there is no reason to re-issue a paid or overdue invoice
+// from here. See HT-4.
+const SENDABLE_STATUSES: Invoice['status'][] = ['draft', 'estimate', 'work_order'];
 
 export interface InvoiceDetailsProps {
   invoice: Invoice;
@@ -22,6 +24,8 @@ export interface InvoiceDetailsProps {
   onEdit?: (invoice: Invoice) => void;
   onDelete?: (invoiceId: string) => void;
   onStatusChange?: (status: Invoice['status']) => void;
+  // Called after the invoice has been emailed, so the caller can refresh.
+  onSent?: () => void;
   isEditable?: boolean;
   isEditing?: boolean;
   companyLogo?: string | null;
@@ -34,6 +38,7 @@ export function InvoiceDetails({
   onEdit, 
   onDelete, 
   onStatusChange,
+  onSent,
   isEditable = true,
   isEditing = false,
   companyLogo
@@ -45,6 +50,7 @@ export function InvoiceDetails({
   const [printLoading, setPrintLoading] = useState(false);
   const [sendLoading, setSendLoading] = useState(false);
   const [showSendDialog, setShowSendDialog] = useState(false);
+  const [sentAt, setSentAt] = useState<string | null>(invoice?.sent_at ?? null);
   
   // Ensure invoice_items exists with a default empty array
   const safeInvoice = {
@@ -85,7 +91,8 @@ export function InvoiceDetails({
   };
 
   const handleStatusChange = (status: Invoice['status']) => {
-    onStatusChange(status);
+    // Optional prop: guard it, or the status buttons crash when it is omitted.
+    onStatusChange?.(status);
   };
 
   const handleDelete = () => {
@@ -104,7 +111,7 @@ export function InvoiceDetails({
   const canSend = isSendableStatus && !!recipientEmail;
 
   const sendDisabledReason = !isSendableStatus
-    ? `Only a Draft or Work Order can be sent. This invoice is "${safeInvoice.status}".`
+    ? `A "${safeInvoice.status}" document cannot be emailed from here.`
     : !recipientEmail
       ? 'This client has no email address on file.'
       : null;
@@ -134,9 +141,26 @@ export function InvoiceDetails({
         throw new Error(data.error);
       }
 
-      // Only move the status once the provider has accepted the message.
-      onStatusChange?.('sent');
-      alert(`Invoice sent to ${recipientEmail}.`);
+      // Only record the send once the provider has accepted the message.
+      // sent_at is written rather than the status, so an estimate stays an
+      // estimate and a payment state is never overwritten.
+      const sentTimestamp = new Date().toISOString();
+      const { error: stampError } = await supabase
+        .from('invoices')
+        .update({ sent_at: sentTimestamp })
+        .eq('uid', safeInvoice.uid);
+
+      if (stampError) {
+        // The client has the email; failing to record that is not worth
+        // presenting as a failed send, but it must not pass silently either.
+        console.error('Invoice was emailed but sent_at could not be saved:', stampError);
+        alert(`Invoice sent to ${recipientEmail}, but recording the send failed. It may still show as unsent.`);
+      } else {
+        setSentAt(sentTimestamp);
+        alert(`Invoice sent to ${recipientEmail}.`);
+      }
+
+      onSent?.();
     } catch (error) {
       console.error('Error sending invoice:', error);
       alert(`Failed to send the invoice: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -319,10 +343,13 @@ export function InvoiceDetails({
               loading={sendLoading}
               disabled={!canSend || sendLoading}
             >
-              Send Invoice
+              {sentAt ? 'Send Again' : 'Send Invoice'}
             </Button>
             {sendDisabledReason && (
               <Text style={styles.sendHint}>{sendDisabledReason}</Text>
+            )}
+            {sentAt && (
+              <Text style={styles.sendHint}>Last sent {formatDate(sentAt)}</Text>
             )}
 
             <View style={styles.statusButtons}>
@@ -402,7 +429,9 @@ export function InvoiceDetails({
               Email Invoice #{safeInvoice.invoice_number} to {recipientEmail}?
             </Text>
             <Text style={styles.sendHint}>
-              The invoice will be marked as Sent once it has gone out.
+              {sentAt
+                ? `This was already sent on ${formatDate(sentAt)}. Sending again will email it a second time.`
+                : 'The status is left as it is; only the sent date is recorded.'}
             </Text>
           </Dialog.Content>
           <Dialog.Actions>

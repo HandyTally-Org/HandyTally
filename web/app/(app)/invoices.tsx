@@ -30,6 +30,10 @@ export type Invoice = {
   // Covers both document type (draft/estimate/work_order) and payment state.
   // These are the values the status dropdown actually writes.
   status: 'draft' | 'estimate' | 'work_order' | 'sent' | 'partial_paid' | 'paid' | 'overdue' | 'cancelled';
+  // When this document was last emailed to the client; null means never sent.
+  // Deliberately independent of status, so sending an estimate does not stop
+  // it being an estimate.
+  sent_at?: string | null;
   created_at: string;
   updated_at: string;
   job?: Job;
@@ -2053,6 +2057,7 @@ export default function InvoicesScreen() {
                 }}
                 items={invoiceItems || []}
                 companyLogo={companyLogo}
+                onSent={() => fetchInvoices()}
                 onStatusChange={async (status) => {
                   const updated = await updateInvoiceStatus(selectedInvoice.uid, status);
                   if (updated) {
