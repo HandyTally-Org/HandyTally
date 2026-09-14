@@ -2048,26 +2048,33 @@ export default function InvoicesScreen() {
               borderRadius: 10
             }}
           >
-            <ScrollView>
-              <InvoiceDetails
-                invoice={selectedInvoice}
-                onClose={() => {
-                  setShowDetailsModal(false);
-                  setSelectedInvoice(null);
-                }}
-                items={invoiceItems || []}
-                companyLogo={companyLogo}
-                onSent={() => fetchInvoices()}
-                onStatusChange={async (status) => {
-                  const updated = await updateInvoiceStatus(selectedInvoice.uid, status);
-                  if (updated) {
-                    setSelectedInvoice(current =>
-                      current ? { ...current, status } : current
-                    );
-                  }
-                }}
-              />
-            </ScrollView>
+            {/* On web, React Native's Modal is a fixed layer at z-index 9999.
+                Paper Dialogs opened from inside it (Send Invoice, Delete)
+                render through the app-root Portal, which sits *below* that
+                layer, so they open invisibly. A Portal.Host here makes them
+                render inside the modal's layer instead. */}
+            <Portal.Host>
+              <ScrollView>
+                <InvoiceDetails
+                  invoice={selectedInvoice}
+                  onClose={() => {
+                    setShowDetailsModal(false);
+                    setSelectedInvoice(null);
+                  }}
+                  items={invoiceItems || []}
+                  companyLogo={companyLogo}
+                  onSent={() => fetchInvoices()}
+                  onStatusChange={async (status) => {
+                    const updated = await updateInvoiceStatus(selectedInvoice.uid, status);
+                    if (updated) {
+                      setSelectedInvoice(current =>
+                        current ? { ...current, status } : current
+                      );
+                    }
+                  }}
+                />
+              </ScrollView>
+            </Portal.Host>
           </Modal>
         </Portal>
       )}
