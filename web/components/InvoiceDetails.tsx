@@ -135,7 +135,17 @@ export function InvoiceDetails({
       });
 
       if (error) {
-        throw new Error(error.message);
+        // On a non-2xx, supabase-js only says "Edge Function returned a
+        // non-2xx status code"; the function's { error } body is on
+        // error.context. Read it so the user sees the provider's reason.
+        let reason = error.message;
+        try {
+          const body = await error.context?.json();
+          if (body?.error) reason = body.error;
+        } catch {
+          // Body was not JSON; keep the generic message.
+        }
+        throw new Error(reason);
       }
       if (data?.error) {
         throw new Error(data.error);
