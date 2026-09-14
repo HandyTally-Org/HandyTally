@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Platform, Image } from 'react-native';
-import { Text, Button, Card, Divider, Chip, DataTable, Dialog, Portal, Menu } from 'react-native-paper';
-import { styles as globalStyles } from '../styles';
+import { View, StyleSheet, Platform, Image, TouchableOpacity } from 'react-native';
+import { Text, Button, Dialog, Portal } from 'react-native-paper';
 import { Invoice, InvoiceItem } from '../app/(app)/invoices';
 import { supabase } from '../lib/supabase';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { formatCurrency, formatDate } from '../utils/formatting';
 import { generateInvoiceHTML } from '../utils/invoiceHtml';
-
+import { doc, GREEN, NAVY, BORDER, LABEL, INK } from './invoiceDocStyles';
 
 // Documents that can be emailed to a client: the ones that have not yet turned
 // into money owed. Estimates are included deliberately - for a contractor,
@@ -43,9 +42,7 @@ export function InvoiceDetails({
   isEditing = false,
   companyLogo
 }: InvoiceDetailsProps) {
-  const [loading, setLoading] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [statusMenuVisible, setStatusMenuVisible] = useState(false);
   const [companyInfo, setCompanyInfo] = useState(null);
   const [printLoading, setPrintLoading] = useState(false);
   const [sendLoading, setSendLoading] = useState(false);
@@ -78,17 +75,6 @@ export function InvoiceDetails({
       console.error('Error fetching company info:', error);
     }
   }
-
-  const getStatusChipColor = (status: Invoice['status']) => {
-    switch (status) {
-      case 'draft': return '#9e9e9e';
-      case 'sent': return '#2196F3';
-      case 'paid': return '#4CAF50';
-      case 'overdue': return '#F44336';
-      case 'cancelled': return '#FF9800';
-      default: return '#9e9e9e';
-    }
-  };
 
   const handleStatusChange = (status: Invoice['status']) => {
     // Optional prop: guard it, or the status buttons crash when it is omitted.
@@ -216,210 +202,321 @@ export function InvoiceDetails({
     }
   };
 
+  // Items arrive through the `items` prop (the list row does not carry them);
+  // the JSON column on the invoice is only a fallback.
+  const lineItems: InvoiceItem[] = items && items.length > 0 ? items : safeInvoice.invoice_items;
+
+  const documentLabel = (safeInvoice.status === 'estimate' || safeInvoice.status === 'work_order')
+    ? 'Estimate'
+    : 'Invoice';
+
+  const client = safeInvoice.client;
+  const clientAddressLines = client
+    ? [
+        client.address,
+        [client.city, client.state].filter(Boolean).join(', '),
+        client.zip,
+        client.email,
+        client.phone,
+      ].filter(Boolean)
+    : [];
+
+  const jobName = safeInvoice.job
+    ? (safeInvoice.job.title || (safeInvoice.job as any).name || `Job #${safeInvoice.job.uid}`)
+    : 'No job';
+
+  const feeValue = Number(safeInvoice.fee_value) || 0;
+  const feeAmount = Number(safeInvoice.fee_amount) || 0;
+  const hasFee = feeValue > 0 || feeAmount > 0;
+  const feeLabel = safeInvoice.fee_type === 'percent'
+    ? `Fee (${feeValue}%)`
+    : 'Fee';
+
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.contentWrapper}>
-        <View style={styles.headerContainer}>
-          {companyLogo ? (
-            <Image 
-              source={{ uri: `data:image/png;base64,${companyLogo}` }} 
-              style={styles.logo} 
-              resizeMode="contain"
-            />
-          ) : (
-            <View style={styles.logoPlaceholder} />
-          )}
-          
-          <View style={styles.invoiceNumberContainer}>
-            <Text style={styles.invoiceNumberLabel}>
-              {invoice.status === 'estimate' ? 'ESTIMATE' : 'INVOICE'} #
-            </Text>
-            <Text style={styles.invoiceNumber}>{invoice.invoice_number}</Text>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text>{safeInvoice.client ? safeInvoice.client.name : 'No client'}</Text>
-          <Text>Status: {safeInvoice.status}</Text>
-          <Text>Amount: {formatCurrency(safeInvoice.total)}</Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text>Job: {safeInvoice.job ? safeInvoice.job.name : 'No job'}</Text>
-          <Text>Issue Date: {formatDate(safeInvoice.issue_date)}</Text>
-          <Text>Due Date: {formatDate(safeInvoice.due_date)}</Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Items</Text>
-          <DataTable>
-            <DataTable.Header>
-              <DataTable.Title>Description</DataTable.Title>
-              <DataTable.Title numeric>Qty</DataTable.Title>
-              <DataTable.Title numeric>Price</DataTable.Title>
-              <DataTable.Title numeric>Amount</DataTable.Title>
-            </DataTable.Header>
-            
-            {loading ? (
-              <DataTable.Row>
-                <DataTable.Cell>Loading items...</DataTable.Cell>
-              </DataTable.Row>
-            ) : safeInvoice.invoice_items.length === 0 ? (
-              <DataTable.Row>
-                <DataTable.Cell>No items found</DataTable.Cell>
-              </DataTable.Row>
-            ) : (
-              safeInvoice.invoice_items.map((item) => (
-                <DataTable.Row key={item.id}>
-                  <DataTable.Cell>{item.description}</DataTable.Cell>
-                  <DataTable.Cell numeric>{item.quantity}</DataTable.Cell>
-                  <DataTable.Cell numeric>{formatCurrency(item.unit_price)}</DataTable.Cell>
-                  <DataTable.Cell numeric>{formatCurrency(item.amount)}</DataTable.Cell>
-                </DataTable.Row>
-              ))
-            )}
-          </DataTable>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Totals</Text>
-          <View style={styles.totals}>
-            <View style={styles.totalRow}>
-              <Text>Subtotal:</Text>
-              <Text>{formatCurrency(safeInvoice.subtotal)}</Text>
-            </View>
-            
-            <View style={styles.totalRow}>
-              <Text>Tax ({safeInvoice.tax_rate}%):</Text>
-              <Text>{formatCurrency(safeInvoice.tax_amount)}</Text>
-            </View>
-            
-            <Divider style={{ marginVertical: 8 }} />
-            
-            <View style={styles.totalRow}>
-              <Text variant="titleMedium">Total:</Text>
-              <Text variant="titleMedium">{formatCurrency(safeInvoice.total)}</Text>
-            </View>
-          </View>
-        </View>
-
-        {safeInvoice.notes && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Notes</Text>
-            <Text>{safeInvoice.notes}</Text>
-          </View>
-        )}
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Actions</Text>
-          <View style={styles.actionButtons}>
-            <Button 
-              mode="outlined" 
-              onPress={onClose}
-              style={styles.actionButton}
-              icon="arrow-left"
-            >
-              Back to Invoices
-            </Button>
-            
-            {isEditable && onEdit && (
-              <Button 
-                mode="contained" 
-                onPress={() => onEdit(safeInvoice)}
-                style={styles.actionButton}
-                icon="pencil"
+    <View style={doc.screen}>
+      {/* Action bar, mirroring the Cancel / Save pair on the editor. Status
+          changes live on the left so the sheet itself stays read-only. */}
+      <View style={[doc.actionBar, { justifyContent: 'space-between', flexWrap: 'wrap' }]}>
+        <View style={styles.statusRow}>
+          <Text style={styles.statusRowLabel}>Status</Text>
+          {STATUS_OPTIONS.map(({ value, label }) => {
+            const active = safeInvoice.status === value;
+            return (
+              <TouchableOpacity
+                key={value}
+                style={[styles.statusPill, active ? styles.statusPillActive : null]}
+                onPress={() => handleStatusChange(value)}
               >
-                Edit Invoice
-              </Button>
-            )}
-            
-            {/* Print Button */}
-            <Button 
-              mode="contained" 
-              onPress={handlePrint}
-              style={styles.actionButton}
-              icon="printer"
-              loading={printLoading}
-            >
-              Print Invoice
-            </Button>
+                <Text style={[styles.statusPillText, active ? styles.statusPillTextActive : null]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-            {/* Send Button */}
+        <View style={styles.actionGroup}>
+          {onDelete && isEditable && !isEditing && (
+            <Button
+              mode="text"
+              onPress={() => {
+                if (confirm('Are you sure you want to delete this invoice?')) {
+                  handleDelete();
+                }
+              }}
+              textColor="#dc2626"
+              icon="delete"
+              style={{ borderRadius: 4 }}
+              labelStyle={{ fontSize: 14, fontWeight: '600' }}
+            >
+              Delete
+            </Button>
+          )}
+          <Button
+            mode="contained"
+            onPress={onClose}
+            buttonColor="#c9cdd2"
+            textColor={INK}
+            style={{ borderRadius: 4, minWidth: 120 }}
+            labelStyle={{ fontSize: 14, fontWeight: '600' }}
+          >
+            Back
+          </Button>
+          {isEditable && onEdit && (
             <Button
               mode="contained"
-              onPress={() => setShowSendDialog(true)}
-              style={styles.actionButton}
-              icon="email-send"
-              loading={sendLoading}
-              disabled={!canSend || sendLoading}
+              onPress={() => onEdit(safeInvoice)}
+              buttonColor={NAVY}
+              textColor="#ffffff"
+              icon="pencil"
+              style={{ borderRadius: 4, minWidth: 120 }}
+              labelStyle={{ fontSize: 14, fontWeight: '600' }}
             >
-              {sentAt ? 'Send Again' : 'Send Invoice'}
+              Edit
             </Button>
-            {sendDisabledReason && (
-              <Text style={styles.sendHint}>{sendDisabledReason}</Text>
-            )}
-            {sentAt && (
-              <Text style={styles.sendHint}>Last sent {formatDate(sentAt)}</Text>
-            )}
+          )}
+          <Button
+            mode="contained"
+            onPress={handlePrint}
+            loading={printLoading}
+            buttonColor={NAVY}
+            textColor="#ffffff"
+            icon="printer"
+            style={{ borderRadius: 4, minWidth: 120 }}
+            labelStyle={{ fontSize: 14, fontWeight: '600' }}
+          >
+            Print
+          </Button>
+          <Button
+            mode="contained"
+            onPress={() => setShowSendDialog(true)}
+            loading={sendLoading}
+            disabled={!canSend || sendLoading}
+            buttonColor={GREEN}
+            textColor="#ffffff"
+            icon="email-send"
+            style={{ borderRadius: 4, minWidth: 140 }}
+            labelStyle={{ fontSize: 14, fontWeight: '600' }}
+          >
+            {sentAt ? 'Send Again' : `Send ${documentLabel}`}
+          </Button>
+        </View>
+      </View>
 
-            <View style={styles.statusButtons}>
-              <Button 
-                mode={safeInvoice.status === 'draft' ? 'contained' : 'outlined'} 
-                onPress={() => handleStatusChange('draft')}
-                style={styles.statusButton}
-              >
-                Draft
-              </Button>
-              <Button 
-                mode={safeInvoice.status === 'sent' ? 'contained' : 'outlined'} 
-                onPress={() => handleStatusChange('sent')}
-                style={styles.statusButton}
-              >
-                Sent
-              </Button>
-              <Button 
-                mode={safeInvoice.status === 'paid' ? 'contained' : 'outlined'} 
-                onPress={() => handleStatusChange('paid')}
-                style={styles.statusButton}
-              >
-                Paid
-              </Button>
-              <Button 
-                mode={safeInvoice.status === 'overdue' ? 'contained' : 'outlined'} 
-                onPress={() => handleStatusChange('overdue')}
-                style={styles.statusButton}
-              >
-                Overdue
-              </Button>
-              <Button 
-                mode={safeInvoice.status === 'cancelled' ? 'contained' : 'outlined'} 
-                onPress={() => handleStatusChange('cancelled')}
-                style={styles.statusButton}
-              >
-                Cancelled
-              </Button>
+      {(sendDisabledReason || sentAt) && (
+        <View style={styles.sendHintRow}>
+          {sendDisabledReason && <Text style={styles.sendHint}>{sendDisabledReason}</Text>}
+          {sentAt && <Text style={styles.sendHint}>Last sent {formatDate(sentAt)}</Text>}
+        </View>
+      )}
+
+      <View style={{ paddingHorizontal: 16 }}>
+        <View style={doc.sheet}>
+          {/* ── Header: company block on the left, document meta on the right ── */}
+          <View style={doc.headerRow}>
+            <View style={doc.headerLeft}>
+              {companyLogo ? (
+                <Image
+                  source={{ uri: `data:image/png;base64,${companyLogo}` }}
+                  style={doc.logo}
+                />
+              ) : (
+                <View style={doc.logoPlaceholder}>
+                  <Text style={{ color: '#b0b6bd', fontSize: 12 }}>Company logo</Text>
+                </View>
+              )}
+
+              {companyInfo?.address ? (
+                String(companyInfo.address)
+                  .split('\n')
+                  .map((line: string, i: number) => (
+                    <Text key={`addr-${i}`} style={doc.companyLine}>{line}</Text>
+                  ))
+              ) : null}
+              {companyInfo?.email ? (
+                <Text style={doc.companyLink}>{companyInfo.email}</Text>
+              ) : null}
+              {companyInfo?.phone ? (
+                <Text style={doc.companyLine}>{companyInfo.phone}</Text>
+              ) : null}
             </View>
-            
-            {/* Only show Delete button if the invoice is editable and not in edit mode */}
-            {onDelete && isEditable && !isEditing && (
-              <Button 
-                mode="outlined" 
-                onPress={() => {
-                  if (confirm('Are you sure you want to delete this invoice?')) {
-                    handleDelete();
-                  }
-                }}
-                style={styles.actionButton}
-                textColor="red"
-                icon="delete"
-              >
-                Delete Invoice
-              </Button>
-            )}
+
+            <View style={doc.headerRight}>
+              {/* Client */}
+              <View style={doc.clientBox}>
+                {client ? (
+                  <View>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: INK }}>
+                      {client.name}
+                    </Text>
+                    {clientAddressLines.map((line, i) => (
+                      <Text key={`client-line-${i}`} style={{ fontSize: 13, lineHeight: 19, color: '#4b5563' }}>
+                        {line}
+                      </Text>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={doc.clientBoxEmpty}>
+                    <Text style={{ color: LABEL, fontSize: 13 }}>No client</Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={doc.field}>
+                <Text style={doc.fieldLabel}>{documentLabel} #</Text>
+                <Text style={styles.fieldValue}>{safeInvoice.invoice_number}</Text>
+              </View>
+
+              <View style={doc.field}>
+                <Text style={doc.fieldLabel}>Date</Text>
+                <Text style={styles.fieldValue}>{formatDate(safeInvoice.issue_date) || '-'}</Text>
+              </View>
+
+              <View style={doc.field}>
+                <Text style={doc.fieldLabel}>Due Date</Text>
+                <Text style={styles.fieldValue}>{formatDate(safeInvoice.due_date) || '-'}</Text>
+              </View>
+
+              <View style={doc.field}>
+                <Text style={doc.fieldLabel}>Job</Text>
+                <Text style={styles.fieldValue}>{jobName}</Text>
+              </View>
+
+              <View style={doc.field}>
+                <Text style={doc.fieldLabel}>Status</Text>
+                <Text style={styles.fieldValue}>{statusLabel(safeInvoice.status)}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* ── Line items ── */}
+          <View style={doc.columnHeader}>
+            <View style={doc.colDescription}>
+              <Text style={doc.columnHeaderText}>Description</Text>
+            </View>
+            <View style={doc.colNumeric}>
+              <Text style={doc.columnHeaderText}>Rate</Text>
+            </View>
+            <View style={doc.colNumeric}>
+              <Text style={doc.columnHeaderText}>Quantity</Text>
+            </View>
+            <View style={doc.colTotal}>
+              <Text style={doc.columnHeaderText}>Total</Text>
+            </View>
+          </View>
+
+          {lineItems.length === 0 ? (
+            <View style={styles.emptyItems}>
+              <Text style={{ color: LABEL, fontSize: 13 }}>No line items</Text>
+            </View>
+          ) : (
+            lineItems.map((item, index) => {
+              const photos = Array.isArray(item.photos) ? item.photos : [];
+              return (
+                <View key={item.uid || `item-${index}`} style={doc.itemRow}>
+                  <View style={doc.itemCard}>
+                    <View style={doc.itemCells}>
+                      <View style={[doc.cellDescription, { paddingVertical: 12, paddingRight: 12 }]}>
+                        <Text style={{ fontSize: 14, color: INK, flex: 1 }}>{item.description}</Text>
+                      </View>
+                      <View style={[doc.cell, { alignItems: 'center' }]}>
+                        <Text style={{ fontSize: 14, color: INK }}>{formatCurrency(item.unit_price)}</Text>
+                      </View>
+                      <View style={[doc.cell, { alignItems: 'center' }]}>
+                        <Text style={{ fontSize: 14, color: INK }}>{item.quantity}</Text>
+                      </View>
+                      <View style={[doc.cell, { alignItems: 'center' }]}>
+                        <Text style={{ fontSize: 14, color: INK }}>{formatCurrency(item.amount)}</Text>
+                      </View>
+                    </View>
+
+                    {item.notes ? (
+                      <View style={[doc.itemNotesRow, { paddingVertical: 12 }]}>
+                        <Text style={{ fontSize: 14, color: INK }}>{item.notes}</Text>
+                      </View>
+                    ) : null}
+
+                    {photos.length > 0 ? (
+                      <View style={doc.itemPhotosRow}>
+                        {photos.map((photo, photoIndex) => (
+                          <Image
+                            key={`photo-${index}-${photoIndex}`}
+                            source={{ uri: `data:${photo.file_type || 'image/jpeg'};base64,${photo.file_data}` }}
+                            style={doc.thumb}
+                          />
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+              );
+            })
+          )}
+
+          {/* ── Totals ── */}
+          <View style={[doc.totalsWrap, { marginTop: 24 }]}>
+            <View style={doc.totals}>
+              <View style={doc.totalsRow}>
+                <Text style={doc.totalsLabel}>Subtotal</Text>
+                <Text style={doc.totalsValue}>{formatCurrency(safeInvoice.subtotal)}</Text>
+              </View>
+
+              {hasFee && (
+                <View style={doc.totalsRow}>
+                  <Text style={doc.totalsLabel}>{feeLabel}</Text>
+                  <Text style={doc.totalsValue}>{formatCurrency(feeAmount)}</Text>
+                </View>
+              )}
+
+              <View style={doc.totalsRow}>
+                <Text style={doc.totalsLabel}>Tax Rate</Text>
+                <Text style={doc.totalsValue}>{Number(safeInvoice.tax_rate) || 0} %</Text>
+              </View>
+
+              <View style={doc.totalsRow}>
+                <Text style={doc.totalsLabel}>Tax</Text>
+                <Text style={doc.totalsValue}>{formatCurrency(safeInvoice.tax_amount)}</Text>
+              </View>
+
+              <View style={doc.grandTotalRow}>
+                <Text style={doc.grandTotalLabel}>Total (USD)</Text>
+                <Text style={doc.grandTotalValue}>{formatCurrency(safeInvoice.total)}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* ── Notes ── */}
+          <View style={doc.notesSection}>
+            <Text style={doc.sectionLabel}>Notes</Text>
+            <View style={styles.notesBox}>
+              <Text style={{ fontSize: 14, color: safeInvoice.notes ? INK : LABEL }}>
+                {safeInvoice.notes || 'No notes'}
+              </Text>
+            </View>
           </View>
         </View>
       </View>
-      
+
       <Portal>
         <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)}>
           <Dialog.Title>Delete Invoice</Dialog.Title>
@@ -450,217 +547,93 @@ export function InvoiceDetails({
           </Dialog.Actions>
         </Dialog>
       </Portal>
-    </ScrollView>
+    </View>
   );
 }
 
+// Same set, same order, as the status dropdown on the editor.
+const STATUS_OPTIONS: { value: Invoice['status']; label: string }[] = [
+  { value: 'estimate', label: 'Estimate' },
+  { value: 'work_order', label: 'Work Order' },
+  { value: 'draft', label: 'Draft' },
+  { value: 'sent', label: 'Sent' },
+  { value: 'partial_paid', label: 'Partial Paid' },
+  { value: 'paid', label: 'Paid' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
+
+function statusLabel(status: Invoice['status']): string {
+  return STATUS_OPTIONS.find(option => option.value === status)?.label ?? status;
+}
+
+// Only what the read-only view needs on top of the shared document styles.
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
+  fieldValue: {
+    fontSize: 14,
+    color: INK,
   },
-  contentWrapper: {
-    padding: 20,
-    minHeight: '100%',
-  },
-  title: {
-    marginBottom: 20,
-  },
-  section: {
-    marginBottom: 24,
-    backgroundColor: '#ffffff',
-    padding: 16,
-    borderRadius: 8,
-    elevation: 2,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
-  },
-  totals: {
-    alignSelf: 'flex-end',
-    width: '50%',
-    marginTop: 16,
-  },
-  totalRow: {
+  actionGroup: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
   },
-  actionButton: {
-    marginBottom: 8,
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  statusRowLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: LABEL,
+    marginRight: 4,
+  },
+  statusPill: {
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: '#ffffff',
+  },
+  statusPillActive: {
+    backgroundColor: NAVY,
+    borderColor: NAVY,
+  },
+  statusPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: LABEL,
+  },
+  statusPillTextActive: {
+    color: '#ffffff',
+  },
+  sendHintRow: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    alignItems: 'flex-end',
   },
   sendHint: {
     fontSize: 12,
     color: '#666666',
-    marginBottom: 8,
+    marginBottom: 4,
   },
-  statusButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  statusButton: {
-    marginBottom: 8,
-  },
-  printContainer: {
-    display: 'none', // Hidden by default
-    padding: 20,
-    maxWidth: '800px', // Set a maximum width
-    margin: '0 auto', // Center the container
-    '@media print': {
-      display: 'block',
-    },
-  },
-  printOnly: {
-    display: 'none',
+  emptyItems: {
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 3,
+    paddingVertical: 18,
     alignItems: 'center',
-    marginBottom: 20,
-    '@media print': {
-      display: 'flex',
-    },
+    marginBottom: 14,
   },
-  logoText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 10,
-  },
-  printHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  printTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  printStatus: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    padding: 5,
-    borderRadius: 4,
-    backgroundColor: '#ccc',
-  },
-  printCompanyInfo: {
-    marginBottom: 20,
-    alignItems: 'flex-end',
-  },
-  printCompanyName: {
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  printClientInfo: {
-    marginBottom: 20,
-  },
-  printSectionTitle: {
-    fontWeight: 'bold',
-    marginBottom: 5,
-  },
-  printInvoiceDetails: {
-    marginBottom: 20,
-  },
-  printItemsTable: {
-    marginBottom: 20,
-  },
-  printTableHeader: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ccc',
-    paddingBottom: 8,
-    marginBottom: 8,
-  },
-  printDescriptionHeader: {
-    flex: 3,
-    fontWeight: 'bold',
-  },
-  printQuantityHeader: {
-    flex: 1,
-    textAlign: 'center',
-    fontWeight: 'bold',
-  },
-  printPriceHeader: {
-    flex: 1,
-    textAlign: 'right',
-    fontWeight: 'bold',
-  },
-  printAmountHeader: {
-    flex: 1,
-    textAlign: 'right',
-    fontWeight: 'bold',
-  },
-  printTableRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    paddingVertical: 8,
-  },
-  printDescriptionCell: {
-    flex: 3,
-  },
-  printQuantityCell: {
-    flex: 1,
-    textAlign: 'center',
-  },
-  printPriceCell: {
-    flex: 1,
-    textAlign: 'right',
-  },
-  printAmountCell: {
-    flex: 1,
-    textAlign: 'right',
-  },
-  printTotals: {
-    alignSelf: 'flex-end',
-    width: '50%',
-    marginBottom: 20,
-  },
-  printTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  printGrandTotal: {
-    fontWeight: 'bold',
-  },
-  printNotes: {
-    marginTop: 20,
+  notesBox: {
+    minHeight: 80,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 3,
     padding: 10,
-    backgroundColor: '#f9f9f9',
-    borderRadius: 4,
+    backgroundColor: '#ffffff',
   },
-  logo: {
-    width: 100,
-    height: 100,
-  },
-  headerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 20,
-    paddingHorizontal: 10,
-  },
-  logoPlaceholder: {
-    width: 150,
-    height: 80,
-  },
-  invoiceNumberContainer: {
-    alignItems: 'flex-end',
-  },
-  invoiceNumberLabel: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#666',
-  },
-  invoiceNumber: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-}); 
+});
