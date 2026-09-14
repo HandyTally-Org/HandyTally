@@ -39,3 +39,5 @@ app-example
 
 # JetBrains IDE
 .idea/
+# keep the templates
+!.env.example
