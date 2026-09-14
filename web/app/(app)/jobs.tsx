@@ -128,16 +128,25 @@ export default function JobsScreen() {
         .from('jobs')
         .delete()
         .eq('uid', selectedJob.uid);
-      
-      if (error) throw error;
-      
+
+      if (error) {
+        // 23503 = foreign_key_violation. job_costs and jobs_attachments cascade
+        // since migration 20260914120000, so this only fires if it has not been
+        // applied yet, or a new table starts referencing jobs without a delete rule.
+        if (error.code === '23503') {
+          throw new Error(`"${selectedJob.title}" still has linked cost lines or attachments and cannot be deleted`);
+        }
+        throw new Error(error.message);
+      }
+
       setJobs(jobs.filter(job => job.uid !== selectedJob.uid));
       showSnackbar('Job deleted successfully');
+    } catch (error: any) {
+      console.error('Error deleting job:', error);
+      showSnackbar(`Failed to delete job: ${error.message}`);
+    } finally {
       setShowDeleteDialog(false);
       setSelectedJob(null);
-    } catch (error) {
-      console.error('Error deleting job:', error);
-      showSnackbar('Error deleting job');
     }
   };
 
