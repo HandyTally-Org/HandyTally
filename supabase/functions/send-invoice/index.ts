@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Resend is used for outbound mail. Set these in the project's function secrets:
 //   RESEND_API_KEY        - API key from the Resend dashboard
@@ -7,6 +8,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") as string;
 const INVOICE_FROM_ADDRESS = Deno.env.get("INVOICE_FROM_ADDRESS") as string;
 const INVOICE_REPLY_TO = Deno.env.get("INVOICE_REPLY_TO");
+
+// Injected by the platform; used only to verify the caller's session token.
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") as string;
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") as string;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,6 +47,20 @@ serve(async (req) => {
   // Only signed-in users may send. The client passes the caller's session token.
   const authHeader = req.headers.get("Authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return json({ error: "Unauthorized" }, 401);
+  }
+
+  // The gateway only checks that the bearer token is a JWT signed by this
+  // project, and the anon key satisfies that -- it ships in the app bundle and
+  // is public. Resolve the token to a user so that anything short of a live
+  // session (the bare anon key, an expired or revoked session) is refused.
+  const { data: { user }, error: authError } = await createClient(
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
+    { global: { headers: { Authorization: authHeader } } },
+  ).auth.getUser();
+
+  if (authError || !user) {
     return json({ error: "Unauthorized" }, 401);
   }
 
