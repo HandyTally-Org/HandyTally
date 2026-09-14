@@ -70,4 +70,4 @@
 4. Implement automated backups
 5. Create maintenance procedures
 
-Each phase should be completed and tested before moving to the next. Would you like to start with Phase 1 and begin setting up the project? 
+Each phase should be completed and tested before moving to the next.

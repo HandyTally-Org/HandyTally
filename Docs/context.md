@@ -1,3 +1,5 @@
+> **Historical document.** This is the original product brief. The schema and stack described below have drifted from the code; see [architecture.md](architecture.md) for the current system and [dev-issues.md](dev-issues.md) for known problems.
+
 # Invoice Management System Documentation
 
 ## Tech Stack

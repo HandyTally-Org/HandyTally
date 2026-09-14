@@ -236,7 +236,9 @@ The phased plan lives in [`Docs/tasks.md`](Docs/tasks.md). Highlights still ahea
 
 ## Further reading
 
-- [`Docs/context.md`](Docs/context.md) — product requirements and original data model
+- [`Docs/architecture.md`](Docs/architecture.md) — detailed technical breakdown: auth and RLS, multi-tenancy, data model, edge functions, key flows
+- [`Docs/dev-issues.md`](Docs/dev-issues.md) — catalog of known technical issues with evidence, fixes and a suggested order of work
+- [`Docs/context.md`](Docs/context.md) — original product brief (historical)
 - [`database/README.md`](database/README.md) — auth admin RPC setup
 - [`web/app/(app)/admin/README.md`](<web/app/(app)/admin/README.md>) — how user management reads `auth.users`
 - [`supabase/README.md`](supabase/README.md) — edge functions and secrets
