@@ -83,10 +83,13 @@ serve(async (req) => {
 
     if (!response.ok) {
       // Surface the provider's reason so the caller can show something useful.
+      // Not 502: Cloudflare sits in front of the self-hosted instance and
+      // replaces any origin 502/504 with its own bare error page, so the
+      // message below would never reach the app. 400 passes through intact.
       console.error("Resend rejected the send:", result);
       return json(
         { error: result?.message ?? "The email provider rejected the request" },
-        502,
+        400,
       );
     }
 
