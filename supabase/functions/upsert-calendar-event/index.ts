@@ -126,14 +126,28 @@ serve(async (req) => {
     // check alone would let the public anon key through, so resolve the token
     // to a user (same reasoning as send-invoice).
     if (!isServiceRoleToken(authHeader)) {
-      const { data: { user }, error: authError } = await createClient(
-        SUPABASE_URL_FOR_AUTH,
-        SUPABASE_ANON_KEY,
-        { global: { headers: { Authorization: authHeader } } },
-      ).auth.getUser();
-      if (authError || !user) {
-        return new Response("Unauthorized", { status: 401 });
+      let user = null;
+      let reason = "no user for this session token";
+      try {
+        // Pass the token explicitly rather than relying on the client picking
+        // it up from a custom Authorization header; that path depends on the
+        // gotrue-js version esm.sh resolves to.
+        const { data, error: authError } = await createClient(
+          SUPABASE_URL_FOR_AUTH,
+          SUPABASE_ANON_KEY,
+          { auth: { persistSession: false, autoRefreshToken: false } },
+        ).auth.getUser(authHeader.slice("Bearer ".length));
+        user = data?.user ?? null;
+        if (authError) reason = authError.message;
+      } catch (error) {
+        // Typically the worker could not reach SUPABASE_URL at all.
+        reason = `auth lookup failed: ${(error as any)?.message ?? error}`;
       }
+      if (!user) {
+        console.warn("Rejected app request:", reason);
+        return json({ error: `Unauthorized (${reason})` }, 401);
+      }
+      console.log(`Send requested by ${user.email} for job ${body?.jobId}`);
       return await sendOnRequest(body, user.email ?? null);
     }
 
