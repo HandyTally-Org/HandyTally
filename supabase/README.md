@@ -19,8 +19,7 @@ Auth-schema helpers (`get_all_users`, `admin_*`) are not migrations — they liv
 | Function | Trigger | Does |
 | --- | --- | --- |
 | `send-invoice` | Called from the web app when a user clicks **Send** on an invoice or estimate | Emails the invoice HTML to the client via Resend. The caller renders the HTML with `web/utils/invoiceHtml.ts` and posts `{ to, subject, html, attachments? }`. Requires a signed-in user's bearer token. |
-| `upsert-calendar-event` | Database webhook on `jobs` (insert / update / delete) | Creates, updates or removes the matching Nylas calendar event and stores `calendar_event_id` on the job. The event goes to the calendar of the user who created the job (`jobs.created_by` → `email_integrations`), falling back to the shared `NYLAS_GRANT_ID` calendar if that user has not connected one. Configure the webhook in **Database → Webhooks** after deploying. |
-| `calendar-connect` | Called from the Schedule page (**Connect Google Calendar** / **Disconnect**) | Nylas hosted-auth flow for the signed-in user: `start` returns the consent URL, `exchange` redeems the returned code and stores the grant in `email_integrations`, `disconnect` revokes it. Requires a signed-in user's bearer token. The app's return URL (`https://<app>/schedule`) must be added as a **callback URI** on the Nylas application. |
+| `upsert-calendar-event` | Database webhook on `jobs` (insert / update / delete) | Creates, updates or removes the matching Nylas calendar event and stores `calendar_event_id` on the job. Configure the webhook in **Database → Webhooks** after deploying. |
 | `create-organization` | Called from the admin app | Validates the requested subdomain, inserts the organization, creates a Route 53 record and attaches the domain in Vercel. Caller must be an active `superuser`. |
 
 ### Deploy
@@ -28,7 +27,6 @@ Auth-schema helpers (`get_all_users`, `admin_*`) are not migrations — they liv
 ```bash
 supabase functions deploy send-invoice
 supabase functions deploy upsert-calendar-event
-supabase functions deploy calendar-connect
 supabase functions deploy create-organization
 ```
 
@@ -46,8 +44,7 @@ Set with `supabase secrets set KEY=value` (or in the dashboard under **Edge Func
 | Function | Secret |
 | --- | --- |
 | `send-invoice` | `RESEND_API_KEY`, `INVOICE_FROM_ADDRESS`, `INVOICE_REPLY_TO` (optional) |
-| `upsert-calendar-event` | `NYLAS_API_KEY`, `NYLAS_API_URI`; `NYLAS_GRANT_ID`, `NYLAS_CALENDAR_ID` (optional shared fallback calendar, see HT-1) |
-| `calendar-connect` | `NYLAS_API_KEY`, `NYLAS_API_URI`, `NYLAS_CLIENT_ID` |
+| `upsert-calendar-event` | `NYLAS_API_KEY`, `NYLAS_API_URI`, `NYLAS_GRANT_ID`, `NYLAS_CALENDAR_ID` |
 | `create-organization` | `BASE_DOMAIN`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_HOSTED_ZONE_ID`, `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, `GITHUB_TOKEN`, `GITHUB_REPO` |
 
 ### Writing a new function

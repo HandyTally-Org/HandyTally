@@ -156,7 +156,7 @@ Authoritative source: `supabase/migrations/`. The 2025 files are dumps of the ho
 | --- | --- |
 | `company` | Name, address, contact, tax settings, `organization_id` |
 | `company_attachments` | Logo etc. as `file_type` + base64 `file_data` |
-| `email_integrations` | Per-user Nylas grant (HT-1): `user_id` → `auth.users`, `provider`, `email`, `grant_id`, `calendar_id`, `status`. Written only by `calendar-connect`; a user can read their own row. |
+| `email_integrations` | Per-org outbound mail settings |
 
 ### 5.3 Operations
 
@@ -197,14 +197,8 @@ All three live under `supabase/functions/<name>/index.ts`, use `serve` from `std
 ### `upsert-calendar-event`
 
 - **Caller:** Supabase **database webhook** on `public.jobs` (INSERT / UPDATE / DELETE).
-- **Does:** creates, updates or deletes the matching event on the calendar of the user who created the job (`jobs.created_by` → `email_integrations.grant_id` / `calendar_id`), falling back to the shared `NYLAS_GRANT_ID` / `NYLAS_CALENDAR_ID` calendar when that user has no active connection; stores the event id back on the job for later updates and deletes; sends an `.ics`. Marks the connection `revoked` when Nylas rejects the grant.
-- **Auth:** accepts only `Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>`, which the webhook is configured to send.
-
-### `calendar-connect`
-
-- **Caller:** `web/components/CalendarConnection.tsx` on the Schedule page.
-- **Does:** Nylas hosted-auth flow for the signed-in user. `start` returns the consent URL with an HMAC-signed `state` bound to the user; `exchange` verifies that `state` against the caller's session, redeems the code, picks the primary calendar and upserts `email_integrations`; `disconnect` revokes the grant at Nylas and deletes the row.
-- **Auth:** resolves the bearer token to a user; the `state` check stops a flow started by one user from being completed by another.
+- **Does:** creates, updates or deletes the matching event on the Nylas calendar `NYLAS_CALENDAR_ID` under grant `NYLAS_GRANT_ID`; stores the event id back on the job for later updates and deletes; sends an `.ics`.
+- **Auth:** checks for a bearer header and `Content-Type: application/json`.
 
 ### `create-organization`
 
@@ -235,15 +229,9 @@ InvoiceDetails                          │                              │    
 ### 7.2 Job → calendar
 
 ```
-JobForm ─ insert/update jobs ─► Postgres ─ webhook ─► upsert-calendar-event ─► Nylas (creator's grant)
+JobForm ─ insert/update jobs ─► Postgres ─ webhook ─► upsert-calendar-event ─► Nylas
                                                               │
-                                                              ├─ read email_integrations for jobs.created_by
                                                               └─ update jobs.calendar_event_id
-
-Schedule ─ Connect Google Calendar ─► calendar-connect (start) ─► Nylas hosted auth ─► Google consent
-                                                                                            │
-Schedule?code=&state= ◄─────────────────────────────────────────────────────────────────────┘
-        └─► calendar-connect (exchange) ─► upsert email_integrations
 ```
 
 ### 7.3 New tenant
