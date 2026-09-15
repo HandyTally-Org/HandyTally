@@ -5,6 +5,7 @@ import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions } from 'rea
 import { DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawer';
 import { useState, useEffect } from 'react';
 import {supabase} from "@/lib/supabase";
+import { useAuth } from '../../contexts/AuthContext';
 
 // Custom drawer content component
 function CustomDrawerContent(props: any) {
@@ -12,7 +13,9 @@ function CustomDrawerContent(props: any) {
   const [adminExpanded, setAdminExpanded] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
-  
+  // HT-12: only organisation admins (and superusers) see the Admin section.
+  const { isAdmin } = useAuth();
+
   // Function to toggle drawer state
   const toggleDrawer = () => {
     setIsCollapsed(!isCollapsed);
@@ -219,7 +222,8 @@ function CustomDrawerContent(props: any) {
             )}
           </TouchableOpacity>
 
-          {/* Admin with submenu */}
+          {/* Admin with submenu: admins only (HT-12) */}
+          {isAdmin && (
           <View>
             <TouchableOpacity
               onPress={toggleAdminSubmenu}
@@ -305,8 +309,9 @@ function CustomDrawerContent(props: any) {
               </View>
             )}
           </View>
+          )}
         </View>
-        
+
         {/* Add the HandyTally logo at the bottom */}
         <View style={[styles.footerContainer, isCollapsed && styles.footerContainerCollapsed]}>
           <View style={styles.handyTallyLogoContainer}>
@@ -343,6 +348,21 @@ function CustomDrawerContent(props: any) {
 }
 
 export default function AppLayout() {
+  // HT-12: the (app) group needs a session. Nothing enforced this before; a
+  // signed-out visitor got every screen with empty data.
+  const { session, isLoading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isLoading && !session) {
+      router.replace('/(auth)/login');
+    }
+  }, [isLoading, session, router]);
+
+  if (isLoading || !session) {
+    return null;
+  }
+
   return (
     <Drawer
       drawerContent={(props) => <CustomDrawerContent {...props} />}

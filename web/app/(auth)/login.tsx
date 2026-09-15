@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { View, StyleSheet, Image } from 'react-native';
 import { Button, Text, TextInput } from 'react-native-paper';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { styles as globalStyles } from '../../styles';
-import { supabase } from '../../lib/supabase';
 
 // Update the logo source paths to match the correct location and filename
 let logoSource;
@@ -33,6 +32,7 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { signIn } = useAuth();
+  const router = useRouter();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -43,50 +43,11 @@ export default function LoginScreen() {
     try {
       setLoading(true);
       setError(null);
-      
-      console.log('Attempting login with:', { email });
-      
-      // First, try to sign in with the provided credentials
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      
-      if (error) throw error;
-      
-      // Check if the user exists in our custom users table
-      if (data.user) {
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('uid', data.user.id)
-          .single();
-        
-        if (userError && userError.code !== 'PGRST116') {
-          console.error('Error fetching user data:', userError);
-        }
-        
-        // If the user doesn't exist in our custom table, add them
-        if (!userData) {
-          const { error: insertError } = await supabase
-            .from('users')
-            .insert([{
-              uid: data.user.id,
-              email: data.user.email,
-              name: '',
-              role: 'user', // Default role
-              created_at: new Date().toISOString()
-            }]);
-          
-          if (insertError) {
-            console.error('Error adding user to custom table:', insertError);
-          }
-        }
-      }
-      
-      // Successful login - let the AuthContext handle the rest
-      console.log('Login successful:', data);
+
+      // HT-12: roles come from organization_memberships via AuthContext now;
+      // the `users` table this used to write to never existed.
       await signIn(email, password);
+      router.replace('/');
     } catch (err) {
       console.error('Login error:', err);
       

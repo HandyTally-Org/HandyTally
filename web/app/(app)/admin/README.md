@@ -1,53 +1,21 @@
-# Admin Section
+# Admin section
 
-This directory contains the admin pages for the HandyTally application.
+Admin-only screens. Each one calls `useRequireAdmin()` (`web/hooks/useRequireAdmin.ts`) and renders nothing for anyone who is not an admin of their organisation or a superuser; the drawer also hides the Admin entry for everyone else. That is route gating only — the database functions and the edge function these screens call check the caller's role themselves.
 
-## User Management
+## Users (`users.tsx`) — HT-12
 
-The `users.tsx` file has been updated to pull data directly from Supabase's `auth.users` table instead of using a custom users table. This provides several benefits:
+The members of the signed-in admin's organisation (`AuthContext.organization`), with role and status.
 
-1. Single source of truth for user data
-2. Direct access to authentication status (confirmed/pending)
-3. Better integration with Supabase Auth features
+| Action | Goes through |
+| --- | --- |
+| List | `list_organization_members(org_id)` |
+| Invite (email, name, role admin / member / technician) | `invite-user` edge function — creates the account, adds the membership, emails a one-time link to `/set-password` |
+| Change role | `set_organization_member_role(org_id, target_user_id, new_role)` |
+| Deactivate / reactivate | `set_organization_member_active(org_id, target_user_id, active)` |
+| Send password reset | `supabase.auth.resetPasswordForEmail`, landing on `/set-password` |
 
-### Implementation Details
+Roles are `organization_memberships.role`; `user_profiles.role` is only used to recognise superusers. See `supabase/migrations/20260916100100_organization_member_management.sql` and `supabase/functions/invite-user/README.md`.
 
-- The User type has been updated to match the structure of auth.users
-- User data is fetched using a custom RPC function (`get_all_users()`)
-- The table now displays the following columns from auth.users:
-  - UID (user id)
-  - Display name (from user_metadata)
-  - Email
-  - Phone
-  - Providers (from app_metadata)
-  - Provider type (from app_metadata)
-  - Created at
-  - Last sign in at
-- Admin actions (update, delete, confirm) use secure RPC functions
+## Company (`company.tsx`)
 
-### Required SQL Functions
-
-For this implementation to work, you need to set up several SQL functions in your Supabase project. These functions are defined in `database/auth_functions.sql` and include:
-
-- `get_all_users()` - Retrieves all users from the auth.users table with all necessary fields
-- `is_admin()` - Checks if the current user has admin privileges
-- `admin_update_user_metadata(user_id, metadata)` - Updates a user's metadata
-- `admin_update_user_email(user_id, new_email)` - Updates a user's email
-- `admin_update_user_password(user_id, password)` - Updates a user's password
-- `admin_delete_user(user_id)` - Deletes a user
-- `admin_confirm_user(user_id)` - Confirms a user's email
-
-See the README in the `database` directory for instructions on how to set up these functions.
-
-### Security Considerations
-
-- All admin functions include security checks to ensure only admin users can access them
-- The functions use `SECURITY DEFINER` to run with elevated privileges
-- User roles are determined by the 'role' field in user metadata
-
-### UI Changes
-
-- Updated the table schema to match the Supabase Auth dashboard
-- Added helper function to extract provider information from app_metadata
-- Improved display of user IDs with appropriate styling
-- Removed the Role and Status columns as they're not part of the standard auth.users schema 
+Company profile and logo. Admin-only since HT-12.

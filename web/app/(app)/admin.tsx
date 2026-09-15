@@ -3,6 +3,7 @@ import { View, StyleSheet, ScrollView, Image } from 'react-native';
 import { Text, Button, TextInput, Snackbar, Card } from 'react-native-paper';
 import { supabase } from '../../lib/supabase';
 import { styles as globalStyles } from '../../styles';
+import { useRequireAdmin } from '../../hooks/useRequireAdmin';
 
 // Define the CompanyInfo type
 type CompanyInfo = {
@@ -22,6 +23,8 @@ type CompanyInfo = {
 const DEFAULT_LOGO_URL = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMjAwIiB2aWV3Qm94PSIwIDAgNDAwIDIwMCI+PHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSIyMDAiIGZpbGw9IiM0Q0FGNTAiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjI0IiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPllvdXIgQ29tcGFueSBMb2dvPC90ZXh0Pjwvc3ZnPg==';
 
 export default function AdminScreen() {
+  // HT-12: admin-only.
+  const allowed = useRequireAdmin();
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
   const [formData, setFormData] = useState<CompanyInfo>({
     name: '',
@@ -153,6 +156,10 @@ export default function AdminScreen() {
     setSnackbarMessage(message);
     setSnackbarVisible(true);
   };
+
+  if (!allowed) {
+    return null;
+  }
 
   // Get the logo URL with fallback to default
   const logoUrl = companyInfo?.logo_url || DEFAULT_LOGO_URL;
