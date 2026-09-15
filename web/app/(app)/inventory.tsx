@@ -8,6 +8,7 @@ import * as XLSX from 'xlsx';
 
 export type Material = {
   uid: string;
+  sku: string | null;
   name: string;
   description: string;
   cost: number;
@@ -109,6 +110,7 @@ export default function MaterialsScreen() {
       const cost = Number(material.cost);
       const quantity = Number(material.quantity);
       const payload: Record<string, unknown> = {
+        sku: (material.sku || '').trim() || null,
         name,
         description: material.description || '',
         cost: Number.isFinite(cost) ? cost : 0,
@@ -160,9 +162,14 @@ export default function MaterialsScreen() {
       }
       
       if ('quantity' in formattedUpdates) {
-        formattedUpdates.quantity = formattedUpdates.quantity !== undefined && formattedUpdates.quantity !== '' 
-          ? (typeof formattedUpdates.quantity === 'string' ? parseFloat(formattedUpdates.quantity) : formattedUpdates.quantity) 
-          : 0;
+        const quantity = Number(formattedUpdates.quantity);
+        formattedUpdates.quantity = Number.isFinite(quantity) ? quantity : 0;
+      }
+
+      // Blank SKU is stored as NULL, not ''.
+      if ('sku' in formattedUpdates) {
+        const sku = String(formattedUpdates.sku ?? '').trim();
+        formattedUpdates.sku = sku || null;
       }
       
       // Handle supplier_id which might be the bigint field causing issues
@@ -245,7 +252,8 @@ export default function MaterialsScreen() {
     let filtered = [...materials];
     
     if (searchQuery) {
-      filtered = filtered.filter(material => 
+      filtered = filtered.filter(material =>
+    material.sku?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     material.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     material.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     material.supplier?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -256,11 +264,17 @@ export default function MaterialsScreen() {
       let comparison = 0;
       
       switch (sortColumn) {
+        case 'sku':
+          comparison = (a.sku || '').localeCompare(b.sku || '');
+          break;
         case 'name':
           comparison = a.name.localeCompare(b.name);
           break;
         case 'description':
           comparison = (a.description || '').localeCompare(b.description || '');
+          break;
+        case 'quantity':
+          comparison = (a.quantity || 0) - (b.quantity || 0);
           break;
         case 'cost':
           comparison = (a.cost || 0) - (b.cost || 0);
@@ -296,6 +310,7 @@ export default function MaterialsScreen() {
       // Prepare data for export - include all important fields
       const exportData = materials.map(material => ({
         uid: material.uid,
+        sku: material.sku || '',
         name: material.name,
         description: material.description || '',
         cost: material.cost,
@@ -316,6 +331,7 @@ export default function MaterialsScreen() {
       if (!worksheet['!cols']) worksheet['!cols'] = [];
       worksheet['!cols'] = [
         { wch: 36 }, // uid
+        { wch: 15 }, // sku
         { wch: 25 }, // name
         { wch: 30 }, // description
         { wch: 10 }, // cost
@@ -490,7 +506,10 @@ export default function MaterialsScreen() {
           for (const key of Object.keys(item)) {
             const lowerKey = key.toLowerCase();
             
-            if (lowerKey === 'cost' || lowerKey === 'price') {
+            if (lowerKey === 'sku') {
+              const skuValue = String(item[key] ?? '').trim();
+              normalizedItem.sku = skuValue || null;
+            } else if (lowerKey === 'cost' || lowerKey === 'price') {
               // Handle cost/price field
               const costValue = parseFloat(String(item[key]).replace(/[^0-9.-]+/g, ''));
               normalizedItem.cost = isNaN(costValue) ? 0 : costValue;
@@ -784,7 +803,14 @@ export default function MaterialsScreen() {
               <Card.Content style={{ backgroundColor: '#ffffff', padding: 0 }}>
                 <DataTable style={{ backgroundColor: '#ffffff' }}>
                   <DataTable.Header style={{ backgroundColor: '#ffffff' }}>
-                    <DataTable.Title 
+                    <DataTable.Title
+                      style={{ backgroundColor: '#ffffff' }}
+                      sortDirection={sortColumn === 'sku' ? sortDirection : undefined}
+                      onPress={() => handleSort('sku')}
+                    >
+                      <Text style={{ backgroundColor: '#ffffff' }}>SKU</Text>
+                    </DataTable.Title>
+                    <DataTable.Title
                       style={{ backgroundColor: '#ffffff' }}
                       sortDirection={sortColumn === 'name' ? sortDirection : undefined}
                       onPress={() => handleSort('name')}
@@ -798,12 +824,19 @@ export default function MaterialsScreen() {
                     >
                       <Text style={{ backgroundColor: '#ffffff' }}>Description</Text>
                     </DataTable.Title>
-                    <DataTable.Title 
+                    <DataTable.Title
+                      style={{ backgroundColor: '#ffffff' }}
+                      sortDirection={sortColumn === 'quantity' ? sortDirection : undefined}
+                      onPress={() => handleSort('quantity')}
+                    >
+                      <Text style={{ backgroundColor: '#ffffff' }}>Quantity</Text>
+                    </DataTable.Title>
+                    <DataTable.Title
                       style={{ backgroundColor: '#ffffff' }}
                       sortDirection={sortColumn === 'cost' ? sortDirection : undefined}
                       onPress={() => handleSort('cost')}
                     >
-                      <Text style={{ backgroundColor: '#ffffff' }}>Cost</Text>
+                      <Text style={{ backgroundColor: '#ffffff' }}>Unit Cost</Text>
                     </DataTable.Title>
                     <DataTable.Title 
                       style={{ backgroundColor: '#ffffff' }}
@@ -826,14 +859,14 @@ export default function MaterialsScreen() {
 
                   {loading ? (
                     <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
-                      <DataTable.Cell style={{ flex: 6, backgroundColor: '#ffffff' }}>
+                      <DataTable.Cell style={{ flex: 8, backgroundColor: '#ffffff' }}>
                         <ActivityIndicator size="small" style={{ marginRight: 8 }} />
                         <Text style={{ backgroundColor: '#ffffff' }}>Loading materials...</Text>
                       </DataTable.Cell>
                     </DataTable.Row>
                   ) : getFilteredMaterials().length === 0 ? (
                     <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
-                      <DataTable.Cell style={{ flex: 6, backgroundColor: '#ffffff' }}>
+                      <DataTable.Cell style={{ flex: 8, backgroundColor: '#ffffff' }}>
                         <Text style={{ backgroundColor: '#ffffff' }}>No materials found</Text>
                       </DataTable.Cell>
                     </DataTable.Row>
@@ -841,13 +874,19 @@ export default function MaterialsScreen() {
                     getFilteredMaterials().map(material => (
                       <DataTable.Row key={material.uid} style={{ backgroundColor: '#ffffff' }}>
                         <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
+                          <Text style={{ backgroundColor: '#ffffff' }}>{material.sku || ''}</Text>
+                        </DataTable.Cell>
+                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
                           <Text style={{ backgroundColor: '#ffffff' }}>{material.name}</Text>
                         </DataTable.Cell>
                         <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
                           <Text style={{ backgroundColor: '#ffffff' }}>{material.description}</Text>
                         </DataTable.Cell>
                         <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
-                          <Text style={{ backgroundColor: '#ffffff' }}>${material.cost.toFixed(2)}</Text>
+                          <Text style={{ backgroundColor: '#ffffff' }}>{material.quantity ?? 0}</Text>
+                        </DataTable.Cell>
+                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
+                          <Text style={{ backgroundColor: '#ffffff' }}>${(material.cost ?? 0).toFixed(2)}</Text>
                         </DataTable.Cell>
                         <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
                           <Text style={{ backgroundColor: '#ffffff' }}>{material.supplier}</Text>
@@ -887,6 +926,12 @@ export default function MaterialsScreen() {
             <Dialog.Title style={{ backgroundColor: '#ffffff' }}>Add New Material</Dialog.Title>
             <Dialog.Content style={{ backgroundColor: '#ffffff' }}>
               <TextInput
+                label="SKU"
+                value={newMaterial.sku || ''}
+                onChangeText={(text) => setNewMaterial({ ...newMaterial, sku: text })}
+                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
+              />
+              <TextInput
                 label="Name"
                 value={newMaterial.name || ''}
                 onChangeText={(text) => setNewMaterial({ ...newMaterial, name: text })}
@@ -899,17 +944,18 @@ export default function MaterialsScreen() {
                 style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
               />
               <TextInput
-                label="Cost"
-                value={newMaterial.cost?.toString() || ''}
-                onChangeText={(text) => setNewMaterial({ ...newMaterial, cost: parseFloat(text) })}
-                keyboardType="numeric"
-                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-              />
-              <TextInput
                 label="Quantity"
                 value={newMaterial.quantity?.toString() || ''}
                 onChangeText={(text) => setNewMaterial({ ...newMaterial, quantity: parseFloat(text) })}
                 keyboardType="numeric"
+                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
+              />
+              <TextInput
+                label="Unit Cost"
+                value={newMaterial.cost?.toString() || ''}
+                onChangeText={(text) => setNewMaterial({ ...newMaterial, cost: parseFloat(text) })}
+                keyboardType="numeric"
+                left={<TextInput.Affix text="$" />}
                 style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
               />
               <TextInput
@@ -938,6 +984,12 @@ export default function MaterialsScreen() {
             <Dialog.Title style={{ backgroundColor: '#ffffff' }}>Edit Material</Dialog.Title>
             <Dialog.Content style={{ backgroundColor: '#ffffff' }}>
               <TextInput
+                label="SKU"
+                value={editingMaterial?.sku || ''}
+                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), sku: text } as any)}
+                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
+              />
+              <TextInput
                 label="Name"
                 value={editingMaterial?.name || ''}
                 onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), name: text } as any)}
@@ -950,10 +1002,18 @@ export default function MaterialsScreen() {
                 style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
               />
               <TextInput
-                label="Cost"
+                label="Quantity"
+                value={editingMaterial?.quantity?.toString() || ''}
+                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), quantity: parseFloat(text) } as any)}
+                keyboardType="numeric"
+                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
+              />
+              <TextInput
+                label="Unit Cost"
                 value={editingMaterial?.cost?.toString() || ''}
                 onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), cost: parseFloat(text) } as any)}
                 keyboardType="numeric"
+                left={<TextInput.Affix text="$" />}
                 style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
               />
               <TextInput
