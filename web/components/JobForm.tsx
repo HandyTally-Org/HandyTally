@@ -14,6 +14,7 @@ type Client = {
 import { JobStatusSelector } from './JobStatusSelector';
 import { formatDateInput, isValidDate } from '../utils/date';
 import { MaterialIcons } from '@expo/vector-icons';
+import { DateTimePickerDialog, formatDateTimeLabel } from './DateTimePickerDialog';
 
 type Job = {
   uid: number;  // Changed from string to number to match bigint8 in database
@@ -36,371 +37,6 @@ type JobFormProps = {
   onCancel: () => void;
   submitting?: boolean;
   onChange?: () => void;
-};
-
-// Add DateTimePicker interface
-interface DateTimePickerProps {
-  visible: boolean;
-  onDismiss: () => void;
-  onConfirm: (dateTime: string) => void;
-  initialDate?: string;
-  mode?: 'start' | 'end';
-  position?: { top: number; right: number };
-}
-
-// DateTimePicker component from [id].tsx
-const DateTimePicker: React.FC<DateTimePickerProps> = ({ 
-  visible, 
-  onDismiss, 
-  onConfirm, 
-  initialDate,
-  mode = 'start',
-  position = { top: 0, right: 0 }
-}) => {
-  const [selectedDate, setSelectedDate] = useState<string>('');
-  const [selectedHour, setSelectedHour] = useState<string>('12');
-  const [selectedMinute, setSelectedMinute] = useState<string>('00');
-  const [selectedAmPm, setSelectedAmPm] = useState<'AM' | 'PM'>('AM');
-  const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
-  const [year, setYear] = useState<number>(new Date().getFullYear());
-  const [month, setMonth] = useState<number>(new Date().getMonth());
-  
-  // Month name for display
-  const monthName = new Date(year, month).toLocaleString('default', { month: 'long' });
-  
-  // Position styling for the picker
-  const pickerStyle = {
-    position: 'absolute' as 'absolute',
-    top: position.top,
-    right: position.right,
-    backgroundColor: 'white',
-    borderRadius: 8,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    padding: 16,
-    zIndex: 1000,
-    width: 300,
-  };
-
-  useEffect(() => {
-    // Initialize with initialDate if provided
-    if (initialDate) {
-      const date = new Date(initialDate);
-      if (!isNaN(date.getTime())) {
-        // Format date as YYYY-MM-DD
-        const dateString = date.toISOString().split('T')[0];
-        setSelectedDate(dateString);
-        setCurrentMonth(date);
-        setYear(date.getFullYear());
-        setMonth(date.getMonth());
-        
-        // Set time if available
-        const hours = date.getHours();
-        const minutes = date.getMinutes();
-        setSelectedHour(hours > 12 ? (hours - 12).toString() : (hours === 0 ? '12' : hours.toString()));
-        setSelectedMinute(minutes.toString().padStart(2, '0'));
-        setSelectedAmPm(hours >= 12 ? 'PM' : 'AM');
-      }
-    } else {
-      // Default to today
-      const now = new Date();
-      const dateString = now.toISOString().split('T')[0];
-      setSelectedDate(dateString);
-    }
-  }, [initialDate]);
-
-  const goToPrevMonth = () => {
-    const newDate = new Date(year, month - 1);
-    setMonth(newDate.getMonth());
-    setYear(newDate.getFullYear());
-    setCurrentMonth(newDate);
-  };
-
-  const goToNextMonth = () => {
-    const newDate = new Date(year, month + 1);
-    setMonth(newDate.getMonth());
-    setYear(newDate.getFullYear());
-    setCurrentMonth(newDate);
-  };
-
-  const getDaysInMonth = (year: number, month: number) => {
-    return new Date(year, month + 1, 0).getDate();
-  };
-
-  const getDayOfWeek = (year: number, month: number, day: number) => {
-    return new Date(year, month, day).getDay();
-  };
-
-  const generateCalendarDays = () => {
-    const days = [];
-    const daysInMonth = getDaysInMonth(year, month);
-    const firstDayOfMonth = getDayOfWeek(year, month, 1);
-
-    // Create week rows
-    let currentWeek = [];
-    
-    // Add empty cells for days before the first day of month
-    for (let i = 0; i < firstDayOfMonth; i++) {
-      currentWeek.push(null);
-    }
-    
-    // Add days of the month
-    for (let day = 1; day <= daysInMonth; day++) {
-      currentWeek.push(day);
-      
-      // Start a new week if we reach the end of a week
-      if (currentWeek.length === 7) {
-        days.push([...currentWeek]);
-        currentWeek = [];
-      }
-    }
-    
-    // Fill the last week with empty cells if needed
-    if (currentWeek.length > 0) {
-      while (currentWeek.length < 7) {
-        currentWeek.push(null);
-      }
-      days.push([...currentWeek]);
-    }
-    
-    return days;
-  };
-
-  const isToday = (day: number) => {
-    const today = new Date();
-    return day === today.getDate() && 
-           month === today.getMonth() && 
-           year === today.getFullYear();
-  };
-
-  const isSelectedDate = (day: number) => {
-    if (!day || !selectedDate) return false;
-    
-    // Parse the selectedDate string to get year, month, and day
-    const [year_str, month_str, day_str] = selectedDate.split('-');
-    const selectedYear = parseInt(year_str);
-    const selectedMonth = parseInt(month_str) - 1; // Convert from 1-based to 0-based month
-    const selectedDay = parseInt(day_str);
-
-    // Compare the individual components directly without timezone issues
-    return day === selectedDay && 
-           month === selectedMonth && 
-           year === selectedYear;
-  };
-
-  const handleDateSelect = (day: number) => {
-    // Format date as YYYY-MM-DD manually to avoid timezone issues
-    const yearStr = year.toString();
-    const monthStr = (month + 1).toString().padStart(2, '0'); // +1 because months are 0-indexed
-    const dayStr = day.toString().padStart(2, '0');
-    
-    const dateString = `${yearStr}-${monthStr}-${dayStr}`;
-    setSelectedDate(dateString);
-  };
-
-  const generateHourOptions = () => {
-    return Array.from({ length: 12 }, (_, i) => (i + 1).toString());
-  };
-
-  const generateMinuteOptions = () => {
-    return ['00', '15', '30', '45'];
-  };
-
-  const applyDateTime = () => {
-    if (!selectedDate) return;
-    
-    // Parse the date parts directly
-    const [selectedYearStr, selectedMonthStr, selectedDayStr] = selectedDate.split('-');
-    
-    // Convert 12-hour to 24-hour for consistency
-    let hours = parseInt(selectedHour);
-    if (selectedAmPm === 'PM' && hours < 12) {
-      hours += 12;
-    } else if (selectedAmPm === 'AM' && hours === 12) {
-      hours = 0;
-    }
-    
-    // Create a date object with the exact components
-    // Keep the date exactly as entered - critical for timezone consistency
-    const dateObj = new Date(
-      parseInt(selectedYearStr),
-      parseInt(selectedMonthStr) - 1,
-      parseInt(selectedDayStr),
-      hours,
-      parseInt(selectedMinute),
-      0,
-      0
-    );
-    
-    // Convert to ISO string for the API
-    const formattedDate = dateObj.toISOString();
-    
-    // Log for debugging
-    console.log('Date picker selected date:', selectedDate);
-    console.log('Creating date with:', {
-      year: parseInt(selectedYearStr),
-      month: parseInt(selectedMonthStr) - 1,
-      day: parseInt(selectedDayStr),
-      hours,
-      minutes: parseInt(selectedMinute)
-    });
-    console.log('Date picker ISO string:', formattedDate);
-    
-    onConfirm(formattedDate);
-  };
-
-  // If not visible, don't render anything
-  if (!visible) return null;
-
-  return (
-    <View style={dateTimePickerStyles.datePickerContainer}>
-      <View style={dateTimePickerStyles.calendarHeader}>
-        <View style={dateTimePickerStyles.monthYearContainer}>
-          <Text style={dateTimePickerStyles.monthYearText}>{`${monthName} ${year}`}</Text>
-        </View>
-        <View style={dateTimePickerStyles.navigationButtons}>
-          <IconButton icon="chevron-left" size={24} onPress={goToPrevMonth} />
-          <IconButton icon="chevron-right" size={24} onPress={goToNextMonth} />
-        </View>
-      </View>
-      
-      <View style={dateTimePickerStyles.contentContainer}>
-        {/* Calendar section */}
-        <View style={dateTimePickerStyles.calendarSection}>
-          <View style={dateTimePickerStyles.weekdayHeader}>
-            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
-              <Text key={index} style={dateTimePickerStyles.weekdayText}>{day}</Text>
-            ))}
-          </View>
-          
-          <View style={dateTimePickerStyles.daysContainer}>
-            {generateCalendarDays().map((week, weekIndex) => (
-              <View key={weekIndex} style={dateTimePickerStyles.weekRow}>
-                {week.map((day, dayIndex) => (
-                  <TouchableOpacity
-                    key={dayIndex}
-                    style={[
-                      dateTimePickerStyles.dayCell,
-                      day === null ? dateTimePickerStyles.emptyDay : {},
-                      isSelectedDate(day as number) ? dateTimePickerStyles.selectedDay : {},
-                      isToday(day as number) ? dateTimePickerStyles.todayDay : {}
-                    ]}
-                    onPress={() => day !== null ? handleDateSelect(day as number) : null}
-                    disabled={day === null}
-                  >
-                    {day !== null && (
-                      <Text style={[
-                        dateTimePickerStyles.dayText,
-                        isSelectedDate(day as number) ? dateTimePickerStyles.selectedDayText : {},
-                        isToday(day as number) ? dateTimePickerStyles.todayDayText : {}
-                      ]}>
-                        {day}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* Time picker section */}
-        <View style={dateTimePickerStyles.timeSection}>
-          <Text style={dateTimePickerStyles.timeHeaderText}>Time</Text>
-          <View style={dateTimePickerStyles.timePickerContainer}>
-            <View style={dateTimePickerStyles.timePickerColumn}>
-              <Text style={dateTimePickerStyles.timeColumnLabel}>Hour</Text>
-              <ScrollView style={dateTimePickerStyles.timeScrollView} showsVerticalScrollIndicator={true}>
-                {generateHourOptions().map((hour) => (
-                  <TouchableOpacity
-                    key={hour}
-                    style={[
-                      dateTimePickerStyles.timeOption,
-                      selectedHour === hour ? dateTimePickerStyles.selectedTimeOption : {}
-                    ]}
-                    onPress={() => setSelectedHour(hour)}
-                  >
-                    <Text style={[
-                      dateTimePickerStyles.timeOptionText,
-                      selectedHour === hour ? dateTimePickerStyles.selectedTimeOptionText : {}
-                    ]}>
-                      {hour}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-            
-            <View style={dateTimePickerStyles.timePickerColumn}>
-              <Text style={dateTimePickerStyles.timeColumnLabel}>Min</Text>
-              <ScrollView style={dateTimePickerStyles.timeScrollView} showsVerticalScrollIndicator={true}>
-                {generateMinuteOptions().map((minute) => (
-                  <TouchableOpacity
-                    key={minute}
-                    style={[
-                      dateTimePickerStyles.timeOption,
-                      selectedMinute === minute ? dateTimePickerStyles.selectedTimeOption : {}
-                    ]}
-                    onPress={() => setSelectedMinute(minute)}
-                  >
-                    <Text style={[
-                      dateTimePickerStyles.timeOptionText,
-                      selectedMinute === minute ? dateTimePickerStyles.selectedTimeOptionText : {}
-                    ]}>
-                      {minute}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-            
-            <View style={dateTimePickerStyles.timePickerColumn}>
-              <Text style={dateTimePickerStyles.timeColumnLabel}>AM/PM</Text>
-              <View style={dateTimePickerStyles.amPmContainer}>
-                <TouchableOpacity
-                  style={[
-                    dateTimePickerStyles.timeOption,
-                    selectedAmPm === 'AM' ? dateTimePickerStyles.selectedTimeOption : {}
-                  ]}
-                  onPress={() => setSelectedAmPm('AM')}
-                >
-                  <Text style={[
-                    dateTimePickerStyles.timeOptionText,
-                    selectedAmPm === 'AM' ? { color: '#2196F3' } : {}
-                  ]}>
-                    AM
-                  </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={[
-                    dateTimePickerStyles.timeOption,
-                    selectedAmPm === 'PM' ? dateTimePickerStyles.selectedTimeOption : {}
-                  ]}
-                  onPress={() => setSelectedAmPm('PM')}
-                >
-                  <Text style={[
-                    dateTimePickerStyles.timeOptionText,
-                    selectedAmPm === 'PM' ? { color: '#2196F3' } : {}
-                  ]}>
-                    PM
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </View>
-      </View>
-      
-      <View style={dateTimePickerStyles.dateTimePickerActions}>
-        <Button onPress={onDismiss}>Cancel</Button>
-        <Button onPress={applyDateTime}>OK</Button>
-      </View>
-    </View>
-  );
 };
 
 export function JobForm({ job, defaults, onSubmit, onCancel, submitting = false, onChange }: JobFormProps) {
@@ -438,12 +74,6 @@ export function JobForm({ job, defaults, onSubmit, onCancel, submitting = false,
   // Initialize these state variables to false to ensure date pickers are hidden by default
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
-  const [startButtonLayout, setStartButtonLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
-  const [endButtonLayout, setEndButtonLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
-  
-  // Add refs for buttons
-  const startDateButtonRef = useRef(null);
-  const endDateButtonRef = useRef(null);
 
   useEffect(() => {
     fetchClients();
@@ -720,100 +350,69 @@ export function JobForm({ job, defaults, onSubmit, onCancel, submitting = false,
     return option ? option.label : status;
   };
 
-  // Add new functions to handle date time selection with toggle behavior
-  const openStartDatePicker = () => {
-    // If already open, close it (toggle behavior)
-    if (showStartDatePicker) {
-      setShowStartDatePicker(false);
-      return;
-    }
-    
-    // Close any other open picker first
-    setShowEndDatePicker(false);
-    // Then open the start date picker
-    setShowStartDatePicker(true);
-  };
-
-  const openEndDatePicker = () => {
-    // If already open, close it (toggle behavior)
-    if (showEndDatePicker) {
-      setShowEndDatePicker(false);
-      return;
-    }
-    
-    // Close any other open picker first
-    setShowStartDatePicker(false);
-    // Then open the end date picker
-    setShowEndDatePicker(true);
-  };
-
-  // Revise the formatDateTimeWithTimezone function to be simpler and more direct
-  const formatDateTimeWithTimezone = (dateString: string | null): string => {
-    if (!dateString) return '';
-    
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return '';
-      
-      // Get timezone abbreviation (like GMT+05:00)
-      const timeZoneOffset = date.getTimezoneOffset();
-      const offsetHours = Math.abs(Math.floor(timeZoneOffset / 60));
-      const offsetMinutes = Math.abs(timeZoneOffset % 60);
-      const timeZoneString = `GMT${timeZoneOffset <= 0 ? '+' : '-'}${offsetHours.toString().padStart(2, '0')}:${offsetMinutes.toString().padStart(2, '0')}`;
-      
-      // Format date as MM/DD/YYYY
-      const month = (date.getMonth() + 1).toString().padStart(2, '0');
-      const day = date.getDate().toString().padStart(2, '0');
-      const year = date.getFullYear();
-      
-      // Format time as HH:MM AM/PM
-      let hours = date.getHours();
-      const minutes = date.getMinutes().toString().padStart(2, '0');
-      const ampm = hours >= 12 ? 'PM' : 'AM';
-      hours = hours % 12;
-      hours = hours ? hours : 12; // the hour '0' should be '12'
-      const hoursStr = hours.toString().padStart(2, '0');
-      
-      return `${month}/${day}/${year} ${hoursStr}:${minutes} ${ampm} ${timeZoneString}`;
-    } catch (error) {
-      console.error('Error formatting date:', error);
-      return '';
-    }
-  };
-
-  // Completely revise the handleDateTimeConfirm function for accurate timezone handling
+  // The dialog hands back an ISO string; keep it as-is and cache a readable label.
   const handleDateTimeConfirm = (dateTime: string, mode: 'start' | 'end') => {
-    console.log(`Selected ${mode} datetime (ISO):`, dateTime);
-    
-    // Parse the date string into a Date object
-    const selectedDate = new Date(dateTime);
-    console.log(`As Date object:`, selectedDate);
-    
-    // IMPORTANT: Don't adjust for timezone offset when storing
-    // Instead, keep the exact date and time the user selected
-    
-    // Format the date+time for display with timezone info
-    const formattedDateTime = formatDateTimeWithTimezone(dateTime);
-    console.log(`Formatted for display:`, formattedDateTime);
-    
+    const label = formatDateTimeLabel(dateTime);
     if (mode === 'start') {
-      setFormData({
-        ...formData,
-        start_date: dateTime, // Store the original ISO string
-        start_time: formattedDateTime 
-      });
+      setFormData(prev => ({ ...prev, start_date: dateTime, start_time: label }));
       setShowStartDatePicker(false);
     } else {
-      setFormData({
-        ...formData,
-        end_date: dateTime, // Store the original ISO string
-        end_time: formattedDateTime
-      });
+      setFormData(prev => ({ ...prev, end_date: dateTime, end_time: label }));
       setShowEndDatePicker(false);
     }
-    
-    console.log('Updated form data:', formData);
+    if (onChange) onChange();
   };
+
+  const clearDateTime = (mode: 'start' | 'end') => {
+    if (mode === 'start') {
+      setFormData(prev => ({ ...prev, start_date: null, start_time: null }));
+    } else {
+      setFormData(prev => ({ ...prev, end_date: null, end_time: null }));
+    }
+    if (onChange) onChange();
+  };
+
+  // When the end has not been set yet, open its picker one hour after the start.
+  const endPickerFallback = (() => {
+    if (!formData.start_date) return null;
+    const start = new Date(formData.start_date);
+    if (isNaN(start.getTime())) return null;
+    return new Date(start.getTime() + 60 * 60 * 1000).toISOString();
+  })();
+
+  const endBeforeStart = (() => {
+    if (!formData.start_date || !formData.end_date) return false;
+    const start = new Date(formData.start_date).getTime();
+    const end = new Date(formData.end_date).getTime();
+    return !isNaN(start) && !isNaN(end) && end < start;
+  })();
+
+  const renderDateTimeField = (mode: 'start' | 'end', value: string | null, onPress: () => void) => (
+    <TouchableOpacity
+      style={[fieldStyles.field, submitting && fieldStyles.fieldDisabled]}
+      onPress={onPress}
+      disabled={submitting}
+      accessibilityRole="button"
+    >
+      <MaterialIcons name="event" size={20} color="#6B7280" style={fieldStyles.fieldIcon} />
+      <Text style={value ? fieldStyles.fieldText : fieldStyles.fieldPlaceholder}>
+        {value
+          ? formatDateTimeLabel(value)
+          : mode === 'start' ? 'Pick a start date and time' : 'Pick an end date and time'}
+      </Text>
+      {value ? (
+        <IconButton
+          icon="close-circle"
+          size={18}
+          iconColor="#9CA3AF"
+          style={fieldStyles.clearButton}
+          onPress={() => clearDateTime(mode)}
+          disabled={submitting}
+          accessibilityLabel="Clear"
+        />
+      ) : null}
+    </TouchableOpacity>
+  );
 
   return (
         <ScrollView 
@@ -1048,92 +647,35 @@ export function JobForm({ job, defaults, onSubmit, onCancel, submitting = false,
           </View>
           
           <View style={styles.formField}>
-        <Text style={styles.label}>Start Date & Time</Text>
-        <View style={styles.dateTimeContainer}>
-                <TouchableOpacity 
-                  style={[styles.input, { flex: 2, marginRight: 16, backgroundColor: '#ffffff', justifyContent: 'center', borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 4 }]}
-                  onPress={openStartDatePicker}
-            disabled={submitting}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12 }}>
-                    <Text style={{ color: formData.start_date ? '#000000' : '#757575' }}>
-                      {formData.start_date ? 
-                        formatDateTimeWithTimezone(formData.start_date) : 
-                        'MM/DD/YYYY HH:MM AM/PM'}
-                    </Text>
-                    <MaterialIcons name="calendar-today" size={30} color="#757575" />
-                  </View>
-                </TouchableOpacity>
-
-        </View>
-            
-            {/* DateTimePicker for start date (only rendered when showStartDatePicker is true) */}
-            {showStartDatePicker ? (
-              <View style={dateTimePickerStyles.inlineDatePickerContainer}>
-                <DateTimePicker
-                  visible={true}
-                  onDismiss={() => setShowStartDatePicker(false)}
-                  onConfirm={(dateTime) => handleDateTimeConfirm(dateTime, 'start')}
-                  initialDate={formData.start_date && formData.start_time ? (() => {
-                    try {
-                      const dateStr = `${formData.start_date} ${formData.start_time}`;
-                      const date = new Date(dateStr);
-                      return !isNaN(date.getTime()) ? date.toISOString() : undefined;
-                    } catch (e) {
-                      console.log('Invalid start date format:', e);
-                      return undefined;
-                    }
-                  })() : undefined}
-                  mode="start"
-                  position={{ top: 0, right: 0 }}
-                />
-              </View>
-            ) : null}
+            <Text style={styles.label}>Start Date & Time</Text>
+            {renderDateTimeField('start', formData.start_date, () => setShowStartDatePicker(true))}
           </View>
-          
+
           <View style={styles.formField}>
-        <Text style={styles.label}>End Date & Time</Text>
-        <View style={styles.dateTimeContainer}>
-                <TouchableOpacity 
-                  style={[styles.input, { flex: 2, marginRight: 16, backgroundColor: '#ffffff', justifyContent: 'center', borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 4 }]}
-                  onPress={openEndDatePicker}
-            disabled={submitting}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12 }}>
-                    <Text style={{ color: formData.end_date ? '#000000' : '#757575' }}>
-                      {formData.end_date ? 
-                        formatDateTimeWithTimezone(formData.end_date) : 
-                        'MM/DD/YYYY HH:MM AM/PM'}
-                    </Text>
-                    <MaterialIcons name="calendar-today" size={30} color="#757575" />
-                  </View>
-                </TouchableOpacity>
-
-        </View>
-            
-            {/* DateTimePicker for end date (only rendered when showEndDatePicker is true) */}
-            {showEndDatePicker ? (
-              <View style={dateTimePickerStyles.inlineDatePickerContainer}>
-                <DateTimePicker
-                  visible={true}
-                  onDismiss={() => setShowEndDatePicker(false)}
-                  onConfirm={(dateTime) => handleDateTimeConfirm(dateTime, 'end')}
-                  initialDate={formData.end_date && formData.end_time ? (() => {
-                    try {
-                      const dateStr = `${formData.end_date} ${formData.end_time}`;
-                      const date = new Date(dateStr);
-                      return !isNaN(date.getTime()) ? date.toISOString() : undefined;
-                    } catch (e) {
-                      console.log('Invalid end date format:', e);
-                      return undefined;
-                    }
-                  })() : undefined}
-                  mode="end"
-                  position={{ top: 0, right: 0 }}
-                />
-              </View>
+            <Text style={styles.label}>End Date & Time</Text>
+            {renderDateTimeField('end', formData.end_date, () => setShowEndDatePicker(true))}
+            {endBeforeStart ? (
+              <HelperText type="error" visible>
+                The end is before the start.
+              </HelperText>
             ) : null}
           </View>
+
+          <DateTimePickerDialog
+            visible={showStartDatePicker}
+            title="Start date & time"
+            value={formData.start_date}
+            onDismiss={() => setShowStartDatePicker(false)}
+            onConfirm={(iso) => handleDateTimeConfirm(iso, 'start')}
+          />
+          <DateTimePickerDialog
+            visible={showEndDatePicker}
+            title="End date & time"
+            value={formData.end_date}
+            fallback={endPickerFallback}
+            onDismiss={() => setShowEndDatePicker(false)}
+            onConfirm={(iso) => handleDateTimeConfirm(iso, 'end')}
+          />
           
           <View style={[styles.row, { justifyContent: 'flex-end', gap: 8, marginTop: 24, marginBottom: 24 }]}>
             <Button mode="outlined" onPress={onCancel} disabled={submitting}>
@@ -1159,182 +701,36 @@ export function JobForm({ job, defaults, onSubmit, onCancel, submitting = false,
   );
 } 
 
-// Create local styles for the DateTimePicker
-const dateTimePickerStyles = StyleSheet.create({
-  datePickerContainer: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    padding: 16,
-    maxHeight: 500,
-    width: '100%',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  contentContainer: {
+// Styles for the date & time trigger fields; the popup itself lives in DateTimePickerDialog.
+const fieldStyles = StyleSheet.create({
+  field: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  calendarSection: {
-    flex: 3,
-    marginRight: 12,
-  },
-  timeSection: {
-    flex: 2,
-    justifyContent: 'flex-start',
-    alignItems: 'stretch',
-    borderLeftWidth: 1,
-    borderLeftColor: '#e0e0e0',
+    alignItems: 'center',
+    minHeight: 48,
     paddingLeft: 12,
-  },
-  timeHeaderText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  timeColumnLabel: {
-    fontSize: 12,
-    textAlign: 'center',
-    marginBottom: 4,
-    color: '#757575',
-  },
-  calendarHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  monthYearContainer: {
-    flex: 1,
-  },
-  monthYearText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  navigationButtons: {
-    flexDirection: 'row',
-  },
-  calendarContainer: {
-    marginBottom: 16,
-  },
-  weekdayHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 8,
-  },
-  weekdayText: {
-    width: 32,
-    textAlign: 'center',
-    fontWeight: 'bold',
-  },
-  daysContainer: {
+    paddingRight: 4,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 4,
-  },
-  weekRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    height: 40,
-  },
-  dayCell: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 16,
-  },
-  dayText: {
-    textAlign: 'center',
-  },
-  emptyDay: {
-    opacity: 0,
-  },
-  todayDay: {
-    backgroundColor: '#e3f2fd',
-  },
-  todayDayText: {
-    fontWeight: 'bold',
-    color: '#2196F3',
-  },
-  selectedDay: {
-    backgroundColor: '#2196F3',
-  },
-  selectedDayText: {
-    color: '#ffffff',
-    fontWeight: 'bold',
-  },
-  timePickerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    height: 180,
-  },
-  timePickerColumn: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  timeScrollView: {
-    width: '100%',
-    height: 120,
-  },
-  amPmContainer: {
-    height: 120,
-    justifyContent: 'space-evenly',
-  },
-  timeOption: {
-    padding: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 4,
-    minWidth: 48,
-  },
-  selectedTimeOption: {
-    backgroundColor: '#e3f2fd',
-  },
-  timeOptionText: {
-    fontSize: 16,
-  },
-  selectedTimeOptionText: {
-    color: '#2196F3',
-    fontWeight: 'bold',
-  },
-  dateTimePickerActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 8,
-  },
-  dateTimeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 4,
-    backgroundColor: '#ffffff',
-  },
-  dateTimeButtonText: {
-    fontSize: 16,
-    color: '#333',
-  },
-  inlineDatePickerContainer: {
-    marginTop: 8,
-    width: '100%',
-    backgroundColor: '#ffffff',
+    borderColor: '#D1D5DB',
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    overflow: 'hidden',
-    zIndex: 999,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-  }
-}); 
+    backgroundColor: '#ffffff',
+  },
+  fieldDisabled: {
+    opacity: 0.6,
+  },
+  fieldIcon: {
+    marginRight: 10,
+  },
+  fieldText: {
+    flex: 1,
+    fontSize: 15,
+    color: '#111827',
+  },
+  fieldPlaceholder: {
+    flex: 1,
+    fontSize: 15,
+    color: '#9CA3AF',
+  },
+  clearButton: {
+    margin: 0,
+  },
+});
