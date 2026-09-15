@@ -6,6 +6,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import Nylas from 'nylas'
 import {serve} from "https://deno.land/std@0.168.0/http/server.ts"
+import {timingSafeEqual} from "https://deno.land/std@0.168.0/crypto/timing_safe_equal.ts"
 import {createClient} from 'supabase-js'
 
 const NylasConfig = {
@@ -27,14 +28,33 @@ const corsHeaders = {
   "Content-Type": "application/json",
 };
 
+// This function is called by a database webhook on the jobs table, not by a
+// user, so there is no session to check. The webhook is configured (Database ->
+// Webhooks on the self-hosted dashboard) to send
+//   Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>
+// and only that exact token is accepted. The gateway's JWT check alone is not
+// enough: the anon key passes it too, and the anon key is public.
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") as string;
+
+// The service-role client is used for the reads and the calendar_event_id
+// write-back. Those used to go through the anon client and so depended on the
+// permissive row-level security policies that HT-14 is closing.
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL") as string,
-  Deno.env.get("SUPABASE_ANON_KEY") as string,
+  SUPABASE_SERVICE_ROLE_KEY,
+  { auth: { persistSession: false, autoRefreshToken: false } },
 );
 
-// this edge function is triggered via database webhooks on the jobs table
-// Webhook: https://supabase.com/dashboard/project/evgopevhaapzyvqulwjb/integrations/webhooks/webhooks
-// Edge Function: https://supabase.com/dashboard/project/evgopevhaapzyvqulwjb/functions/upsert-calendar-event
+const encoder = new TextEncoder();
+
+// Constant-time comparison so response timing does not leak how much of the
+// token matched.
+const isServiceRoleToken = (authHeader: string): boolean =>
+  timingSafeEqual(
+    encoder.encode(authHeader.slice("Bearer ".length)),
+    encoder.encode(SUPABASE_SERVICE_ROLE_KEY),
+  );
+
 serve(async (req) => {
   try {
     // Check if the request method is OPTIONS (CORS preflight)
@@ -47,9 +67,15 @@ serve(async (req) => {
       return new Response("Method Not Allowed", { status: 405 });
     }
 
-    // Check if the request has a valid authorization header
+    // Only the database webhook may call this; see the note on
+    // SUPABASE_SERVICE_ROLE_KEY above.
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    if (
+      !SUPABASE_SERVICE_ROLE_KEY ||
+      !authHeader ||
+      !authHeader.startsWith("Bearer ") ||
+      !isServiceRoleToken(authHeader)
+    ) {
       return new Response("Unauthorized", { status: 401 });
     }
 
