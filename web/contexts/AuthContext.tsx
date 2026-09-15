@@ -80,22 +80,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Keyed on the user id, not the session object: a token refresh produces a
+  // new session for the same user and must not blank the admin screens.
+  const userId = session?.user?.id ?? null;
+
   const refreshMembership = useCallback(async () => {
-    if (!session) {
+    if (!userId) {
       setMembership(null);
       setMembershipLoaded(true);
       return;
     }
     setMembership(await fetchMembership());
     setMembershipLoaded(true);
-  }, [session]);
+  }, [userId]);
 
   // Re-read the membership whenever the signed-in user changes.
   useEffect(() => {
     if (isLoading) return;
     setMembershipLoaded(false);
     refreshMembership();
-  }, [isLoading, session?.user?.id, refreshMembership]);
+  }, [isLoading, refreshMembership]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
