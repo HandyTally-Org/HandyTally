@@ -41,18 +41,24 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 type Membership = { organization: Organization; role: OrgRole } | null;
 
-// get_user_organizations() returns one row per membership (and, for a
-// superuser, one per organisation). Prefer the one where the user is admin,
-// matching the ordering auto_set_organization_id() uses when stamping rows.
-async function fetchMembership(): Promise<Membership> {
-  const { data, error } = await supabase.rpc('get_user_organizations');
+// get_user_organizations(target_user_id) returns one row per membership and,
+// for a superuser, a synthetic 'superuser' row for every organisation they
+// are not a member of. A real membership wins over those synthetic rows, and
+// admin over member, matching auto_set_organization_id(); a superuser with no
+// membership at all falls back to the first organisation.
+//
+// target_user_id is passed explicitly: the database also has an older
+// zero-argument get_user_organizations() returning uuid[], and a call with no
+// arguments is ambiguous between the two.
+async function fetchMembership(userId: string): Promise<Membership> {
+  const { data, error } = await supabase.rpc('get_user_organizations', { target_user_id: userId });
   if (error) {
     console.error('Error loading organization membership:', error);
     return null;
   }
   const rows = (data ?? []) as { org_id: string; org_name: string; user_role: OrgRole; is_active: boolean }[];
   const active = rows.filter(r => r.is_active);
-  const rank = (r: OrgRole) => (r === 'superuser' ? 0 : r === 'admin' ? 1 : 2);
+  const rank = (r: OrgRole) => (r === 'admin' ? 0 : r === 'superuser' ? 2 : 1);
   const best = active.sort((a, b) => rank(a.user_role) - rank(b.user_role))[0];
   if (!best) return null;
   return { organization: { id: best.org_id, name: best.org_name }, role: best.user_role };
@@ -90,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setMembershipLoaded(true);
       return;
     }
-    setMembership(await fetchMembership());
+    setMembership(await fetchMembership(userId));
     setMembershipLoaded(true);
   }, [userId]);
 
