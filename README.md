@@ -31,7 +31,7 @@ The product is delivered as an **Expo / React Native** codebase that targets the
 | **Dashboard** | Client, active-job, pending-invoice and low-stock counts, sales-over-time chart, recent activity feed |
 | **Clients** | CRUD, tagging from the list view, per-client job and invoice history |
 | **Jobs** | Status tracking, costs, attachments, client linking, Excel import/export (jobs, job costs, attachments) |
-| **Schedule** | Weekly / monthly calendar of jobs; job changes are pushed to an external calendar through Nylas |
+| **Schedule** | Weekly / monthly calendar of jobs; each job emails a calendar invitation to the client and the user who created it |
 | **Invoices** | Joist-style document editor with line items, item notes and photos, percentage or fixed fees, tax; document lifecycle `estimate → work_order → sent → partial_paid / paid / overdue`; print, PDF, and email-to-client via Resend |
 | **Inventory & Services** | Materials with stock levels and low-stock warnings; service catalog with rates |
 | **Labor** | Labor entries against jobs |
@@ -65,7 +65,7 @@ flowchart LR
   PG -->|DB webhook on jobs| F2
 
   F1 --> RESEND[Resend]
-  F2 --> NYLAS[Nylas Calendar]
+  F2 --> RESEND
   F3 --> R53[AWS Route 53]
   F3 --> VERCEL[Vercel domains]
 ```
@@ -106,7 +106,7 @@ flowchart LR
 | Data | Supabase (Postgres 15, Auth, Storage), `@supabase/supabase-js` |
 | Serverless | Supabase Edge Functions (Deno) |
 | Email | Resend |
-| Calendar | Nylas v3 |
+| Calendar invites | iCalendar (`.ics`) attachments sent through Resend |
 | Spreadsheets | SheetJS (`xlsx`) |
 | Charts / calendar UI | react-native-chart-kit, react-big-calendar, FullCalendar |
 | Language | TypeScript |
@@ -178,8 +178,8 @@ Each function reads its secrets from the project's function secrets — see [Con
 | `send-invoice` | `RESEND_API_KEY` | Resend API key |
 | | `INVOICE_FROM_ADDRESS` | Verified sender, e.g. `HandyTally <invoices@handytally.com>` |
 | | `INVOICE_REPLY_TO` | Optional reply-to address |
-| `upsert-calendar-event` | `NYLAS_API_KEY`, `NYLAS_API_URI` | Nylas credentials |
-| | `NYLAS_GRANT_ID`, `NYLAS_CALENDAR_ID` | Target calendar |
+| `upsert-calendar-event` | `RESEND_API_KEY`, `INVOICE_FROM_ADDRESS`, `INVOICE_REPLY_TO` | Same Resend sender as `send-invoice`; the from address is the invite's organiser |
+| | `CALENDAR_FROM_ADDRESS` | Optional sender override for invites only |
 | | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Provided automatically by Supabase |
 | `create-organization` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Service-role client for cross-tenant writes |
 | | `BASE_DOMAIN` | Root domain for tenant subdomains |

@@ -12,6 +12,7 @@ All notable changes to HandyTally are recorded here. Ticket numbers refer to `HT
 - Invoice editor rebuilt as a Joist-style document layout.
 
 ### Changed
+- **HT-1** — Calendar invites are now iCalendar attachments emailed through Resend instead of events created on a Nylas calendar. Updates resend the same event; deletes send a cancellation. The `NYLAS_*` secrets are no longer used and the Nylas subscription can be dropped.
 - **HT-7** — Jobs status and Clients tag pickers use the same dropdown style as Invoices.
 - Invoice HTML generation extracted to `web/utils/invoiceHtml.ts` and shared by preview, print and email.
 

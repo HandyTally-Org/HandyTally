@@ -19,7 +19,7 @@ Auth-schema helpers (`get_all_users`, `admin_*`) are not migrations — they liv
 | Function | Trigger | Does |
 | --- | --- | --- |
 | `send-invoice` | Called from the web app when a user clicks **Send** on an invoice or estimate | Emails the invoice HTML to the client via Resend. The caller renders the HTML with `web/utils/invoiceHtml.ts` and posts `{ to, subject, html, attachments? }`. Requires a signed-in user's bearer token. |
-| `upsert-calendar-event` | Database webhook on `jobs` (insert / update / delete) | Creates, updates or removes the matching Nylas calendar event on the shared HandyTally calendar and stores `calendar_event_id` on the job. The client and the user who created the job (`jobs.created_by`) are invited, so the job appears on both of their calendars. Configure the webhook in **Database → Webhooks** after deploying. |
+| `upsert-calendar-event` | Database webhook on `jobs` (insert / update / delete) | Emails an iCalendar invitation through Resend to the client and to the user who created the job (`jobs.created_by`), so the job appears on both of their calendars. Updates resend the same UID with a higher sequence; deletes send a cancellation. Stores the UID in `jobs.calendar_event_id`. Configure the webhook in **Database → Webhooks** after deploying. |
 | `create-organization` | Called from the admin app | Validates the requested subdomain, inserts the organization, creates a Route 53 record and attaches the domain in Vercel. Caller must be an active `superuser`. |
 
 ### Deploy
@@ -44,7 +44,7 @@ Set with `supabase secrets set KEY=value` (or in the dashboard under **Edge Func
 | Function | Secret |
 | --- | --- |
 | `send-invoice` | `RESEND_API_KEY`, `INVOICE_FROM_ADDRESS`, `INVOICE_REPLY_TO` (optional) |
-| `upsert-calendar-event` | `NYLAS_API_KEY`, `NYLAS_API_URI`, `NYLAS_GRANT_ID`, `NYLAS_CALENDAR_ID` |
+| `upsert-calendar-event` | `RESEND_API_KEY`, `INVOICE_FROM_ADDRESS` (shared with `send-invoice`); `CALENDAR_FROM_ADDRESS`, `INVOICE_REPLY_TO` (optional) |
 | `create-organization` | `BASE_DOMAIN`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_HOSTED_ZONE_ID`, `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, `GITHUB_TOKEN`, `GITHUB_REPO` |
 
 ### Writing a new function
