@@ -39,3 +39,5 @@ app-example
 
 # JetBrains IDE
 .idea/
+# Secrets must never be committed; keep API keys in .env / function secrets
+Docs/NylasKey.txt
