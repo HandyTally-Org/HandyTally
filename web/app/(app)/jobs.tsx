@@ -4,6 +4,7 @@ import { Text, Button, Searchbar, Card, DataTable, Chip, IconButton, Dialog, Por
 import { supabase } from '../../lib/api';
 import { styles as globalStyles } from '../../styles';
 import { JobForm } from '../../components/JobForm';
+import { sendJobInvite } from '../../utils/sendJobInvite';
 import { useRouter } from 'expo-router';
 import * as XLSX from 'xlsx';
 
@@ -36,6 +37,8 @@ export default function JobsScreen() {
   // The job the Delete dialog is asking about. Kept separate from any "open
   // job" state so pressing the trash icon never navigates away from the list.
   const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
+  // uid of the job whose calendar invite is being sent, for the row spinner
+  const [sendingInviteFor, setSendingInviteFor] = useState<number | null>(null);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [editingJob, setEditingJob] = useState<Job | null>(null);
@@ -119,6 +122,23 @@ export default function JobsScreen() {
   const showSnackbar = (message: string) => {
     setSnackbarMessage(message);
     setSnackbarVisible(true);
+  };
+
+  // HT-1: email the .ics for this job to the client, its creator and me.
+  const handleSendInvite = async (job: Job) => {
+    if (!job.start_date) {
+      showSnackbar('Set a start date before sending a calendar invite');
+      return;
+    }
+    setSendingInviteFor(job.uid);
+    try {
+      const { to } = await sendJobInvite(job.uid);
+      showSnackbar(`Calendar invite sent to ${to.join(', ')}`);
+    } catch (error: any) {
+      showSnackbar(`Could not send the invite: ${error.message}`);
+    } finally {
+      setSendingInviteFor(null);
+    }
   };
 
   const handleDeleteJob = async () => {
@@ -1200,13 +1220,22 @@ export default function JobsScreen() {
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(job.end_date)}</DataTable.Cell>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
                   <View style={styles.actionButtons}>
-                    <IconButton 
-                      icon="pencil" 
+                    <IconButton
+                      icon="pencil"
                       size={20}
                       onPress={() => handleEditJob(job)}
                     />
-                    <IconButton 
-                      icon="delete" 
+                    <Tooltip title="Send calendar invite">
+                      <IconButton
+                        icon="calendar-export"
+                        size={20}
+                        loading={sendingInviteFor === job.uid}
+                        disabled={sendingInviteFor !== null}
+                        onPress={() => handleSendInvite(job)}
+                      />
+                    </Tooltip>
+                    <IconButton
+                      icon="delete"
                       size={20}
                       onPress={() => {
                         setJobToDelete(job);

@@ -5,6 +5,7 @@ All notable changes to HandyTally are recorded here. Ticket numbers refer to `HT
 ## Unreleased
 
 ### Added
+- **HT-1** — **Send calendar invite** button on each job (Jobs list row and job detail) emails the `.ics` for the job's start and finish times on demand, to the client, the job's creator and whoever pressed the button.
 - **HT-1** — The user who creates a job is invited to its calendar event alongside the client, so the job shows on their own Google Calendar. `jobs.created_by` records the creator.
 - **HT-4** — Send an invoice or estimate to the client by email through the `send-invoice` edge function (Resend). Sends are recorded in a new `invoices.sent_at` column rather than by overwriting `status`, so an estimate stays an estimate after it has been emailed. The provider's rejection reason is surfaced to the user when a send fails.
 - **HT-3** — Set a client tag directly from the Clients list.

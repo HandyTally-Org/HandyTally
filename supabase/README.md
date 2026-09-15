@@ -19,7 +19,7 @@ Auth-schema helpers (`get_all_users`, `admin_*`) are not migrations — they liv
 | Function | Trigger | Does |
 | --- | --- | --- |
 | `send-invoice` | Called from the web app when a user clicks **Send** on an invoice or estimate | Emails the invoice HTML to the client via Resend. The caller renders the HTML with `web/utils/invoiceHtml.ts` and posts `{ to, subject, html, attachments? }`. Requires a signed-in user's bearer token. |
-| `upsert-calendar-event` | Database webhook on `jobs` (insert / update / delete) | Emails an iCalendar invitation through Resend to the client and to the user who created the job (`jobs.created_by`), so the job appears on both of their calendars. Updates resend the same UID with a higher sequence; deletes send a cancellation. Stores the UID in `jobs.calendar_event_id`. Configure the webhook in **Database → Webhooks** after deploying. |
+| `upsert-calendar-event` | Database webhook on `jobs` (insert / update / delete), and the **Send calendar invite** button on the Jobs screens (`{ action: "send", jobId }` with the user's token) | Emails an iCalendar invitation through Resend to the client and to the user who created the job (`jobs.created_by`), so the job appears on both of their calendars. Updates resend the same UID with a higher sequence; deletes send a cancellation. Stores the UID in `jobs.calendar_event_id`. Configure the webhook in **Database → Webhooks** after deploying. |
 | `create-organization` | Called from the admin app | Validates the requested subdomain, inserts the organization, creates a Route 53 record and attaches the domain in Vercel. Caller must be an active `superuser`. |
 
 ### Deploy
