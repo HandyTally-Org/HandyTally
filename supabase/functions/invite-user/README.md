@@ -33,6 +33,8 @@ The link's origin is `APP_URL` when that secret is set, otherwise the request's 
 
 ## Deploy
 
+On the self-hosted instance the function file is copied into the Coolify functions volume and the migrations are applied with `psql` by hand (see the deploy script handed over with PR #26). Where the CLI is in use:
+
 ```bash
 supabase functions deploy invite-user
 ```

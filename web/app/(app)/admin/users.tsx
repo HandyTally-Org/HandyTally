@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { Text, Button, TextInput, Card, DataTable, IconButton, Dialog, Portal, Snackbar, Chip, Menu } from 'react-native-paper';
-import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useRequireAdmin } from '../../../hooks/useRequireAdmin';
 import {
@@ -153,18 +152,9 @@ export default function UsersScreen() {
     }
   };
 
-  const handlePasswordReset = async (member: OrganizationMember) => {
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(member.email, {
-        redirectTo: `${window.location.origin}/set-password`,
-      });
-      if (error) throw error;
-      showSnackbar(`Password reset email sent to ${member.email}`);
-    } catch (error: any) {
-      console.error('Error sending password reset:', error);
-      showSnackbar(`Could not send the password reset: ${error.message || 'unknown error'}`);
-    }
-  };
+  // No "send password reset" here: that would go through GoTrue's mailer,
+  // which has no SMTP on the self-hosted instance (HT-30) and drops the mail
+  // while reporting success. Invitations go through Resend instead.
 
   const displayName = (m: OrganizationMember) =>
     [m.first_name, m.last_name].filter(Boolean).join(' ') || m.email;
@@ -287,13 +277,6 @@ export default function UsersScreen() {
                           <DataTable.Cell style={white}>{formatDate(member.last_sign_in_at)}</DataTable.Cell>
                           <DataTable.Cell style={white}>
                             <View style={{ flexDirection: 'row', ...white }}>
-                              <IconButton
-                                icon="lock-reset"
-                                size={20}
-                                onPress={() => handlePasswordReset(member)}
-                                disabled={busy}
-                                accessibilityLabel="Send password reset"
-                              />
                               <IconButton
                                 icon={member.is_active ? 'account-off' : 'account-check'}
                                 size={20}

@@ -12,7 +12,6 @@ The members of the signed-in admin's organisation (`AuthContext.organization`), 
 | Invite (email, name, role admin / member / technician) | `invite-user` edge function — creates the account, adds the membership, emails a one-time link to `/set-password` |
 | Change role | `set_organization_member_role(org_id, target_user_id, new_role)` |
 | Deactivate / reactivate | `set_organization_member_active(org_id, target_user_id, active)` |
-| Send password reset | `supabase.auth.resetPasswordForEmail`, landing on `/set-password` |
 
 Roles are `organization_memberships.role`; `user_profiles.role` is only used to recognise superusers. See `supabase/migrations/20260916100100_organization_member_management.sql` and `supabase/functions/invite-user/README.md`.
 
