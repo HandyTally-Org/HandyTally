@@ -155,10 +155,11 @@ Then run [`database/auth_functions.sql`](database/auth_functions.sql) in the SQL
 ```bash
 supabase functions deploy send-invoice
 supabase functions deploy upsert-calendar-event
+supabase functions deploy calendar-connect
 supabase functions deploy create-organization
 ```
 
-Each function reads its secrets from the project's function secrets — see [Configuration](#configuration). `upsert-calendar-event` is invoked by a **database webhook on the `jobs` table**, which must be configured in the Supabase dashboard after deploy.
+Each function reads its secrets from the project's function secrets — see [Configuration](#configuration). `upsert-calendar-event` is invoked by a **database webhook on the `jobs` table**, which must be configured in the Supabase dashboard after deploy. `calendar-connect` needs the app's `/schedule` URL registered as a **callback URI** on the Nylas application.
 
 ## Configuration
 
@@ -179,8 +180,10 @@ Each function reads its secrets from the project's function secrets — see [Con
 | | `INVOICE_FROM_ADDRESS` | Verified sender, e.g. `HandyTally <invoices@handytally.com>` |
 | | `INVOICE_REPLY_TO` | Optional reply-to address |
 | `upsert-calendar-event` | `NYLAS_API_KEY`, `NYLAS_API_URI` | Nylas credentials |
-| | `NYLAS_GRANT_ID`, `NYLAS_CALENDAR_ID` | Target calendar |
-| | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Provided automatically by Supabase |
+| | `NYLAS_GRANT_ID`, `NYLAS_CALENDAR_ID` | Optional shared fallback calendar for jobs whose creator has not connected their own |
+| | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Provided automatically by Supabase |
+| `calendar-connect` | `NYLAS_API_KEY`, `NYLAS_API_URI`, `NYLAS_CLIENT_ID` | Nylas credentials and application client id for hosted auth |
+| | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Provided automatically by Supabase |
 | `create-organization` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Service-role client for cross-tenant writes |
 | | `BASE_DOMAIN` | Root domain for tenant subdomains |
 | | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_HOSTED_ZONE_ID` | Route 53 record creation |
