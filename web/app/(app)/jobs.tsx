@@ -6,7 +6,6 @@ import { styles as globalStyles } from '../../styles';
 import { JobForm } from '../../components/JobForm';
 import { useRouter } from 'expo-router';
 import * as XLSX from 'xlsx';
-import { MaterialIcons } from '@expo/vector-icons';
 
 type Job = {
   uid: number;
@@ -34,7 +33,9 @@ export default function JobsScreen() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
-  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  // The job the Delete dialog is asking about. Kept separate from any "open
+  // job" state so pressing the trash icon never navigates away from the list.
+  const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [editingJob, setEditingJob] = useState<Job | null>(null);
@@ -121,32 +122,32 @@ export default function JobsScreen() {
   };
 
   const handleDeleteJob = async () => {
-    if (!selectedJob) return;
-    
+    if (!jobToDelete) return;
+
     try {
       const { error } = await supabase
         .from('jobs')
         .delete()
-        .eq('uid', selectedJob.uid);
+        .eq('uid', jobToDelete.uid);
 
       if (error) {
         // 23503 = foreign_key_violation. job_costs and jobs_attachments cascade
         // since migration 20260914120000, so this only fires if it has not been
         // applied yet, or a new table starts referencing jobs without a delete rule.
         if (error.code === '23503') {
-          throw new Error(`"${selectedJob.title}" still has linked cost lines or attachments and cannot be deleted`);
+          throw new Error(`"${jobToDelete.title}" still has linked cost lines or attachments and cannot be deleted`);
         }
         throw new Error(error.message);
       }
 
-      setJobs(jobs.filter(job => job.uid !== selectedJob.uid));
+      setJobs(jobs.filter(job => job.uid !== jobToDelete.uid));
       showSnackbar('Job deleted successfully');
     } catch (error: any) {
       console.error('Error deleting job:', error);
       showSnackbar(`Failed to delete job: ${error.message}`);
     } finally {
       setShowDeleteDialog(false);
-      setSelectedJob(null);
+      setJobToDelete(null);
     }
   };
 
@@ -732,10 +733,6 @@ export default function JobsScreen() {
         )
       );
       
-      if (selectedJob && selectedJob.uid === jobId) {
-        setSelectedJob({ ...selectedJob, status: newStatus });
-      }
-      
       showSnackbar('Job status updated successfully');
       return true;
     } catch (error) {
@@ -1212,7 +1209,7 @@ export default function JobsScreen() {
                       icon="delete" 
                       size={20}
                       onPress={() => {
-                        setSelectedJob(job);
+                        setJobToDelete(job);
                         setShowDeleteDialog(true);
                       }}
                       iconColor="red"
@@ -1230,7 +1227,7 @@ export default function JobsScreen() {
         <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)}>
           <Dialog.Title>Delete Job</Dialog.Title>
           <Dialog.Content>
-            <Text>Are you sure you want to delete the job "{selectedJob?.title}"?</Text>
+            <Text>Are you sure you want to delete the job "{jobToDelete?.title}"?</Text>
             <Text>This action cannot be undone.</Text>
           </Dialog.Content>
           <Dialog.Actions>
@@ -1382,193 +1379,12 @@ export default function JobsScreen() {
         </Dialog>
       </Portal>
       
-      {showAddForm ? (
+      {showAddForm && (
         <JobForm
           clients={clients}
           onSubmit={handleAddJob}
           onCancel={() => setShowAddForm(false)}
         />
-      ) : selectedJob ? (
-        <View style={{ marginTop: 16 }}>
-          <Text style={{
-            fontFamily: 'System',
-            fontSize: 20,
-            fontWeight: '600',
-            marginBottom: 16,
-            color: '#333333',
-          }}>Job Information</Text>
-          
-          <View style={{ 
-            borderWidth: 0,
-            borderColor: '#e0e0e0', 
-            borderRadius: 4,
-            overflow: 'hidden',
-            marginBottom: 20
-          }}>
-            <View style={{ 
-              flexDirection: 'row', 
-              backgroundColor: '#f5f5f5', 
-              padding: 12,
-              borderBottomWidth: 1,
-              borderBottomColor: '#e0e0e0'
-            }}>
-              <Text style={{ flex: 1, fontWeight: 'normal', fontSize: 14 }}>Job Title</Text>
-              <Text style={{ flex: 1, fontWeight: 'normal', fontSize: 14 }}>Client</Text>
-              <Text style={{ flex: 1, fontWeight: 'normal', fontSize: 14 }}>Status</Text>
-              <Text style={{ flex: 1, fontWeight: 'normal', fontSize: 14 }}>Start Date</Text>
-              <Text style={{ flex: 1, fontWeight: 'normal', fontSize: 14 }}>End Date</Text>
-            </View>
-            
-            <View style={{ 
-              flexDirection: 'row', 
-              padding: 12,
-              backgroundColor: 'white',
-              alignItems: 'center',
-              borderBottomWidth: 1,
-              borderBottomColor: '#e0e0e0'
-            }}>
-              <Text style={{ flex: 1 }}>{selectedJob.title}</Text>
-              <Text style={{ flex: 1 }}>{selectedJob.client_name || 'Unknown Client'}</Text>
-              <View style={{ flex: 1 }}>
-                <select
-                  value={selectedJob.status}
-                  onChange={(e) => updateJobStatus(selectedJob.uid, e.target.value)}
-                  style={{
-                    padding: 8,
-                    borderRadius: 4,
-                    borderColor: '#ccc',
-                    backgroundColor: '#ffffff',
-                    color: '#000000',
-                    fontWeight: 'normal',
-                    width: '90%'
-                  }}
-                >
-                  <option value="pending">Pending</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              </View>
-              <Text style={{ flex: 1 }}>{formatDate(selectedJob.start_date)}</Text>
-              <Text style={{ flex: 1 }}>{formatDate(selectedJob.end_date)}</Text>
-            </View>
-          </View>
-          
-          <Button 
-            mode="contained" 
-            onPress={() => handleEditJob(selectedJob)}
-            style={{ alignSelf: 'flex-end', marginBottom: 20 }}
-          >
-            Edit Job
-          </Button>
-          
-          <Button 
-            mode="contained" 
-            onPress={() => {
-              // Create a new invoice for this job
-              const newInvoice = {
-                job_id: selectedJob.uid,
-                client_id: selectedJob.client_id || '',
-                status: 'estimate'
-              };
-              
-              // Store this in localStorage
-              localStorage.setItem('newInvoiceData', JSON.stringify(newInvoice));
-              
-              // Navigate to the invoices page
-              router.push('/invoices');
-            }}
-            style={{ 
-              alignSelf: 'flex-end', 
-              marginBottom: 20,
-              marginLeft: 16
-            }}
-            icon="plus"
-          >
-            Create Invoice
-          </Button>
-          
-          <View style={{ marginTop: 16 }}>
-            <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 8 }}>Description</Text>
-            <Text>{selectedJob.description || 'No description provided'}</Text>
-          </View>
-
-          <View style={{ marginTop: 24 }}>
-            <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 8 }}>Location</Text>
-            <Text>{selectedJob.location || 'No location specified'}</Text>
-          </View>
-
-          <View style={{ marginTop: 24 }}>
-            <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 8 }}>Notes</Text>
-            <Text>{selectedJob.notes || 'No notes'}</Text>
-          </View>
-
-          <DataTable>
-            <DataTable.Header>
-              <DataTable.Title>Invoice #</DataTable.Title>
-              <DataTable.Title>Client</DataTable.Title>
-              <DataTable.Title>Start Date</DataTable.Title>
-              <DataTable.Title>End Date</DataTable.Title>
-              <DataTable.Title>Total</DataTable.Title>
-              <DataTable.Title>Status</DataTable.Title>
-              <DataTable.Title>Actions</DataTable.Title>
-            </DataTable.Header>
-            
-            {jobInvoices.length === 0 ? (
-              <DataTable.Row>
-                <DataTable.Cell>No invoices found for this job</DataTable.Cell>
-              </DataTable.Row>
-            ) : (
-              jobInvoices.map(invoice => (
-                <DataTable.Row key={invoice.uid}>
-                  <DataTable.Cell>{invoice.invoice_number}</DataTable.Cell>
-                  <DataTable.Cell>{invoice.client_name || 'Unknown Client'}</DataTable.Cell>
-                  <DataTable.Cell>{formatDate(invoice.issue_date)}</DataTable.Cell>
-                  <DataTable.Cell>{formatDate(invoice.due_date)}</DataTable.Cell>
-                  <DataTable.Cell>${invoice.total.toFixed(2)}</DataTable.Cell>
-                  <DataTable.Cell>{invoice.status}</DataTable.Cell>
-                  <DataTable.Cell>
-                    <View style={{ flexDirection: 'row' }}>
-                    <IconButton 
-                        icon="eye"
-                        size={20}
-                        onPress={() => handleViewInvoice(invoice)}
-                    />
-                    <IconButton 
-                        icon="pencil"
-                        size={20}
-                        onPress={() => handleEditInvoice(invoice)}
-                    />
-                  </View>
-                  </DataTable.Cell>
-                </DataTable.Row>
-              ))
-            )}
-          </DataTable>
-
-          {/* Spacer to push the back button to the bottom */}
-          <View style={{ flex: 1 }} />
-
-          {/* Back to Jobs button */}
-          <TouchableOpacity 
-            style={{ 
-              padding: 16,
-              flexDirection: 'row',
-              alignItems: 'center',
-              borderTopWidth: 1,
-              borderTopColor: '#e0e0e0',
-              marginTop: 'auto'
-            }}
-            onPress={() => setSelectedJob(null)}  // Adjust this based on your navigation logic
-          >
-            <View style={{ width: 24, marginRight: 12 }}>
-              <MaterialIcons name="arrow-back" size={20} color="#666666" />
-            </View>
-            <Text style={{ color: '#666666' }}>Back to Jobs</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <></>
       )}
 
       {/* Date & Time Picker Dropdown for Start Date */}
