@@ -4,6 +4,7 @@ import { TextInput, Button, Text, Card, ActivityIndicator, IconButton, Snackbar 
 import { supabase } from '../lib/api';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
+import { useRequireAdmin } from '../../../hooks/useRequireAdmin';
 
 interface CompanyData {
   uid?: string;
@@ -29,6 +30,8 @@ interface CompanyAttachment {
 const DEFAULT_LOGO_URL = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMjAwIiB2aWV3Qm94PSIwIDAgNDAwIDIwMCI+PHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSIyMDAiIGZpbGw9IiM0Q0FGNTAiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjI0IiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPllvdXIgQ29tcGFueSBMb2dvPC90ZXh0Pjwvc3ZnPg==';
 
 export default function AdminPage() {
+  // HT-12: company settings are admin-only.
+  const allowed = useRequireAdmin();
   const [company, setCompany] = useState<CompanyData>({
     business_name: '',
     address: '',
@@ -329,6 +332,10 @@ export default function AdminPage() {
       setLoading(false);
     }
   };
+
+  if (!allowed) {
+    return null;
+  }
 
   if (loading) {
     return (

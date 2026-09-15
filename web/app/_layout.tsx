@@ -1,6 +1,6 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { Slot, Stack, useRouter, useSegments } from 'expo-router';
+import { Slot, Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
@@ -13,7 +13,7 @@ import { DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawe
 import { ActivityIndicator } from 'react-native-paper';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { AuthProvider, useAuth } from '../contexts/AuthContext';
+import { AuthProvider } from '../contexts/AuthContext';
 import '../styles/print.css';
 import { usePathname } from 'expo-router';
 import { supabase } from '../lib/supabase';
@@ -34,27 +34,7 @@ const theme = {
   },
 };
 
-function RootLayoutNav() {
-  const { session, isLoading } = useAuth();
-  const segments = useSegments();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (isLoading) return;
-
-    const inAuthGroup = segments[0] === '(auth)';
-
-    if (!session && !inAuthGroup) {
-      // Redirect to the sign-in page if not authenticated
-      router.replace('/(auth)/login');
-    } else if (session && inAuthGroup) {
-      // Redirect to the home page if authenticated
-      router.replace('/(app)');
-    }
-  }, [session, segments, isLoading]);
-
-  return <Slot />;
-}
+// The session check for the (app) group lives in app/(app)/_layout.tsx (HT-12).
 
 // Custom drawer content component
 function CustomDrawerContent(props: any) {
