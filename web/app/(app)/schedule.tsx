@@ -4,7 +4,6 @@ import { Text, ActivityIndicator, Button, IconButton, Menu, Divider } from 'reac
 import { supabase } from '../../lib/supabase';
 import { toLocaleDateString } from '@fowusu/calendar-kit';
 import CustomCalendar, { CustomCalendarRef } from '../components/CustomCalendar';
-import CalendarConnection from '../../components/CalendarConnection';
 import { useRouter } from 'expo-router';
 import moment from 'moment';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -322,9 +321,6 @@ export default function ScheduleScreen() {
           </Menu>
         </View>
       </View>
-
-      {/* HT-1: per-user Google Calendar connection */}
-      <CalendarConnection />
       
       {loading ? (
         <View style={styles.loadingContainer}>

@@ -1,6 +1,0 @@
-{
-  "imports": {
-    "nylas": "npm:nylas@7.10.0",
-    "supabase-js": "npm:@supabase/supabase-js@2.49.1"
-  }
-}

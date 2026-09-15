@@ -5,7 +5,6 @@ All notable changes to HandyTally are recorded here. Ticket numbers refer to `HT
 ## Unreleased
 
 ### Added
-- **HT-1** — Connect your own Google Calendar from the Schedule page. Jobs you create are pushed to your calendar instead of one shared company calendar. Grants are stored per user in `email_integrations` through the new `calendar-connect` edge function (Nylas hosted auth); `jobs.created_by` records who a job belongs to. The shared `NYLAS_GRANT_ID` calendar remains as a fallback for users who have not connected. This is the per-user Nylas foundation HT-11 (connected mailboxes) builds on.
 - **HT-4** — Send an invoice or estimate to the client by email through the `send-invoice` edge function (Resend). Sends are recorded in a new `invoices.sent_at` column rather than by overwriting `status`, so an estimate stays an estimate after it has been emailed. The provider's rejection reason is surfaced to the user when a send fails.
 - **HT-3** — Set a client tag directly from the Clients list.
 - Invoice line items support notes and photos; invoices support a fixed or percentage fee applied before tax.
