@@ -17,12 +17,12 @@ jobs:
       run:
         working-directory: web
     env:
-      # Placeholders so the bundle can be produced without real credentials.
-      # Production values are set in the Amplify environment.
-      EXPO_PUBLIC_SUPABASE_URL: https://example.supabase.co
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder
-      EXPO_PUBLIC_BASE_DOMAIN: example.com
-      EXPO_PUBLIC_VERCEL_TEAM_ID: ci-placeholder
+      # Repository variables when set; placeholders otherwise so a PR can still
+      # be built. web/lib/supabase.ts currently hard-codes its URL and key
+      # (DI-05), so the bundle does not depend on these yet.
+      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || 'https://example.supabase.co' }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'ci-placeholder' }}
+      EXPO_PUBLIC_BASE_DOMAIN: ${{ vars.EXPO_PUBLIC_BASE_DOMAIN || 'handytally.com' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -36,7 +36,8 @@ jobs:
         run: npm ci
 
       - name: Export static web bundle
-        # Mirrors web/amplify.yml so a PR that breaks the Amplify build fails here first.
+        # The same bundle the deploy job ships, so a PR that breaks the export
+        # fails here before it can reach master.
         run: npx expo export --platform web
 
       - name: Upload bundle
@@ -45,3 +46,29 @@ jobs:
           name: web-dist
           path: web/dist
           retention-days: 7
+
+  web-deploy:
+    name: Deploy web app to Cloudflare
+    # Only the bundle built from master is deployed; PRs stop at the build.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: web-build
+    runs-on: ubuntu-latest
+    steps:
+      # Needed for web/wrangler.jsonc; the bundle itself comes from the build job.
+      - uses: actions/checkout@v4
+
+      - name: Download bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+
+      - name: Deploy with Wrangler
+        # Assets-only Worker configured in web/wrangler.jsonc (HT-31). The action
+        # installs wrangler itself; nothing is added to web/package.json.
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: web
+          command: deploy

@@ -43,3 +43,6 @@ app-example
 !.env.example
 # Secrets must never be committed; keep API keys in .env / function secrets
 Docs/NylasKey.txt
+
+# Wrangler (Cloudflare Workers) local state
+.wrangler/
