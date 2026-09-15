@@ -197,7 +197,7 @@ All three live under `supabase/functions/<name>/index.ts`, use `serve` from `std
 ### `upsert-calendar-event`
 
 - **Caller:** Supabase **database webhook** on `public.jobs` (INSERT / UPDATE / DELETE).
-- **Does:** creates, updates or deletes the matching event on the Nylas calendar `NYLAS_CALENDAR_ID` under grant `NYLAS_GRANT_ID`; stores the event id back on the job for later updates and deletes; sends an `.ics`.
+- **Does:** creates, updates or deletes the matching event on the Nylas calendar `NYLAS_CALENDAR_ID` under grant `NYLAS_GRANT_ID`; invites the client and the job's creator (`jobs.created_by` → `auth.users.email`) so the job lands on the user's own calendar (HT-1); stores the event id back on the job for later updates and deletes; sends an `.ics`.
 - **Auth:** checks for a bearer header and `Content-Type: application/json`.
 
 ### `create-organization`

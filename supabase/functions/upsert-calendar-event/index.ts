@@ -101,22 +101,26 @@ serve(async (req) => {
       return upsertCalendarEvent(record);
     }
     if (type === "DELETE" && table === "jobs") {
-      // Handle job update
       console.log("Job deleted uid:", old_record.uid);
-      // fetch and delete calendar event - old_record contains the previous state of the record
+      // old_record contains the previous state of the record. A job that was
+      // never synced (no start date, client without an email, ...) has nothing
+      // to remove; that is not an error, and answering 400 only fills the
+      // webhook log with failures.
       if (!old_record.calendar_event_id) {
-        return new Response("No calendar event ID to delete", { status: 400 });
-      } else {
-        try {
-          await deleteCalendarEvent(old_record.calendar_event_id);
-          console.log("Calendar event deleted successfully");
-        } catch (error) {
-          console.error("Error deleting calendar event:", error);
-          return new Response(
-            "Error deleting calendar event: " + (error as any).message,
-            { status: 500 },
-          );
-        }
+        return new Response(
+          JSON.stringify({ skipped: "no calendar event to delete" }),
+          { headers: { "Content-Type": "application/json" } },
+        );
+      }
+      try {
+        await deleteCalendarEvent(old_record.calendar_event_id);
+        console.log("Calendar event deleted successfully");
+      } catch (error) {
+        console.error("Error deleting calendar event:", error);
+        return new Response(
+          "Error deleting calendar event: " + (error as any).message,
+          { status: 500 },
+        );
       }
     }
 
@@ -131,11 +135,26 @@ serve(async (req) => {
   }
 });
 
+// HT-1: the event lives on the shared HandyTally calendar, and the user who
+// created the job is invited to it, so it shows up on their own Google
+// Calendar next to the client's invite. jobs.created_by holds that user;
+// their email comes from auth.users (service role only).
+const getCreatorEmail = async (createdBy: string | null): Promise<string | null> => {
+  if (!createdBy) return null;
+  const { data, error } = await supabase.auth.admin.getUserById(createdBy);
+  if (error || !data?.user?.email) {
+    console.warn(`Could not resolve email for job creator ${createdBy}:`, error?.message);
+    return null;
+  }
+  return data.user.email;
+};
+
 const upsertCalendarEvent = async (record: any) => {
   // Handle job upsert
   console.log("Job uid:", record.uid);
   console.log("Job client uid:", record.client_id);
   console.log("client_id", record.client_id);
+  console.log("created_by", record.created_by);
   console.log("start_date", record.start_date);
   console.log("end_date", record.end_date);
 
@@ -167,6 +186,15 @@ const upsertCalendarEvent = async (record: any) => {
     });
   }
 
+  const creatorEmail = await getCreatorEmail(record.created_by ?? null);
+
+  // Client first, then the job's creator. Nylas rejects duplicate
+  // participants, so skip the creator if they share the client's address.
+  const participants = [{ email: client.email as string, status: "noreply" as const }];
+  if (creatorEmail && creatorEmail.toLowerCase() !== String(client.email).toLowerCase()) {
+    participants.push({ email: creatorEmail, status: "noreply" as const });
+  }
+
   // send update using /functions/send-calendar-invite
   try {
     console.log("Creating event with Nylas API...");
@@ -185,45 +213,45 @@ const upsertCalendarEvent = async (record: any) => {
     eventDescription += `-----------------------\n\n`;
     eventDescription += `Job Start Date: ${record.start_date}\n`;
     eventDescription += `Job End Date: ${record.end_date || "Pending"}\n`;
-    eventDescription += `Job Status: ${record.status.toString().toUpperCase() || "Pending"}\n`;
+    eventDescription += `Job Status: ${
+      record.status ? String(record.status).toUpperCase() : "Pending"
+    }\n`;
 
     let event;
     const calendarEventId = record.calendar_event_id;
     const startTime = Math.floor(new Date(record.start_date).getTime() / 1000);
 
-    // if missing end_date, set it to 1 hour after start_date and update on next update
+    // if missing end_date, set it to 1 hour after start_date and update on
+    // next update. (This used to add 3600 ms rather than 3600 s, so every
+    // open-ended job became a 3.6 second event.)
     let endTime = record.end_date
       ? Math.floor(new Date(record.end_date).getTime() / 1000)
-      : Math.floor((new Date(record.start_date).getTime() + 3600) / 1000);
+      : startTime + 3600;
 
     // check if endTime is before startTime, this will throw an error in Nylas API so we need to handle it
     if (endTime < startTime) {
       console.warn(
         "End date behind start date, setting to 1 hour after start date",
       );
-      endTime = Math.floor(new Date(record.start_date).getTime() / 1000) +
-        3600;
+      endTime = startTime + 3600;
     }
+
+    const requestBody = {
+      title: record.title || "Job Title [PENDING]",
+      when: {
+        startTime,
+        endTime,
+      },
+      description: eventDescription,
+      location: client.address || "",
+      participants,
+      notifyParticipants: true,
+    };
 
     if (!calendarEventId) {
       event = await nylas.events.create({
         identifier: NYLAS_GRANT_ID as string,
-        requestBody: {
-          title: record.title || "Job Title [PENDING]",
-          when: {
-            startTime,
-            endTime,
-          },
-          description: eventDescription,
-          location: client.address || "",
-          participants: [
-            {
-              email: client.email,
-              status: "noreply",
-            },
-          ],
-          notifyParticipants: true,
-        },
+        requestBody,
         queryParams: {
           calendarId: NYLAS_CALENDAR_ID as string,
         },
@@ -232,22 +260,7 @@ const upsertCalendarEvent = async (record: any) => {
       event = await nylas.events.update({
         identifier: NYLAS_GRANT_ID as string,
         eventId: record.calendar_event_id as string,
-        requestBody: {
-          title: record.title || "Job Title [PENDING]",
-          when: {
-            startTime,
-            endTime,
-          },
-          description: eventDescription,
-          location: client.address || "",
-          participants: [
-            {
-              email: client.email,
-              status: "noreply",
-            },
-          ],
-          notifyParticipants: true,
-        },
+        requestBody,
         queryParams: {
           calendarId: NYLAS_CALENDAR_ID as string,
         },
