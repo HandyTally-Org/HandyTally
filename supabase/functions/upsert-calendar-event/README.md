@@ -1,13 +1,18 @@
 # upsert-calendar-event
 
-Emails a calendar invitation for each `public.jobs` row to the client and to the user who created the job. Called by a **database webhook**, not by the app.
+Emails a calendar invitation for each `public.jobs` row to the client and to the user who created the job. Called by a **database webhook** on every job change, and by the **Send calendar invite** button on the Jobs list and job detail screens.
+
+| Caller | Bearer token | Body |
+| --- | --- | --- |
+| Database webhook | `SUPABASE_SERVICE_ROLE_KEY` | `{ type, table, record, old_record }` as sent by Supabase |
+| App button (`web/utils/sendJobInvite.ts`) | the user's session token | `{ "action": "send", "jobId": <jobs.uid> }` — sends a `METHOD:REQUEST` for that job to the client, the creator **and the requesting user**; responds `{ success, uid, to }` or `{ skipped }` |
 
 The invite is a standard iCalendar file sent through Resend as a `text/calendar` attachment. Gmail, Outlook and Apple Mail show it as an invitation with Yes / No / Maybe, and the event lands on the recipient's own calendar. There is no calendar API and nothing to connect.
 
 | Event on `jobs` | What is sent |
 | --- | --- |
 | Insert, or update of a job that was never invited | `METHOD:REQUEST` — a new invitation |
-| Update of an already-invited job | `METHOD:REQUEST` with the same UID and a higher `SEQUENCE` — the recipient's event is updated in place |
+| Update of an already-invited job | `METHOD:REQUEST` with the same UID and a higher `SEQUENCE` — the recipient's event is updated in place. Only when title, description, dates or client changed; a status-only edit sends nothing, and the function's own `calendar_event_id` write-back is ignored |
 | Delete | `METHOD:CANCEL` with the same UID — the event is removed from the recipient's calendar |
 
 Recipients are the client's email and the creator's login email (`jobs.created_by` → `auth.users`), de-duplicated. A job with no start date, or with no recipient email, is skipped with a `200` and a `skipped` reason in the log.

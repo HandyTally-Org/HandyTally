@@ -1,8 +1,11 @@
 // upsert-calendar-event: emails a calendar invite for a job to the client and
 // to the user who created the job. HT-1.
 //
-// Called by a database webhook on public.jobs (INSERT / UPDATE / DELETE), not
-// by the app. See README.md in this directory for the webhook configuration.
+// Called two ways:
+//   * by the database webhook on public.jobs (INSERT / UPDATE / DELETE), with
+//     the service-role key as bearer -- see README.md for the configuration;
+//   * by a signed-in user from the Jobs screens ("Send calendar invite"),
+//     with their session token and a body of { action: "send", jobId }.
 //
 // How it works
 // ------------
@@ -53,11 +56,14 @@ const REPLY_TO = Deno.env.get("INVOICE_REPLY_TO");
 // and only that exact token is accepted. The gateway's JWT check alone is not
 // enough: the anon key passes it too, and the anon key is public.
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") as string;
+// Used only to resolve a user's session token when the app calls us directly.
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") as string;
 
 // Service-role client: reads clients and auth.users, writes
 // jobs.calendar_event_id, without depending on row-level-security policies.
+const SUPABASE_URL_FOR_AUTH = Deno.env.get("SUPABASE_URL") as string;
 const supabase = createClient(
-  Deno.env.get("SUPABASE_URL") as string,
+  SUPABASE_URL_FOR_AUTH,
   SUPABASE_SERVICE_ROLE_KEY,
   { auth: { persistSession: false, autoRefreshToken: false } },
 );
@@ -99,20 +105,13 @@ serve(async (req) => {
       return new Response("Method Not Allowed", { status: 405 });
     }
 
-    // Only the database webhook may call this; see the note on
-    // SUPABASE_SERVICE_ROLE_KEY above.
     const authHeader = req.headers.get("Authorization");
-    if (
-      !SUPABASE_SERVICE_ROLE_KEY ||
-      !authHeader ||
-      !authHeader.startsWith("Bearer ") ||
-      !isServiceRoleToken(authHeader)
-    ) {
+    if (!SUPABASE_SERVICE_ROLE_KEY || !authHeader || !authHeader.startsWith("Bearer ")) {
       return new Response("Unauthorized", { status: 401 });
     }
 
     const contentType = req.headers.get("Content-Type");
-    if (!contentType || contentType !== "application/json") {
+    if (!contentType || !contentType.startsWith("application/json")) {
       return new Response("Unsupported Media Type", { status: 415 });
     }
 
@@ -121,14 +120,44 @@ serve(async (req) => {
       return json({ error: "Calendar invites are not configured on the server" }, 500);
     }
 
-    const { type, table, record, old_record } = await req.json();
+    const body = await req.json();
+
+    // Not the webhook: treat the bearer as a user session. The gateway's JWT
+    // check alone would let the public anon key through, so resolve the token
+    // to a user (same reasoning as send-invoice).
+    if (!isServiceRoleToken(authHeader)) {
+      const { data: { user }, error: authError } = await createClient(
+        SUPABASE_URL_FOR_AUTH,
+        SUPABASE_ANON_KEY,
+        { global: { headers: { Authorization: authHeader } } },
+      ).auth.getUser();
+      if (authError || !user) {
+        return new Response("Unauthorized", { status: 401 });
+      }
+      return await sendOnRequest(body, user.email ?? null);
+    }
+
+    const { type, table, record, old_record } = body;
     console.log("Database event:", { type, table, record, old_record });
 
     if (table !== "jobs") {
       return json({ skipped: `not a jobs event (${table})` });
     }
 
-    if (type === "INSERT" || type === "UPDATE") {
+    if (type === "INSERT") {
+      return await sendInvite(record);
+    }
+    if (type === "UPDATE") {
+      // Sending an invite writes calendar_event_id back to the job, which
+      // fires this webhook again. Nothing else sets that column, so a change
+      // to it means "our own write-back": skip, or every new job would get a
+      // second "Updated:" email seconds after the first.
+      if (record.calendar_event_id !== old_record?.calendar_event_id) {
+        return json({ skipped: "calendar_event_id write-back" });
+      }
+      if (!inviteRelevantChange(record, old_record)) {
+        return json({ skipped: "no change to the invited details" });
+      }
       return await sendInvite(record);
     }
     if (type === "DELETE") {
@@ -143,6 +172,14 @@ serve(async (req) => {
     });
   }
 });
+
+// Only resend when something the recipient's calendar shows has changed.
+// A status change alone (pending -> completed) is not worth an "Updated:"
+// email; the manual "Send calendar invite" button covers the odd case.
+const INVITE_FIELDS = ["title", "description", "start_date", "end_date", "client_id"] as const;
+
+const inviteRelevantChange = (record: any, oldRecord: any) =>
+  !oldRecord || INVITE_FIELDS.some((f) => (record?.[f] ?? null) !== (oldRecord?.[f] ?? null));
 
 // ---------------------------------------------------------------------------
 // Job -> recipients
@@ -178,7 +215,11 @@ const fetchCreatorEmail = async (createdBy: string | null): Promise<string | nul
 
 type Attendee = { email: string; name?: string | null };
 
-const collectAttendees = (client: Client | null, creatorEmail: string | null): Attendee[] => {
+const collectAttendees = (
+  client: Client | null,
+  creatorEmail: string | null,
+  requesterEmail: string | null = null,
+): Attendee[] => {
   const seen = new Set<string>();
   const out: Attendee[] = [];
   const add = (email?: string | null, name?: string | null) => {
@@ -191,6 +232,9 @@ const collectAttendees = (client: Client | null, creatorEmail: string | null): A
   };
   add(client?.email, client?.name);
   add(creatorEmail);
+  // The person who pressed "Send calendar invite" gets it too, which matters
+  // for jobs created before created_by existed.
+  add(requesterEmail);
   return out;
 };
 
@@ -385,7 +429,30 @@ const sendEmail = async (opts: {
 const formatWhen = (times: EventTimes) =>
   times.start.toUTCString().replace(" GMT", " UTC");
 
-const sendInvite = async (record: any) => {
+// "Send calendar invite" pressed in the app: load the job and send as if the
+// webhook had fired, plus the requesting user as an attendee. Any signed-in
+// user may do this for any job, which matches what row-level security lets
+// them read today (HT-14); tighten alongside the organization scoping.
+const sendOnRequest = async (body: any, requesterEmail: string | null) => {
+  if (body?.action !== "send" || !body.jobId) {
+    return json({ error: "Expected { action: \"send\", jobId }" }, 400);
+  }
+  const { data: job, error } = await supabase
+    .from("jobs")
+    .select("*")
+    .eq("uid", body.jobId)
+    .maybeSingle();
+  if (error) {
+    console.error("Error loading job:", error);
+    return json({ error: "Could not load the job" }, 500);
+  }
+  if (!job) {
+    return json({ error: "Job not found" }, 404);
+  }
+  return await sendInvite(job, requesterEmail);
+};
+
+const sendInvite = async (record: any, requesterEmail: string | null = null) => {
   const times = eventTimes(record);
   if (!times) {
     // A job without a date is a normal state, not an error.
@@ -396,7 +463,7 @@ const sendInvite = async (record: any) => {
     fetchClient(record.client_id ?? null),
     fetchCreatorEmail(record.created_by ?? null),
   ]);
-  const attendees = collectAttendees(client, creatorEmail);
+  const attendees = collectAttendees(client, creatorEmail, requesterEmail);
   if (attendees.length === 0) {
     return json({ skipped: "neither the client nor the job creator has an email" });
   }

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, ScrollView, Platform, Pressable, TouchableOpacity, Dimensions, Modal } from 'react-native';
 import { Text, Button, Card, SegmentedButtons, FAB, TextInput, Dialog, Portal, Divider, Chip, DataTable, ActivityIndicator, RadioButton, List, IconButton, Menu, Snackbar, Surface } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { sendJobInvite } from '../../../utils/sendJobInvite';
 import { supabase } from '../../../lib/supabase';
 import { formatCurrency, formatDate } from '../../../utils/formatting';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -533,6 +534,26 @@ export default function JobDetailsScreen() {
   const [totalOtherCost, setTotalOtherCost] = useState(0);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [sendingInvite, setSendingInvite] = useState(false);
+
+  // HT-1: email the .ics for this job to the client, its creator and me.
+  const handleSendInvite = async () => {
+    if (!job?.start_date) {
+      setSnackbarMessage('Set a start date before sending a calendar invite');
+      setSnackbarVisible(true);
+      return;
+    }
+    setSendingInvite(true);
+    try {
+      const { to } = await sendJobInvite(Number(id));
+      setSnackbarMessage(`Calendar invite sent to ${to.join(', ')}`);
+    } catch (error: any) {
+      setSnackbarMessage(`Could not send the invite: ${error.message}`);
+    } finally {
+      setSendingInvite(false);
+      setSnackbarVisible(true);
+    }
+  };
   const [showEditForm, setShowEditForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
@@ -1879,9 +1900,19 @@ export default function JobDetailsScreen() {
       <View style={styles.infoContainer}>
         {/* Add Edit Job button at the top right */}
         <View style={styles.headerButtonContainer}>
-          <Button 
-            mode="contained" 
-            icon="pencil" 
+          <Button
+            mode="outlined"
+            icon="calendar-export"
+            onPress={handleSendInvite}
+            loading={sendingInvite}
+            disabled={sendingInvite}
+            style={styles.editButton}
+          >
+            Send calendar invite
+          </Button>
+          <Button
+            mode="contained"
+            icon="pencil"
             onPress={() => setEditMode(true)}
             style={styles.editButton}
           >
