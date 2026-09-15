@@ -26,6 +26,9 @@ export default function MaterialsScreen() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
+  // The Add dialog keeps its own draft: sharing `editingMaterial` with it made the
+  // Edit dialog (visible whenever editingMaterial !== null) open on the first keystroke.
+  const [newMaterial, setNewMaterial] = useState<Partial<Material>>({});
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
@@ -90,37 +93,53 @@ export default function MaterialsScreen() {
     }
   }
 
-  const handleAddMaterial = async (material: any) => {
+  const handleAddMaterial = async (material: Partial<Material>) => {
+    const name = (material.name || '').trim();
+    if (!name) {
+      showSnackbar('Material name is required');
+      return;
+    }
+
     try {
+      setSubmitting(true);
       console.log('Adding material:', material);
-      
-      // Only include essential fields with safe type handling
-      const essentialMaterial = {
-        name: String(material.name || ''),
-        description: String(material.description || ''),
-        cost: typeof material.cost === 'number' ? material.cost : parseFloat(String(material.cost || '0')),
-        unit: String(material.unit || '')
+
+      // `unit` and `quantity` are numeric columns, so blanks are left out rather than
+      // sent as '' (which Postgres rejects with "invalid input syntax for type numeric").
+      const cost = Number(material.cost);
+      const quantity = Number(material.quantity);
+      const payload: Record<string, unknown> = {
+        name,
+        description: material.description || '',
+        cost: Number.isFinite(cost) ? cost : 0,
+        supplier: material.supplier || '',
+        category: material.category || '',
+        is_active: true,
       };
-      
-      console.log('Essential material:', essentialMaterial);
-      
-      const { data, error } = await supabase
-        .from('materials')
-        .insert([essentialMaterial]);
-      
-      if (error) {
-        alert(`Error adding material: ${error.message}`);
-        console.error('Error adding material:', error);
-        return;
+      if (Number.isFinite(quantity)) {
+        payload.quantity = quantity;
       }
-      
+
+      console.log('Insert payload:', payload);
+
+      const { error } = await supabase
+        .from('materials')
+        .insert([payload]);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
       // Refresh the materials list
-      fetchMaterials();
+      await fetchMaterials();
       setShowAddForm(false);
+      setNewMaterial({});
       showSnackbar('Material added successfully');
     } catch (error: any) {
-      alert(`Error adding material: ${error.message}`);
       console.error('Error adding material:', error);
+      showSnackbar(`Failed to add material: ${error.message}`);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -206,6 +225,11 @@ export default function MaterialsScreen() {
   const showSnackbar = (message: string) => {
     setSnackbarMessage(message);
     setSnackbarVisible(true);
+  };
+
+  const closeAddForm = () => {
+    setShowAddForm(false);
+    setNewMaterial({});
   };
 
   const handleSort = (column: string) => {
@@ -454,10 +478,11 @@ export default function MaterialsScreen() {
           materialsToDelete.push(materialName);
         } else {
           // Create a normalized item with default values
-          const normalizedItem = {
+          // No `unit` default: the column is numeric, so a text value like 'each'
+          // makes every row's insert fail.
+          const normalizedItem: Record<string, any> = {
             name: materialName,
             cost: 0,
-            unit: 'each',
             description: ''
           };
           
@@ -470,7 +495,8 @@ export default function MaterialsScreen() {
               const costValue = parseFloat(String(item[key]).replace(/[^0-9.-]+/g, ''));
               normalizedItem.cost = isNaN(costValue) ? 0 : costValue;
             } else if (lowerKey === 'unit') {
-              normalizedItem.unit = String(item[key] || 'each');
+              const unitValue = parseFloat(String(item[key]));
+              if (!isNaN(unitValue)) normalizedItem.unit = unitValue;
             } else if (lowerKey === 'description' || lowerKey === 'desc') {
               normalizedItem.description = String(item[key] || '');
             } else if (lowerKey === 'quantity' || lowerKey === 'qty') {
@@ -857,44 +883,51 @@ export default function MaterialsScreen() {
         
         {/* Add Material Dialog */}
         <Portal>
-          <Dialog visible={showAddForm} onDismiss={() => setShowAddForm(false)} style={{ backgroundColor: '#ffffff' }}>
+          <Dialog visible={showAddForm} onDismiss={closeAddForm} style={{ backgroundColor: '#ffffff' }}>
             <Dialog.Title style={{ backgroundColor: '#ffffff' }}>Add New Material</Dialog.Title>
             <Dialog.Content style={{ backgroundColor: '#ffffff' }}>
               <TextInput
                 label="Name"
-                value={editingMaterial?.name || ''}
-                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), name: text } as any)}
+                value={newMaterial.name || ''}
+                onChangeText={(text) => setNewMaterial({ ...newMaterial, name: text })}
                 style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
               />
               <TextInput
                 label="Description"
-                value={editingMaterial?.description || ''}
-                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), description: text } as any)}
+                value={newMaterial.description || ''}
+                onChangeText={(text) => setNewMaterial({ ...newMaterial, description: text })}
                 style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
               />
               <TextInput
                 label="Cost"
-                value={editingMaterial?.cost?.toString() || ''}
-                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), cost: parseFloat(text) } as any)}
+                value={newMaterial.cost?.toString() || ''}
+                onChangeText={(text) => setNewMaterial({ ...newMaterial, cost: parseFloat(text) })}
+                keyboardType="numeric"
+                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
+              />
+              <TextInput
+                label="Quantity"
+                value={newMaterial.quantity?.toString() || ''}
+                onChangeText={(text) => setNewMaterial({ ...newMaterial, quantity: parseFloat(text) })}
                 keyboardType="numeric"
                 style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
               />
               <TextInput
                 label="Supplier"
-                value={editingMaterial?.supplier || ''}
-                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), supplier: text } as any)}
+                value={newMaterial.supplier || ''}
+                onChangeText={(text) => setNewMaterial({ ...newMaterial, supplier: text })}
                 style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
               />
               <TextInput
                 label="Category"
-                value={editingMaterial?.category || ''}
-                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), category: text } as any)}
+                value={newMaterial.category || ''}
+                onChangeText={(text) => setNewMaterial({ ...newMaterial, category: text })}
                 style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
               />
             </Dialog.Content>
             <Dialog.Actions style={{ backgroundColor: '#ffffff' }}>
-              <Button onPress={() => setShowAddForm(false)}>Cancel</Button>
-              <Button onPress={() => handleAddMaterial(editingMaterial)}>Add</Button>
+              <Button onPress={closeAddForm}>Cancel</Button>
+              <Button onPress={() => handleAddMaterial(newMaterial)} disabled={submitting}>Add</Button>
             </Dialog.Actions>
           </Dialog>
         </Portal>

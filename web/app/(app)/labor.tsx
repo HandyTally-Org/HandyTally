@@ -8,7 +8,7 @@ import * as XLSX from 'xlsx';
 import { ExactHeader } from '../../components/ExactHeader';
 
 export type Service = {
-  id: string;
+  uid: number;
   name: string;
   description: string;
   rate: number;
@@ -97,7 +97,7 @@ export default function ServicesScreen() {
     }
   };
 
-  const handleUpdateService = async (uid: string, updates: Partial<Service>) => {
+  const handleUpdateService = async (uid: number, updates: Partial<Service>) => {
     try {
       setSubmitting(true);
       
@@ -127,28 +127,39 @@ export default function ServicesScreen() {
     }
   };
 
-  const handleDeleteService = async (uid: string) => {
+  const handleDeleteService = async (service: Service | null) => {
+    setShowDeleteDialog(false);
+    if (!service) {
+      showSnackbar('No service selected to delete');
+      return;
+    }
+
     try {
       setSubmitting(true);
-      
-      console.log('Deleting service:', uid);
-      
+
+      console.log('Deleting service:', service.uid);
+
       const { error } = await supabase
         .from('services')
         .delete()
-        .eq('uid', uid);
+        .eq('uid', service.uid);
 
       if (error) {
+        // 23503 = foreign_key_violation: invoice_items / job_costs still reference this service
+        if (error.code === '23503') {
+          throw new Error(`"${service.name}" is used by existing invoices or jobs and cannot be deleted`);
+        }
         throw new Error(error.message);
       }
 
-      setServices(services.filter((service) => service.uid !== uid));
+      setServices(services.filter((s) => s.uid !== service.uid));
       showSnackbar('Service deleted successfully');
     } catch (error: any) {
       console.error('Error deleting service:', error);
       showSnackbar(`Failed to delete service: ${error.message}`);
     } finally {
       setSubmitting(false);
+      setSelectedService(null);
     }
   };
 
@@ -881,7 +892,10 @@ export default function ServicesScreen() {
                       icon="delete"
                       size={20}
                       iconColor="red"
-                      onPress={() => setShowDeleteDialog(true)}
+                      onPress={() => {
+                        setSelectedService(service);
+                        setShowDeleteDialog(true);
+                      }}
                     />
                   </View>
                 </DataTable.Cell>
@@ -939,7 +953,7 @@ export default function ServicesScreen() {
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setShowDeleteDialog(false)}>Cancel</Button>
-            <Button onPress={() => handleDeleteService(selectedService?.uid || '')} textColor="red">Delete</Button>
+            <Button onPress={() => handleDeleteService(selectedService)} disabled={submitting} textColor="red">Delete</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
