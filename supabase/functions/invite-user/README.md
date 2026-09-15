@@ -13,7 +13,7 @@ The caller must hold an active `organization_memberships` row with `role = 'admi
 
 | Case | What happens |
 | --- | --- |
-| New address | The auth account is created through the Auth admin API (`generateLink` type `invite`), `handle_new_user()` adds the `user_profiles` row, the membership is inserted with the requested role, and the email carries a one-time link to `<app>/set-password?token_hash=…&type=invite` |
+| New address | The auth account is created through the Auth admin API (`generateLink` type `invite`), the `user_profiles` row is written (the repo's `handle_new_user()` trigger is not installed on the live database), the membership is inserted with the requested role, and the email carries a one-time link to `<app>/set-password?token_hash=…&type=invite` |
 | Existing account, not a member | The membership is added (or reactivated with the new role) and the email links to `<app>/login` |
 | Existing account, already an active member | `409` |
 

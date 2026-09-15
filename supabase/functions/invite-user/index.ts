@@ -13,7 +13,8 @@
 //    the service role because the RPC would see no auth.uid() from us.
 // 2. New address: the auth account is created through the Auth admin API
 //    (generateLink type "invite"), which returns the one-time token for the
-//    set-password page. handle_new_user() adds the user_profiles row. The
+//    set-password page. The user_profiles row is written here (the repo's
+//    handle_new_user() trigger is not installed on the live database). The
 //    membership row is inserted with the requested role.
 //    Existing address: no account is created; the membership is added (or
 //    reactivated with the requested role) and the email just points at the
@@ -221,18 +222,6 @@ serve(async (req) => {
       return json({ error: "That email already has an account but it could not be found" }, 500);
     }
     userId = existing.id;
-    // Accounts from before handle_new_user() existed have no user_profiles
-    // row, and list_organization_members() joins on it.
-    const { error: profileError } = await supabase
-      .from("user_profiles")
-      .upsert(
-        { id: userId, email, first_name: firstName || null, last_name: lastName || null },
-        { onConflict: "id", ignoreDuplicates: true },
-      );
-    if (profileError) {
-      console.error("Could not ensure the user profile:", profileError);
-      return json({ error: "Could not update that user's profile" }, 500);
-    }
   } else {
     console.error("generateLink failed:", linkError);
     return json({ error: linkError?.message ?? "Could not create the account" }, 400);
@@ -241,6 +230,23 @@ serve(async (req) => {
   if (!existingAccount && !tokenHash) {
     console.error("generateLink returned no hashed_token for", email);
     return json({ error: "Could not create the invitation link" }, 500);
+  }
+
+  // --- Profile --------------------------------------------------------------
+  // list_organization_members() joins on user_profiles, so the row must exist.
+  // The repo has a handle_new_user() trigger on auth.users for this, but it is
+  // not installed on the live database (verified 2026-09-15), and accounts
+  // from before it existed have no row either. Written here for every account
+  // instead; an existing row is left untouched.
+  const { error: profileError } = await supabase
+    .from("user_profiles")
+    .upsert(
+      { id: userId, email, first_name: firstName || null, last_name: lastName || null },
+      { onConflict: "id", ignoreDuplicates: true },
+    );
+  if (profileError) {
+    console.error("Could not ensure the user profile:", profileError);
+    return json({ error: "The account exists but its profile could not be written" }, 500);
   }
 
   // --- Membership -----------------------------------------------------------
