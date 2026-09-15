@@ -126,14 +126,25 @@ serve(async (req) => {
     // check alone would let the public anon key through, so resolve the token
     // to a user (same reasoning as send-invoice).
     if (!isServiceRoleToken(authHeader)) {
-      const { data: { user }, error: authError } = await createClient(
-        SUPABASE_URL_FOR_AUTH,
-        SUPABASE_ANON_KEY,
-        { global: { headers: { Authorization: authHeader } } },
-      ).auth.getUser();
-      if (authError || !user) {
-        return new Response("Unauthorized", { status: 401 });
+      let user = null;
+      let reason = "no user for this session token";
+      try {
+        const { data, error: authError } = await createClient(
+          SUPABASE_URL_FOR_AUTH,
+          SUPABASE_ANON_KEY,
+          { global: { headers: { Authorization: authHeader } } },
+        ).auth.getUser();
+        user = data?.user ?? null;
+        if (authError) reason = authError.message;
+      } catch (error) {
+        // Typically the worker could not reach SUPABASE_URL at all.
+        reason = `auth lookup failed: ${(error as any)?.message ?? error}`;
       }
+      if (!user) {
+        console.warn("Rejected app request:", reason);
+        return json({ error: `Unauthorized (${reason})` }, 401);
+      }
+      console.log(`Send requested by ${user.email} for job ${body?.jobId}`);
       return await sendOnRequest(body, user.email ?? null);
     }
 
