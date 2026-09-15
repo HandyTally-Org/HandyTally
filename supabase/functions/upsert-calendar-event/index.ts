@@ -129,11 +129,14 @@ serve(async (req) => {
       let user = null;
       let reason = "no user for this session token";
       try {
+        // Pass the token explicitly rather than relying on the client picking
+        // it up from a custom Authorization header; that path depends on the
+        // gotrue-js version esm.sh resolves to.
         const { data, error: authError } = await createClient(
           SUPABASE_URL_FOR_AUTH,
           SUPABASE_ANON_KEY,
-          { global: { headers: { Authorization: authHeader } } },
-        ).auth.getUser();
+          { auth: { persistSession: false, autoRefreshToken: false } },
+        ).auth.getUser(authHeader.slice("Bearer ".length));
         user = data?.user ?? null;
         if (authError) reason = authError.message;
       } catch (error) {
