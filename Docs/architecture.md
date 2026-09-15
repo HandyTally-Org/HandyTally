@@ -32,7 +32,7 @@ HandyTally is a **thick-client** application. There is no application server: th
 │  │ Auth     │  │ Postgres │  │ Edge Functions (Deno)    │ │
 │  │ GoTrue   │  │ + RLS    │  │  send-invoice   → Resend │ │
 │  └──────────┘  └────┬─────┘  │  upsert-calendar-event   │ │
-│                     │ webhook│           → Nylas         │ │
+│                     │ webhook│      → Resend (.ics)      │ │
 │                     └───────►│  create-organization     │ │
 │                              │     → Route 53, Vercel   │ │
 │                              └──────────────────────────┘ │
@@ -197,7 +197,7 @@ All three live under `supabase/functions/<name>/index.ts`, use `serve` from `std
 ### `upsert-calendar-event`
 
 - **Caller:** Supabase **database webhook** on `public.jobs` (INSERT / UPDATE / DELETE).
-- **Does:** creates, updates or deletes the matching event on the Nylas calendar `NYLAS_CALENDAR_ID` under grant `NYLAS_GRANT_ID`; invites the client and the job's creator (`jobs.created_by` → `auth.users.email`) so the job lands on the user's own calendar (HT-1); stores the event id back on the job for later updates and deletes; sends an `.ics`.
+- **Does:** builds an iCalendar invitation for the job and emails it through Resend to the client and the job's creator (`jobs.created_by` → `auth.users.email`), so the job lands on both calendars (HT-1). Updates resend the same UID (`job-<uid>@handytally`, stored in `jobs.calendar_event_id`) with a higher `SEQUENCE`; deletes send `METHOD:CANCEL`. No calendar API is involved.
 - **Auth:** checks for a bearer header and `Content-Type: application/json`.
 
 ### `create-organization`
@@ -229,7 +229,7 @@ InvoiceDetails                          │                              │    
 ### 7.2 Job → calendar
 
 ```
-JobForm ─ insert/update jobs ─► Postgres ─ webhook ─► upsert-calendar-event ─► Nylas
+JobForm ─ insert/update jobs ─► Postgres ─ webhook ─► upsert-calendar-event ─► Resend (.ics to client + creator)
                                                               │
                                                               └─ update jobs.calendar_event_id
 ```
@@ -260,7 +260,7 @@ admin-app ─ invoke ─► create-organization ─┬─ verify superuser
 | Where | What |
 | --- | --- |
 | Amplify environment | `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_BASE_DOMAIN`, `EXPO_PUBLIC_VERCEL_TEAM_ID` |
-| Supabase function secrets | `RESEND_API_KEY`, `INVOICE_FROM_ADDRESS`, `INVOICE_REPLY_TO`, `NYLAS_*`, `BASE_DOMAIN`, `AWS_*`, `VERCEL_*`, `GITHUB_*` |
+| Supabase function secrets | `RESEND_API_KEY`, `INVOICE_FROM_ADDRESS`, `INVOICE_REPLY_TO`, `CALENDAR_FROM_ADDRESS`, `BASE_DOMAIN`, `AWS_*`, `VERCEL_*`, `GITHUB_*` |
 | Auto-injected into functions | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` |
 | Local | `web/.env`, `admin-app/.env`, `supabase/functions/.env` (templates committed as `.env.example`) |
 
