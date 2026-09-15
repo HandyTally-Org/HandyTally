@@ -34,10 +34,12 @@
 //   INVOICE_REPLY_TO         optional
 //   SUPABASE_SERVICE_ROLE_KEY  injected; webhook auth, reads and the write-back
 
-import "jsr:@supabase/functions-js/edge-runtime.d.ts"
+// URL imports only: the self-hosted edge runtime starts workers without an
+// import map (see main/index.ts on the host), so a bare "supabase-js"
+// specifier from deno.json does not resolve there. Same as send-invoice.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { timingSafeEqual } from "https://deno.land/std@0.168.0/crypto/timing_safe_equal.ts"
-import { createClient } from "supabase-js"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") as string;
 const FROM_ADDRESS = Deno.env.get("CALENDAR_FROM_ADDRESS") ||
