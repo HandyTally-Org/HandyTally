@@ -1426,7 +1426,12 @@ export default function InvoicesScreen() {
 
   // Add a function to handle viewing invoice details
   const handleViewInvoiceDetails = async (invoice) => {
-    setSelectedInvoice(invoice);
+    // The list row only carries job_id; the details view shows the job by
+    // name, so resolve it from the jobs already loaded for the editor.
+    const job = invoice?.job_id
+      ? jobs.find(j => (j.uid || j.id) === invoice.job_id) || null
+      : null;
+    setSelectedInvoice({ ...invoice, job });
     setShowDetailsModal(true);
 
     // Line items are not on the list row, so load them or the details view
@@ -2041,11 +2046,13 @@ export default function InvoicesScreen() {
               setSelectedInvoice(null);
             }}
             contentContainerStyle={{
-              backgroundColor: 'white',
-              padding: 20,
+              // Same grey page the editor sits on; the details view draws its
+              // own white sheet inside it.
+              backgroundColor: '#e9ebee',
               margin: 20,
               maxHeight: '90%',
-              borderRadius: 10
+              borderRadius: 10,
+              overflow: 'hidden',
             }}
           >
             {/* On web, React Native's Modal is a fixed layer at z-index 9999.
