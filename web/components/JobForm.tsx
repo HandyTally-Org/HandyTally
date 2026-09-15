@@ -29,6 +29,9 @@ type Job = {
 
 type JobFormProps = {
   job?: Job | null;
+  // Start/end to prefill when creating a job (e.g. from a calendar cell).
+  // Ignored while editing an existing job.
+  defaults?: Partial<Pick<Job, 'start_date' | 'end_date'>>;
   onSubmit: (job: any) => void;
   onCancel: () => void;
   submitting?: boolean;
@@ -400,14 +403,14 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
   );
 };
 
-export function JobForm({ job, onSubmit, onCancel, submitting = false, onChange }: JobFormProps) {
+export function JobForm({ job, defaults, onSubmit, onCancel, submitting = false, onChange }: JobFormProps) {
   const [formData, setFormData] = useState<Omit<Job, 'uid'>>({
     client_id: job?.client_id || 0,  // Always ensure client_id exists
     title: job?.title || '',
     description: job?.description || '',
     status: job?.status || 'pending',
-    start_date: job?.start_date || null,
-    end_date: job?.end_date || null,
+    start_date: job?.start_date || defaults?.start_date || null,
+    end_date: job?.end_date || defaults?.end_date || null,
     start_time: job?.start_time || null,
     end_time: job?.end_time || null,
   });
@@ -481,8 +484,8 @@ export function JobForm({ job, onSubmit, onCancel, submitting = false, onChange 
         description: '',
         status: 'pending',
         client_id: 0, // Use 0 instead of empty string or null
-        start_date: null,
-        end_date: null,
+        start_date: defaults?.start_date || null,
+        end_date: defaults?.end_date || null,
         start_time: null,
         end_time: null,
       });
