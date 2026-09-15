@@ -7,8 +7,19 @@ import { supabase } from '../lib/supabase';
 // the .ics to the client, the job's creator and the person pressing the
 // button, and returns the addresses it sent to.
 export async function sendJobInvite(jobId: number): Promise<{ to: string[] }> {
+  // The function refuses anything but a live user session. supabase-js falls
+  // back to the public anon key when there is no session, which the function
+  // rejects with "missing sub claim"; the screens can look signed in without
+  // one because the database still allows anonymous reads. Check first so the
+  // user gets told to sign in rather than a cryptic 401.
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error('Your session has expired. Sign out and sign in again, then retry.');
+  }
+
   const { data, error } = await supabase.functions.invoke('upsert-calendar-event', {
     body: { action: 'send', jobId },
+    headers: { Authorization: `Bearer ${session.access_token}` },
   });
 
   if (error) {
