@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, StyleSheet, Platform, Image, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Platform, Image } from 'react-native';
 import { Text, Button, Dialog, Portal, TextInput } from 'react-native-paper';
 import { Invoice, InvoiceItem } from '../app/(app)/invoices';
 import { supabase } from '../lib/supabase';
@@ -8,7 +8,7 @@ import * as Sharing from 'expo-sharing';
 import { formatCurrency, formatDate } from '../utils/formatting';
 import { generateInvoiceHTML, renderInvoiceDocument } from '../utils/invoiceHtml';
 import { doc, GREEN, NAVY, BORDER, LABEL, INK } from './invoiceDocStyles';
-import { INVOICE_STATUS_OPTIONS, invoiceStatusLabel, invoiceDocumentLabel } from '../constants/invoiceStatus';
+import { invoiceStatusLabel, invoiceDocumentLabel } from '../constants/invoiceStatus';
 
 // Documents that can be emailed to a client: the ones that have not yet turned
 // into money owed. The payment states are excluded because there is no reason
@@ -37,7 +37,6 @@ export interface InvoiceDetailsProps {
   onClose: () => void;
   onEdit?: (invoice: Invoice) => void;
   onDelete?: (invoiceId: string) => void;
-  onStatusChange?: (status: Invoice['status']) => void;
   // Called after the invoice has been emailed, so the caller can refresh.
   onSent?: () => void;
   isEditable?: boolean;
@@ -49,9 +48,8 @@ export function InvoiceDetails({
   invoice, 
   items, 
   onClose, 
-  onEdit, 
-  onDelete, 
-  onStatusChange,
+  onEdit,
+  onDelete,
   onSent,
   isEditable = true,
   isEditing = false,
@@ -93,11 +91,6 @@ export function InvoiceDetails({
       console.error('Error fetching company info:', error);
     }
   }
-
-  const handleStatusChange = (status: Invoice['status']) => {
-    // Optional prop: guard it, or the status buttons crash when it is omitted.
-    onStatusChange?.(status);
-  };
 
   const handleDelete = () => {
     if (onDelete) {
@@ -289,27 +282,8 @@ export function InvoiceDetails({
 
   return (
     <View style={doc.screen}>
-      {/* Action bar, mirroring the Cancel / Save pair on the editor. Status
-          changes live on the left so the sheet itself stays read-only. */}
-      <View style={[doc.actionBar, { justifyContent: 'space-between', flexWrap: 'wrap' }]}>
-        <View style={styles.statusRow}>
-          <Text style={styles.statusRowLabel}>Status</Text>
-          {INVOICE_STATUS_OPTIONS.map(({ value, label }) => {
-            const active = safeInvoice.status === value;
-            return (
-              <TouchableOpacity
-                key={value}
-                style={[styles.statusPill, active ? styles.statusPillActive : null]}
-                onPress={() => handleStatusChange(value)}
-              >
-                <Text style={[styles.statusPillText, active ? styles.statusPillTextActive : null]}>
-                  {label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
+      {/* Action bar, mirroring the Cancel / Save pair on the editor. */}
+      <View style={[doc.actionBar, { justifyContent: 'flex-end', flexWrap: 'wrap' }]}>
         <View style={styles.actionGroup}>
           {onDelete && isEditable && !isEditing && (
             <Button
@@ -661,38 +635,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  statusRowLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: LABEL,
-    marginRight: 4,
-  },
-  statusPill: {
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 3,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: '#ffffff',
-  },
-  statusPillActive: {
-    backgroundColor: NAVY,
-    borderColor: NAVY,
-  },
-  statusPillText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: LABEL,
-  },
-  statusPillTextActive: {
-    color: '#ffffff',
   },
   sendHintRow: {
     paddingHorizontal: 16,
