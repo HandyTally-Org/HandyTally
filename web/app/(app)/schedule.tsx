@@ -143,6 +143,7 @@ export default function ScheduleScreen() {
           status: jobData.status || 'pending',
           start_date: jobData.start_date,
           end_date: jobData.end_date,
+          assigned_to: jobData.assigned_to ?? null,
         });
         if (error) throw new Error(error.message);
         setNewJobDefaults(null);

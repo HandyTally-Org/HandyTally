@@ -30,7 +30,7 @@ The product is delivered as an **Expo / React Native** codebase that targets the
 | --- | --- |
 | **Dashboard** | Client, active-job, pending-invoice and low-stock counts, sales-over-time chart, recent activity feed |
 | **Clients** | CRUD, tagging from the list view, per-client job and invoice history |
-| **Jobs** | Status tracking, costs, attachments, client linking, Excel import/export (jobs, job costs, attachments) |
+| **Jobs** | Status tracking, assignment to an organization member ("Assigned to"), costs, attachments, client linking, Excel import/export (jobs, job costs, attachments) |
 | **Schedule** | Weekly / monthly calendar of jobs; each job emails a calendar invitation to the client and the user who created it |
 | **Invoices** | Joist-style document editor with line items, item notes and photos, percentage or fixed fees, tax; document lifecycle `estimate → work_order → sent → partial_paid / paid / overdue`; print, PDF, and email-to-client via Resend |
 | **Inventory & Services** | Materials with stock levels and low-stock warnings; service catalog with rates |

@@ -11,6 +11,8 @@ import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from 'date-fns';
 import { JobForm } from '../../../components/JobForm';
+import { useOrganizationMembers } from '../../../hooks/useOrganizationMembers';
+import { assigneeLabel } from '../../../utils/inviteUser';
 import { InvoiceDetails } from '../../../components/InvoiceDetails';
 import { InvoiceForm } from '../../../components/InvoiceForm';
 
@@ -164,6 +166,8 @@ interface Job {
   updated_at: string;
   start_date?: string;
   end_date?: string;
+  // HT-35: user id of the organisation member the job is assigned to.
+  assigned_to?: string | null;
   client?: {
     name: string;
     email: string;
@@ -185,6 +189,8 @@ interface Material {
 export default function JobDetailsScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
+  // HT-35: turns jobs.assigned_to into a name on the Info tab.
+  const { members, loading: membersLoading } = useOrganizationMembers();
   const [selectedTab, setSelectedTab] = useState('info');
   const [job, setJob] = useState<Job | null>(null);
   const [invoices, setInvoices] = useState([]);
@@ -959,7 +965,8 @@ export default function JobDetailsScreen() {
         status: updatedJobData.status,
         client_id: clientId, // Use the validated number
         start_date: updatedJobData.start_date,
-        end_date: updatedJobData.end_date
+        end_date: updatedJobData.end_date,
+        assigned_to: updatedJobData.assigned_to ?? null,
       };
       
       // Remove any undefined values
@@ -1617,6 +1624,7 @@ export default function JobDetailsScreen() {
             <DataTable.Title>Title</DataTable.Title>
             <DataTable.Title>Description</DataTable.Title>
             <DataTable.Title>Client</DataTable.Title>
+            <DataTable.Title>Assigned to</DataTable.Title>
             <DataTable.Title>Status</DataTable.Title>
             <DataTable.Title>Start</DataTable.Title>
             <DataTable.Title>Finish</DataTable.Title>
@@ -1626,6 +1634,9 @@ export default function JobDetailsScreen() {
             <DataTable.Cell>{job?.title || 'N/A'}</DataTable.Cell>
             <DataTable.Cell>{job?.description || 'No description'}</DataTable.Cell>
             <DataTable.Cell>{job?.client?.name || 'No client'}</DataTable.Cell>
+            <DataTable.Cell>
+              {membersLoading && job?.assigned_to ? '…' : assigneeLabel(job?.assigned_to, members)}
+            </DataTable.Cell>
             <DataTable.Cell>
               <Chip 
                 style={{backgroundColor: getStatusColor(job?.status)}}
