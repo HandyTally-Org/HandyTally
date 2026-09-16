@@ -2149,14 +2149,6 @@ export default function InvoicesScreen() {
                   items={invoiceItems || []}
                   companyLogo={companyLogo}
                   onSent={() => fetchInvoices()}
-                  onStatusChange={async (status) => {
-                    const updated = await updateInvoiceStatus(selectedInvoice.uid, status);
-                    if (updated) {
-                      setSelectedInvoice(current =>
-                        current ? { ...current, status } : current
-                      );
-                    }
-                  }}
                 />
               </ScrollView>
             </Portal.Host>
