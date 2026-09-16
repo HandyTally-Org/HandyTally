@@ -78,6 +78,28 @@ const messageToHtml = (message: string) =>
     .map((paragraph) => `<p style="margin: 0 0 12px 0;">${paragraph.replace(/\n/g, "<br>")}</p>`)
     .join("");
 
+// The company logo is stored as a data: URI (admin.tsx / company.tsx embed
+// the upload directly rather than putting it in storage), and Gmail and most
+// other clients strip data: URIs from <img> tags. Resend can still show the
+// image if it rides along as a real attachment referenced by content_id, so
+// pull any data: URI out of the rendered document and swap it for a cid:
+// reference before sending.
+type InlineImage = { filename: string; content: string; content_id: string };
+
+const extractInlineImages = (markup: string): { markup: string; images: InlineImage[] } => {
+  const images: InlineImage[] = [];
+  const markupWithCids = markup.replace(
+    /src="data:([^;"]+);base64,([^"]+)"/g,
+    (_match, mime: string, base64: string) => {
+      const contentId = `logo-${images.length}`;
+      const extension = mime.split("/")[1] || "png";
+      images.push({ filename: `${contentId}.${extension}`, content: base64, content_id: contentId });
+      return `src="cid:${contentId}"`;
+    },
+  );
+  return { markup: markupWithCids, images };
+};
+
 const buildEmailHtml = (args: {
   subject: string;
   message: string;
@@ -98,7 +120,7 @@ const buildEmailHtml = (args: {
           .ht-mail .message { font-size: 15px; line-height: 1.5; margin-bottom: 20px; }
           .ht-mail .document { background: #ffffff; border: 1px solid #d5d8dc; border-radius: 4px; padding: 16px; }
           .ht-mail .total { font-size: 18px; font-weight: bold; text-align: right; margin: 20px 0 8px 0; }
-          .ht-mail .approve { text-align: right; margin: 8px 0 24px 0; }
+          .ht-mail .approve { text-align: center; margin: 8px 0 24px 0; }
           .ht-mail .approve a { display: inline-block; background: ${BUTTON_COLOR}; color: #ffffff !important; text-decoration: none; font-weight: 600; font-size: 16px; padding: 12px 28px; border-radius: 4px; }
           .ht-mail .footer { font-size: 12px; color: #6b7280; line-height: 1.5; }
           ${args.document.css}
@@ -224,10 +246,12 @@ serve(async (req) => {
 
   const approveUrl = `${appOrigin}/approve?token=${encodeURIComponent(invoice.approval_token)}`;
 
+  const { markup: inlinedMarkup, images: inlineImages } = extractInlineImages(document.markup);
+
   const html = buildEmailHtml({
     subject: subject.trim(),
     message: message ?? "",
-    document,
+    document: { css: document.css, markup: inlinedMarkup },
     total: invoice.total,
     approveUrl,
     businessName,
@@ -246,6 +270,7 @@ serve(async (req) => {
         subject: subject.trim(),
         html,
         ...(INVOICE_REPLY_TO ? { reply_to: INVOICE_REPLY_TO } : {}),
+        ...(inlineImages.length ? { attachments: inlineImages } : {}),
       }),
     });
 
