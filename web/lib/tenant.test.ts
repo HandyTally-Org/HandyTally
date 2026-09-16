@@ -41,3 +41,19 @@ describe('parseTenantSubdomain', () => {
     expect(parseTenantSubdomain(undefined, base)).toBeNull();
   });
 });
+
+import { isApexHost } from './tenant';
+
+describe('isApexHost', () => {
+  it('is true for the bare domain and www', () => {
+    expect(isApexHost('handytally.com', base)).toBe(true);
+    expect(isApexHost('WWW.HandyTally.com.', base)).toBe(true);
+  });
+
+  it('is false for customer hosts, localhost and the workers.dev URL', () => {
+    expect(isApexHost('wgelectricus.handytally.com', base)).toBe(false);
+    expect(isApexHost('localhost', base)).toBe(false);
+    expect(isApexHost('handytally-web.lucas-r-fittipaldi.workers.dev', base)).toBe(false);
+    expect(isApexHost(null, base)).toBe(false);
+  });
+});
