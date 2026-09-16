@@ -211,6 +211,16 @@ export default function RootLayout() {
                         drawerItemStyle: { height: 0 },
                       }}
                     />
+                    {/* HT-10: public landing page for the Approve button in
+                        estimate emails. Not a drawer destination. */}
+                    <Drawer.Screen
+                      name="approve"
+                      options={{
+                        drawerLabel: () => null,
+                        title: 'Approve estimate',
+                        drawerItemStyle: { height: 0 },
+                      }}
+                    />
                   </Drawer>
                 )}
           {isServer && <Slot />}

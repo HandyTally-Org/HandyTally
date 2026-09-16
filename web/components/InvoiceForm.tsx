@@ -9,6 +9,7 @@ import { supabase } from '../lib/supabase';
 import { Service } from '../app/(app)/services';
 import { Material } from '../app/(app)/materials';
 import { doc, GREEN, NAVY, BORDER, LABEL, INK, MAX_ITEM_PHOTOS } from './invoiceDocStyles';
+import { INVOICE_STATUS_OPTIONS, NEW_INVOICE_STATUS, invoiceDocumentLabel } from '../constants/invoiceStatus';
 
 type InvoiceFormProps = {
   jobs: Job[];
@@ -93,7 +94,7 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
     tax_amount: initialInvoice?.tax_amount || 0,
     total: initialInvoice?.total || 0,
     notes: initialInvoice?.notes || '',
-    status: initialInvoice?.status || 'estimate',
+    status: initialInvoice?.status || NEW_INVOICE_STATUS,
     invoice_items: initialInvoice?.invoice_items || []
   });
   const [invoiceItems, setInvoiceItems] = useState<Omit<InvoiceItem, 'id' | 'invoice_id'>[]>(
@@ -477,7 +478,7 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
         tax_rate: safeParseNumber(formData.tax_rate),
         tax_amount: safeParseNumber(formData.tax_amount),
         total: safeParseNumber(formData.total),
-        status: formData.status || 'draft'
+        status: formData.status || NEW_INVOICE_STATUS
       };
 
       const normalizedItems = invoiceItems.map(item => ({
@@ -529,9 +530,7 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
     }
   };
 
-  const documentLabel = (formData.status === 'estimate' || formData.status === 'work_order')
-    ? 'Estimate'
-    : 'Invoice';
+  const documentLabel = invoiceDocumentLabel(formData.status);
 
   const clientAddressLines = selectedClient
     ? [
@@ -703,17 +702,12 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
                 <Text style={doc.fieldLabel}>Status</Text>
                 <select
                   style={nativeSelectStyle}
-                  value={formData.status || 'estimate'}
+                  value={formData.status || NEW_INVOICE_STATUS}
                   onChange={(e: any) => handleStatusChange(e.target.value)}
                 >
-                  <option value="estimate">Estimate</option>
-                  <option value="work_order">Work Order</option>
-                  <option value="draft">Draft</option>
-                  <option value="sent">Sent</option>
-                  <option value="partial_paid">Partial Paid</option>
-                  <option value="paid">Paid</option>
-                  <option value="overdue">Overdue</option>
-                  <option value="cancelled">Cancelled</option>
+                  {INVOICE_STATUS_OPTIONS.map(option => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
                 </select>
               </View>
             </View>
