@@ -10,6 +10,8 @@ import { Client } from './clients';
 import { PageHeader } from '../../components/PageHeader';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import { ImportExportButtons } from '../../components/ImportExportButtons';
+import { exportWorkbook, pickWorkbook, sheetRows, confirmAction, toIsoDate } from '../../utils/excel';
 
 export type Invoice = {
   uid: string;
@@ -38,6 +40,8 @@ export type Invoice = {
   updated_at: string;
   job?: Job;
   client?: Client;
+  // Filled in by fetchInvoices from the joined client row.
+  client_name?: string;
 };
 
 export type InvoiceItemPhoto = {
@@ -707,6 +711,156 @@ export default function InvoicesScreen() {
   const showSnackbar = (message: string) => {
     setSnackbarMessage(message);
     setSnackbarVisible(true);
+  };
+
+  // Excel export: one sheet of invoices and one of their line items. The
+  // Invoices sheet can be edited and imported back; uid identifies the row.
+  const handleExport = async () => {
+    try {
+      setLoading(true);
+
+      const { data: items, error: itemsError } = await supabase
+        .from('invoice_items')
+        .select('*')
+        .order('invoice_id');
+      if (itemsError) throw itemsError;
+
+      const invoicesForExport = invoices.map((invoice) => ({
+        uid: invoice.uid,
+        invoice_number: invoice.invoice_number,
+        status: invoice.status || '',
+        client_id: invoice.client_id ?? '',
+        client_name: invoice.client_name || '',
+        job_id: invoice.job_id ?? '',
+        issue_date: invoice.issue_date || '',
+        due_date: invoice.due_date || '',
+        subtotal: invoice.subtotal ?? 0,
+        fee_type: invoice.fee_type || '',
+        fee_value: invoice.fee_value ?? 0,
+        fee_amount: invoice.fee_amount ?? 0,
+        tax_rate: invoice.tax_rate ?? 0,
+        tax_amount: invoice.tax_amount ?? 0,
+        total: invoice.total ?? 0,
+        notes: invoice.notes || '',
+        delete: 'n',
+      }));
+
+      const itemsForExport = (items || []).map((item) => ({
+        uid: item.uid,
+        invoice_id: item.invoice_id,
+        type: item.type || '',
+        description: item.description || '',
+        quantity: item.quantity ?? 0,
+        unit_price: item.unit_price ?? 0,
+        amount: item.amount ?? 0,
+        service_id: item.service_id ?? '',
+        material_id: item.material_id ?? '',
+      }));
+
+      await exportWorkbook('invoices.xlsx', [
+        { name: 'Invoices', rows: invoicesForExport, columnWidths: [10, 14, 12, 10, 25, 10, 12, 12, 12, 10, 10, 12, 10, 12, 12, 40, 8] },
+        { name: 'Invoice Items', rows: itemsForExport, columnWidths: [10, 10, 10, 40, 10, 12, 12, 10, 12] },
+      ]);
+
+      showSnackbar('Invoices exported successfully');
+    } catch (error) {
+      console.error('Error exporting invoices:', error);
+      showSnackbar('Error exporting invoices');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleImport = async () => {
+    try {
+      const workbook = await pickWorkbook();
+      if (!workbook) return;
+
+      const rows = sheetRows<any>(workbook, 'Invoices', 'Invoice');
+      if (!rows) {
+        showSnackbar('Error: Invoices sheet not found in the Excel file');
+        return;
+      }
+      if (rows.length === 0) {
+        showSnackbar('No invoice data found in the Excel file');
+        return;
+      }
+      const proceed = await confirmAction(
+        `Import ${rows.length} invoices? Rows with a uid update that invoice, and rows with delete set to "y" remove it along with its line items.`,
+        'Import'
+      );
+      if (proceed) {
+        await importInvoices(rows);
+      }
+    } catch (error) {
+      console.error('Error processing Excel file:', error);
+      showSnackbar('Error processing Excel file');
+    }
+  };
+
+  const importInvoices = async (rows: any[]) => {
+    try {
+      setLoading(true);
+
+      let added = 0;
+      let updated = 0;
+      let deleted = 0;
+      let errors = 0;
+
+      for (const row of rows) {
+        try {
+          const uid = row.uid != null && row.uid !== '' ? String(row.uid) : '';
+          const deleteFlag = String(row.delete ?? '').trim().toLowerCase();
+
+          if (uid && (deleteFlag === 'y' || deleteFlag === 'yes')) {
+            const { error: itemsError } = await supabase.from('invoice_items').delete().eq('invoice_id', uid);
+            if (itemsError) throw itemsError;
+            const { error } = await supabase.from('invoices').delete().eq('uid', uid);
+            if (error) throw error;
+            deleted++;
+            continue;
+          }
+
+          const invoiceData = {
+            invoice_number: row.invoice_number != null && row.invoice_number !== '' ? String(row.invoice_number) : null,
+            status: row.status || 'draft',
+            client_id: row.client_id || null,
+            job_id: row.job_id || null,
+            issue_date: toIsoDate(row.issue_date),
+            due_date: toIsoDate(row.due_date),
+            subtotal: Number(row.subtotal) || 0,
+            fee_type: row.fee_type || null,
+            fee_value: Number(row.fee_value) || 0,
+            fee_amount: Number(row.fee_amount) || 0,
+            tax_rate: Number(row.tax_rate) || 0,
+            tax_amount: Number(row.tax_amount) || 0,
+            total: Number(row.total) || 0,
+            notes: row.notes || '',
+          };
+
+          if (uid) {
+            const { error } = await supabase.from('invoices').update(invoiceData).eq('uid', uid);
+            if (error) throw error;
+            updated++;
+          } else {
+            const { error } = await supabase.from('invoices').insert([invoiceData]);
+            if (error) throw error;
+            added++;
+          }
+        } catch (rowError) {
+          console.error('Error importing invoice row:', row, rowError);
+          errors++;
+        }
+      }
+
+      await fetchInvoices();
+      showSnackbar(`Import complete: ${added} added, ${updated} updated, ${deleted} deleted${errors > 0 ? `, ${errors} errors` : ''}`);
+    } catch (error) {
+      console.error('Error importing invoices:', error);
+      showSnackbar('Error importing invoices');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getStatusChipColor = (status: string): string => {
@@ -1610,6 +1764,7 @@ export default function InvoicesScreen() {
         >
           Create New Invoice
         </Button>
+            <ImportExportButtons onExport={handleExport} onImport={handleImport} disabled={loading} />
           </View>
           
           <View style={styles.filtersContainer}>

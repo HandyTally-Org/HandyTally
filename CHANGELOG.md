@@ -5,6 +5,8 @@ All notable changes to HandyTally are recorded here. Ticket numbers refer to `HT
 ## Unreleased
 
 ### Added
+- **HT-34** — Invoices page exports to Excel (an `Invoices` sheet plus an `Invoice Items` sheet) and imports the `Invoices` sheet back: rows with a `uid` update that invoice, rows with `delete` set to `y` remove it with its line items, and other rows are added.
+- **HT-34** — Excel export and import work in the phone app as well as the browser: an export opens the share sheet and an import uses the document picker.
 - **HT-1** — **Send calendar invite** button on each job (Jobs list row and job detail) emails the `.ics` for the job's start and finish times on demand, to the client, the job's creator and whoever pressed the button.
 - **HT-1** — The user who creates a job is invited to its calendar event alongside the client, so the job shows on their own Google Calendar. `jobs.created_by` records the creator.
 - **HT-4** — Send an invoice or estimate to the client by email through the `send-invoice` edge function (Resend). Sends are recorded in a new `invoices.sent_at` column rather than by overwriting `status`, so an estimate stays an estimate after it has been emailed. The provider's rejection reason is surfaced to the user when a send fails.
@@ -13,11 +15,16 @@ All notable changes to HandyTally are recorded here. Ticket numbers refer to `HT
 - Invoice editor rebuilt as a Joist-style document layout.
 
 ### Changed
+- **HT-23** — Add and edit forms on the Inventory and Labor pages open in a compact centred dialog with a shared header, two-column layout and footer instead of a full-width popup. Labor gains an edit dialog; its pencil icon previously did nothing.
+- **HT-34** — The five list pages share one Excel helper (`web/utils/excel.ts`) and one pair of export/import buttons with hover labels, replacing five copies of the file-reader and hidden-input code.
 - **HT-1** — Calendar invites are now iCalendar attachments emailed through Resend instead of events created on a Nylas calendar. Updates resend the same event; deletes send a cancellation. The `NYLAS_*` secrets are no longer used and the Nylas subscription can be dropped.
 - **HT-7** — Jobs status and Clients tag pickers use the same dropdown style as Invoices.
 - Invoice HTML generation extracted to `web/utils/invoiceHtml.ts` and shared by preview, print and email.
 
 ### Fixed
+- **HT-34** — Importing a Labor export failed for every row because the blank `unit` text was sent to a numeric column; the value is now parsed as a number and left out when blank.
+- **HT-23** — Typing a unit such as "hour" when adding a labor code could never save (numeric column), so the field is no longer offered.
+- Inventory and Labor no longer call a database function (`execute_sql`) that does not exist, on every page load and import.
 - **HT-1** — A job with no end date produced a 3.6 second calendar event instead of one hour; deleting a job that was never synced no longer logs a webhook failure.
 - **HT-5** — Excel import icon is visible on the Jobs page.
 - **HT-4** — Send Invoice dialog renders inside the invoice details modal.

@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, ScrollView, Platform, TouchableOpacity } from 'react-native';
-import { Text, Button, Searchbar, Snackbar, Card, Chip, IconButton, DataTable, ActivityIndicator, Dialog, Portal, TextInput } from 'react-native-paper';
+import { useState, useEffect } from 'react';
+import { View, StyleSheet } from 'react-native';
+import { Text, Button, Searchbar, Snackbar, Card, IconButton, DataTable, ActivityIndicator, Dialog, Portal } from 'react-native-paper';
 import { supabase } from '../../lib/supabase';
-import { ServiceForm } from '../../components/ServiceForm';
+import { ServiceDialog, ServiceDraft } from '../../components/ServiceDialog';
+import { ImportExportButtons } from '../../components/ImportExportButtons';
 import { styles as globalStyles } from '../../styles';
-import * as XLSX from 'xlsx';
-import { ExactHeader } from '../../components/ExactHeader';
+import { exportWorkbook, pickWorkbook, sheetRows, hasColumn, confirmAction } from '../../utils/excel';
 
 export type Service = {
   uid: number;
@@ -30,17 +30,8 @@ export default function ServicesScreen() {
   const [sortDirection, setSortDirection] = useState<'ascending' | 'descending'>('ascending');
   const [submitting, setSubmitting] = useState(false);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   useEffect(() => {
     fetchServices();
-  }, []);
-
-  useEffect(() => {
-    console.log('XLSX library loaded:', XLSX);
-    if (!XLSX) {
-      console.error('XLSX library not available');
-    }
   }, []);
 
   async function fetchServices() {
@@ -69,7 +60,7 @@ export default function ServicesScreen() {
     }
   }
 
-  const handleAddService = async (service: Omit<Service, 'uid'>) => {
+  const handleAddService = async (service: ServiceDraft) => {
     try {
       setSubmitting(true);
       
@@ -226,35 +217,10 @@ export default function ServicesScreen() {
         delete: 'n'
       }));
       
-      console.log('Exporting services data:', exportData);
-      
-      const worksheet = XLSX.utils.json_to_sheet(exportData);
-      
-      if (!worksheet['!cols']) worksheet['!cols'] = [];
-      worksheet['!cols'] = [
-        { wch: 36 },
-        { wch: 25 },
-        { wch: 30 },
-        { wch: 10 },
-        { wch: 10 },
-        { wch: 15 },
-        { wch: 10 },
-        { wch: 10 }
-      ];
-      
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Services');
-      
-      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-      
-      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'services.xlsx';
-      a.click();
-      URL.revokeObjectURL(url);
-      
+      await exportWorkbook('services.xlsx', [
+        { name: 'Services', rows: exportData, columnWidths: [36, 25, 30, 10, 10, 15, 10, 10] },
+      ]);
+
       alert('Services exported successfully. This file can be used for import.\n\nTo delete a service, change the "delete" column value to "y".');
     } catch (error) {
       console.error('Error exporting services:', error);
@@ -262,98 +228,23 @@ export default function ServicesScreen() {
     }
   };
 
-  const handleImportClick = () => {
-    console.log('Import button clicked');
-    
-    if (Platform.OS !== 'web') {
-      alert('File import is only available on web platform');
-      return;
-    }
-    
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-    
-    if (fileInputRef.current) {
-      console.log('Triggering file input click');
-      fileInputRef.current.click();
-    } else {
-      console.error('File input reference is null');
-      alert('Could not open file selector. Please try again.');
-    }
-  };
-
-  const handleFileSelected = async (event) => {
-    console.log('File selected event triggered', event);
+  const handleImport = async () => {
     try {
-      const file = event.target.files[0];
-      console.log('Selected file:', file);
-      
-      if (!file) {
-        console.log('No file selected');
+      const workbook = await pickWorkbook();
+      if (!workbook) return;
+
+      const rows = sheetRows(workbook);
+      if (!rows || rows.length === 0) {
+        alert('No data found in the spreadsheet.');
         return;
       }
-      
-      const reader = new FileReader();
-      
-      reader.onload = async (e) => {
-        console.log('FileReader onload triggered');
-        try {
-          console.log('FileReader result:', e.target.result);
-          
-          if (!e.target.result) {
-            console.error('FileReader result is empty');
-            alert('Could not read the file. Please try again.');
-            return;
-          }
-          
-          const data = new Uint8Array(e.target.result);
-          console.log('Data array created, length:', data.length);
-          
-          console.log('Attempting to parse Excel file...');
-          const workbook = XLSX.read(data, { type: 'array' });
-          console.log('Workbook parsed:', workbook);
-          
-          console.log('Sheet names:', workbook.SheetNames);
-          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-          console.log('First sheet:', firstSheet);
-          
-          const jsonData = XLSX.utils.sheet_to_json(firstSheet);
-          console.log('JSON data extracted:', jsonData);
-          
-          if (jsonData.length === 0) {
-            alert('No data found in the Excel file.');
-            return;
-          }
-          
-          const firstItem = jsonData[0];
-          console.log('First item in data:', firstItem);
-          
-          if (!firstItem.name) {
-            alert('The Excel file must have a "name" column.');
-            return;
-          }
-          
-          if (confirm(`Are you sure you want to import ${jsonData.length} services?`)) {
-            await importServices(jsonData);
-          }
-        } catch (error) {
-          console.error('Error processing Excel file:', error);
-          alert(`Failed to process Excel file: ${error.message}`);
-        }
-      };
-      
-      reader.onerror = (error) => {
-        console.error('FileReader error:', error);
-        alert('Error reading the file. Please try again.');
-      };
-      
-      console.log('Starting file read as ArrayBuffer');
-      reader.readAsArrayBuffer(file);
-      console.log('File read initiated');
-      
-    } catch (error) {
-      console.error('Error in handleFileSelected:', error);
+      if (!hasColumn(rows, 'name')) {
+        alert('The spreadsheet must have a "name" column.');
+        return;
+      }
+      await importServices(rows);
+    } catch (error: any) {
+      console.error('Error importing services:', error);
       alert(`Failed to import services: ${error.message}`);
     }
   };
@@ -370,43 +261,6 @@ export default function ServicesScreen() {
       
       const servicesToInsert = [];
       
-      let columnNames = [];
-      try {
-        const { data: columns, error: columnsError } = await supabase.rpc('execute_sql', {
-          sql_query: `
-            SELECT column_name, data_type, is_nullable 
-            FROM information_schema.columns 
-            WHERE table_name = 'services' AND table_schema = 'public'
-            ORDER BY ordinal_position;
-          `
-        });
-        
-        if (columnsError) {
-          console.error('Error checking table structure:', columnsError);
-        } else {
-          console.log('Services table structure:', columns);
-          columnNames = columns.map(col => col.column_name);
-          console.log('Available columns:', columnNames);
-        }
-      } catch (structError) {
-        console.error('Error checking table structure:', structError);
-      }
-      
-      try {
-        const { data: sampleService, error: sampleError } = await supabase
-          .from('services')
-          .select('*')
-          .limit(1)
-          .single();
-        
-        if (sampleError) {
-          console.error('Error fetching sample service:', sampleError);
-        } else {
-          console.log('Sample service from database:', sampleService);
-        }
-      } catch (sampleError) {
-        console.error('Error fetching sample service:', sampleError);
-      }
       
       for (const item of data) {
         try {
@@ -473,15 +327,13 @@ export default function ServicesScreen() {
               }
               
               else if (lowerKey === 'unit') {
-                normalizedItem.unit = String(value || '');
+                // `unit` is a numeric column: a label such as "hour" makes the row fail.
+                const unitValue = parseFloat(String(value));
+                if (!isNaN(unitValue)) normalizedItem.unit = unitValue;
               }
               
               else if (lowerKey === 'category') {
                 normalizedItem.category = String(value || '');
-              }
-              
-              else if (columnNames.includes(lowerKey)) {
-                normalizedItem[lowerKey] = value;
               }
             }
             
@@ -504,7 +356,7 @@ export default function ServicesScreen() {
         message.push(`Delete ${servicesToDelete.length} services`);
       }
       
-      if (!confirm(`Are you sure you want to:\n${message.join('\n')}`)) {
+      if (!(await confirmAction(`Are you sure you want to:\n${message.join('\n')}`, 'Import'))) {
         return;
       }
       
@@ -724,99 +576,9 @@ export default function ServicesScreen() {
             Add New Labor Code
           </Button>
           
-          <View 
-            style={{ marginLeft: 8 }}
-            accessibilityLabel="Export"
-          >
-            <IconButton
-              icon="file-export"
-              mode="contained"
-              onPress={handleExport}
-              iconColor="#fff"
-              containerColor="#4CAF50"
-              size={20}
-              aria-label="Export"
-            />
-            {Platform.OS === 'web' && (
-              <div 
-                style={{ 
-                  position: 'absolute', 
-                  bottom: -30, 
-                  left: 0, 
-                  backgroundColor: '#333', 
-                  color: 'white', 
-                  padding: '4px 8px', 
-                  borderRadius: 4, 
-                  fontSize: 12,
-                  whiteSpace: 'nowrap',
-                  opacity: 0,
-                  transition: 'opacity 0.2s',
-                  pointerEvents: 'none'
-                }}
-                className="tooltip"
-              >
-                Export
-              </div>
-            )}
-          </View>
-          
-          <View 
-            style={{ marginLeft: 8 }}
-            accessibilityLabel="Import"
-          >
-            <IconButton
-              icon="file-import"
-              mode="contained"
-              onPress={handleImportClick}
-              iconColor="#fff"
-              containerColor="#2196F3"
-              size={20}
-              aria-label="Import"
-            />
-            {Platform.OS === 'web' && (
-              <div 
-                style={{ 
-                  position: 'absolute', 
-                  bottom: -30, 
-                  left: 0, 
-                  backgroundColor: '#333', 
-                  color: 'white', 
-                  padding: '4px 8px', 
-                  borderRadius: 4, 
-                  fontSize: 12,
-                  whiteSpace: 'nowrap',
-                  opacity: 0,
-                  transition: 'opacity 0.2s',
-                  pointerEvents: 'none'
-                }}
-                className="tooltip"
-              >
-                Import
-              </div>
-            )}
-          </View>
+          <ImportExportButtons onExport={handleExport} onImport={handleImport} />
         </View>
         
-        {/* Hidden file input for import */}
-        {Platform.OS === 'web' && (
-          <>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileSelected}
-              accept=".xlsx,.xls"
-              style={{ display: 'none' }}
-              id="labor-import-input"
-            />
-            <style>
-              {`
-                View:hover .tooltip {
-                  opacity: 1;
-                }
-              `}
-            </style>
-          </>
-        )}
       </View>
       
       <Card style={{
@@ -905,43 +667,26 @@ export default function ServicesScreen() {
         </DataTable>
       </Card>
       
-      {/* Add Service Dialog */}
-      <Portal>
-        <Dialog visible={showAddForm} onDismiss={() => setShowAddForm(false)} style={{ backgroundColor: '#ffffff' }}>
-          <Dialog.Title>Add New Service</Dialog.Title>
-          <Dialog.Content>
-            <TextInput
-              label="Name"
-              value={editingService?.name || ''}
-              onChangeText={(text) => setEditingService({ ...(editingService || {}), name: text })}
-              style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-            />
-            <TextInput
-              label="Description"
-              value={editingService?.description || ''}
-              onChangeText={(text) => setEditingService({ ...(editingService || {}), description: text })}
-              style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-            />
-            <TextInput
-              label="Rate"
-              value={editingService?.rate?.toString() || ''}
-              onChangeText={(text) => setEditingService({ ...(editingService || {}), rate: parseFloat(text) })}
-              keyboardType="numeric"
-              style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-            />
-            <TextInput
-              label="Unit"
-              value={editingService?.unit || ''}
-              onChangeText={(text) => setEditingService({ ...(editingService || {}), unit: text })}
-              style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-            />
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setShowAddForm(false)}>Cancel</Button>
-            <Button onPress={() => handleAddService(editingService || {} as Omit<Service, 'uid'>)}>Add</Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
+      <ServiceDialog
+        visible={showAddForm}
+        title="Add labor code"
+        subtitle="A service and its hourly rate for jobs and invoices"
+        submitLabel="Add labor code"
+        submitting={submitting}
+        onDismiss={() => setShowAddForm(false)}
+        onSubmit={handleAddService}
+      />
+
+      <ServiceDialog
+        visible={editingService !== null}
+        title="Edit labor code"
+        subtitle={editingService?.name}
+        service={editingService}
+        submitLabel="Save changes"
+        submitting={submitting}
+        onDismiss={() => setEditingService(null)}
+        onSubmit={(draft) => editingService && handleUpdateService(editingService.uid, draft)}
+      />
       
       {/* Delete Service Dialog */}
       <Portal>

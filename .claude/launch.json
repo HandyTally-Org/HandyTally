@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "C:\\tmp\\ht\\.claude\\run-web.cmd",
+      "runtimeArgs": [],
+      "port": 8081
+    }
+  ]
+}
