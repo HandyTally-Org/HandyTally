@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ImportExportButtons } from '../../components/ImportExportButtons';
 import { exportWorkbook, pickWorkbook, sheetRows, confirmAction, toIsoDate } from '../../utils/excel';
+import { InvoiceStatus, NEW_INVOICE_STATUS, invoiceStatusLabel, invoiceStatusColor } from '../../constants/invoiceStatus';
 
 export type Invoice = {
   uid: string;
@@ -29,13 +30,19 @@ export type Invoice = {
   tax_amount: number;
   total: number;
   notes: string;
-  // Covers both document type (draft/estimate/work_order) and payment state.
-  // These are the values the status dropdown actually writes.
-  status: 'draft' | 'estimate' | 'work_order' | 'sent' | 'partial_paid' | 'paid' | 'overdue' | 'cancelled';
+  // Covers both document type (estimate/work_order) and payment state. The
+  // list of values lives in constants/invoiceStatus.ts.
+  status: InvoiceStatus;
   // When this document was last emailed to the client; null means never sent.
   // Deliberately independent of status, so sending an estimate does not stop
   // it being an estimate.
   sent_at?: string | null;
+  // HT-10: who created the estimate (auth user id, stamped by the database),
+  // the secret in its approval link, and when the client approved it. The
+  // token is never shown; the send-estimate-approval function reads it.
+  created_by?: string | null;
+  approval_token?: string;
+  approved_at?: string | null;
   created_at: string;
   updated_at: string;
   job?: Job;
@@ -122,7 +129,6 @@ export default function InvoicesScreen() {
     checkInvoicesTables();
     checkDatabaseSchema();
     checkAndCreateInvoiceItemsTable();
-    updateDraftToEstimate();
     checkAndFixDatabase();
     checkDatabaseSchema()
       .then(async () => {
@@ -182,7 +188,7 @@ export default function InvoicesScreen() {
           tax_amount: 0,
           total: 0,
           notes: '',
-          status: 'estimate',
+          status: NEW_INVOICE_STATUS,
           invoice_items: [],
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -227,7 +233,7 @@ export default function InvoicesScreen() {
           tax_amount: 0,
           total: 0,
           notes: '',
-          status: 'estimate',
+          status: NEW_INVOICE_STATUS,
           invoice_items: [],
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -271,7 +277,7 @@ export default function InvoicesScreen() {
         tax_amount: 0,
         total: 0,
         notes: '',
-        status: 'estimate',
+        status: NEW_INVOICE_STATUS,
         invoice_items: [],
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -508,7 +514,7 @@ export default function InvoicesScreen() {
           fee_amount: Number(invoice.fee_amount) || 0,
           total: Number(invoice.total),
           notes: invoice.notes || '',
-          status: invoice.status || 'draft'
+          status: invoice.status || NEW_INVOICE_STATUS
         })
         .select(`
           *,
@@ -823,7 +829,7 @@ export default function InvoicesScreen() {
 
           const invoiceData = {
             invoice_number: row.invoice_number != null && row.invoice_number !== '' ? String(row.invoice_number) : null,
-            status: row.status || 'draft',
+            status: row.status || NEW_INVOICE_STATUS,
             client_id: row.client_id || null,
             job_id: row.job_id || null,
             issue_date: toIsoDate(row.issue_date),
@@ -860,23 +866,6 @@ export default function InvoicesScreen() {
       showSnackbar('Error importing invoices');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const getStatusChipColor = (status: string): string => {
-    switch (status) {
-      case 'draft':
-        return '#9e9e9e'; // Gray
-      case 'sent':
-        return '#2196f3'; // Blue
-      case 'paid':
-        return '#4caf50'; // Green
-      case 'overdue':
-        return '#f44336'; // Red
-      case 'cancelled':
-        return '#ff9800'; // Orange
-      default:
-        return '#9e9e9e'; // Default gray
     }
   };
 
@@ -924,9 +913,7 @@ export default function InvoicesScreen() {
     if (selectedStatuses.length > 0) {
       filtered = filtered.filter(invoice => 
         // Include this invoice if its status is in the selectedStatuses array
-        selectedStatuses.includes(invoice.status) ||
-        // Special case for 'estimate' to also match 'draft' for backward compatibility
-        (selectedStatuses.includes('estimate') && invoice.status === 'draft')
+        selectedStatuses.includes(invoice.status)
       );
     }
     
@@ -1155,9 +1142,6 @@ export default function InvoicesScreen() {
     }
   }
 
-  const isInvoiceEditable = (invoice: Invoice): boolean => {
-    return invoice.status === 'draft';
-  };
 
   const handleEditInvoice = async (invoice) => {
     try {
@@ -1308,7 +1292,7 @@ export default function InvoicesScreen() {
             fee_amount: updatedInvoice.fee_amount || 0,
             total: updatedInvoice.total,
             notes: updatedInvoice.notes,
-            status: updatedInvoice.status || 'estimate',
+            status: updatedInvoice.status || NEW_INVOICE_STATUS,
           })
           .select()
           .single();
@@ -1647,52 +1631,6 @@ export default function InvoicesScreen() {
     }
   };
 
-  // Update the getStatusTextColor function to include the new statuses
-  const getStatusTextColor = (status: string): string => {
-    switch (status) {
-      case 'estimate':
-        return '#666666'; // Dark gray
-      case 'work_order':
-        return '#9c27b0'; // Purple
-      case 'sent':
-        return '#0066cc'; // Blue
-      case 'partial_paid':
-        return '#ff9800'; // Orange
-      case 'paid':
-        return '#008800'; // Green
-      case 'overdue':
-        return '#cc0000'; // Red
-      case 'cancelled':
-        return '#888888'; // Gray
-      default:
-        return '#000000'; // Black
-    }
-  };
-
-  // Add a function to update all existing "draft" statuses to "estimate"
-  const updateDraftToEstimate = async () => {
-    try {
-      console.log('Updating all draft invoices to estimate status...');
-      
-      const { error } = await supabase
-        .from('invoices')
-        .update({ status: 'estimate' })
-        .eq('status', 'draft');
-      
-      if (error) {
-        console.error('Error updating draft invoices:', error);
-        showSnackbar('Error updating invoice statuses');
-        return;
-      }
-      
-      console.log('Successfully updated draft invoices to estimate');
-      fetchInvoices(); // Refresh the list
-    } catch (error) {
-      console.error('Error in updateDraftToEstimate:', error);
-      showSnackbar(`Error: ${error.message}`);
-    }
-  };
-
   // Add a function to fetch the company logo from company_attachments
   async function fetchCompanyLogo() {
     try {
@@ -1752,7 +1690,7 @@ export default function InvoicesScreen() {
                   tax_amount: 0,
                   total: 0,
                   notes: '',
-                  status: 'estimate',
+                  status: NEW_INVOICE_STATUS,
                   invoice_items: [],
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
@@ -1969,27 +1907,12 @@ export default function InvoicesScreen() {
                     <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(invoice.due_date)}</DataTable.Cell>
                     <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>${invoice.total.toFixed(2)}</DataTable.Cell>
                     <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
-                      <select
-                        value={invoice.status}
-                        onChange={(e) => updateInvoiceStatus(invoice.uid, e.target.value)}
-                        style={{
-                          padding: 8,
-                          borderRadius: 4,
-                          borderColor: '#ccc',
-                          backgroundColor: '#ffffff',
-                          color: '#000000',
-                          fontWeight: 'bold'
-                        }}
-                      >
-                        <option value="draft">Draft</option>
-                        <option value="estimate">Estimate</option>
-                        <option value="work_order">Work Order</option>
-                        <option value="sent">Sent</option>
-                        <option value="partial_paid">Partial Paid</option>
-                        <option value="paid">Paid</option>
-                        <option value="overdue">Overdue</option>
-                        <option value="cancelled">Cancelled</option>
-                      </select>
+                      {/* HT-10: read-only. An estimate becomes a work order
+                          when the client approves it from the email; other
+                          changes are made from the details view. */}
+                      <Text style={{ fontWeight: 'bold', color: invoiceStatusColor(invoice.status) }}>
+                        {invoiceStatusLabel(invoice.status)}
+                      </Text>
                     </DataTable.Cell>
                     <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
                       <View style={{ flexDirection: 'row' }}>
@@ -2117,7 +2040,7 @@ export default function InvoicesScreen() {
                           fee_amount: updatedInvoice.fee_amount || 0,
                           total: updatedInvoice.total,
                           notes: updatedInvoice.notes,
-                          status: updatedInvoice.status || 'estimate',
+                          status: updatedInvoice.status || NEW_INVOICE_STATUS,
                         })
                         .select()
                         .single();

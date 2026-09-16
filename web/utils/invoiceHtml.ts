@@ -1,125 +1,152 @@
 import { formatDate } from './formatting';
+import { invoiceDocumentLabel } from '../constants/invoiceStatus';
 
-// Generates the printable HTML for an invoice.
-// Extracted from components/InvoiceDetails.tsx so the same markup can be
-// reused by the invoice send path (HT-4) without the two drifting apart.
-export const generateInvoiceHTML = (invoice, items, companyInfo) => {
-  // Log the invoice object to debug
-  console.log('Invoice object for HTML generation:', invoice);
-  
-  // Determine the job name to display
-  const jobName = invoice.job?.name || 
-                 invoice.job?.title ||
-                 invoice.job?.job_name ||
-                 invoice.job?.description ||
-                 invoice.job_name || 
-                 (invoice.job_id ? `Job #${invoice.job_id}` : 'N/A');
-  
+// Renders an invoice, estimate or work order as HTML.
+// Extracted from components/InvoiceDetails.tsx so the same markup is used by
+// Print, by the invoice send path (HT-4) and by the estimate approval email
+// (HT-10) without the three drifting apart.
+//
+// renderInvoiceDocument returns the stylesheet and the markup separately so
+// the approval email can embed the document inside its own page. Every
+// selector is scoped under .ht-doc for that reason. generateInvoiceHTML wraps
+// the two in a complete page for Print and for the plain invoice email.
+
+export type InvoiceDocumentParts = { css: string; markup: string };
+
+export const generateInvoiceHTML = (invoice: any, items: any[], companyInfo: any) => {
+  const { css, markup } = renderInvoiceDocument(invoice, items, companyInfo);
   return `
     <!DOCTYPE html>
     <html>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
         <style>
-          body {
+          body { margin: 0; padding: 0; }
+          ${css}
+        </style>
+      </head>
+      <body>
+        ${markup}
+      </body>
+    </html>
+  `;
+};
+
+export const renderInvoiceDocument = (invoice: any, items: any[], companyInfo: any): InvoiceDocumentParts => {
+  // Determine the job name to display
+  const jobName = invoice.job?.name ||
+                 invoice.job?.title ||
+                 invoice.job?.job_name ||
+                 invoice.job?.description ||
+                 invoice.job_name ||
+                 (invoice.job_id ? `Job #${invoice.job_id}` : 'N/A');
+
+  // An estimate says ESTIMATE, a work order WORK ORDER; only a document in a
+  // payment state is an INVOICE.
+  const title = invoiceDocumentLabel(invoice.status).toUpperCase();
+  const statusText = String(invoice.status || '').replace(/_/g, ' ').toUpperCase();
+
+  const css = `
+          .ht-doc {
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
             padding: 2px;
             margin: 0 auto; /* Center the content */
             max-width: 800px; /* Set a maximum width */
             color: #333;
           }
-          .header-container {
+          .ht-doc .header-container {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
             margin-bottom: 5px;
             padding: 5px;
           }
-          .invoice-title-section {
+          .ht-doc .invoice-title-section {
             flex: 1;
           }
-          .logo {
+          .ht-doc .logo {
             text-align: right;
             margin-left: 10px;
           }
-          .logo img {
+          .ht-doc .logo img {
             max-width: 150px;
             max-height: 80px;
           }
-          .company-info {
+          .ht-doc .company-info {
             text-align: right;
             margin-top: 0;
           }
-          .invoice-details {
+          .ht-doc .invoice-details {
             margin: 5px 0;
             padding: 0 5px;
           }
-          .client-info {
+          .ht-doc .client-info {
             margin-top: 10px;
           }
-          h1 {
+          .ht-doc h1 {
             margin: 0;
             padding: 0;
             font-size: 24px;
           }
-          h3 {
+          .ht-doc h3 {
             margin: 5px 0;
             padding: 0;
           }
-          .status {
+          .ht-doc .status {
             display: inline-block;
             padding: 2px 5px;
             border-radius: 4px;
             font-size: 12px;
             margin-top: 5px;
           }
-          table {
+          .ht-doc table {
             width: 100%;
             border-collapse: collapse;
             margin-top: 10px;
           }
-          th, td {
+          .ht-doc th, .ht-doc td {
             border-bottom: 1px solid #ddd;
             text-align: left;
             padding: 5px;
           }
-          th {
+          .ht-doc th {
             background-color: #f2f2f2;
           }
-          .totals {
+          .ht-doc .totals {
             width: 300px;
             margin-left: auto;
             margin-top: 10px;
           }
-          .total-row {
+          .ht-doc .total-row {
             display: flex;
             justify-content: space-between;
             padding: 2px 0;
           }
-          .grand-total {
+          .ht-doc .grand-total {
             font-weight: bold;
             border-top: 1px solid #000;
             padding-top: 5px;
           }
-          .notes {
+          .ht-doc .notes {
             margin-top: 10px;
             padding: 5px;
             background-color: #f9f9f9;
           }
-        </style>
-      </head>
-      <body>
+  `;
+
+  const markup = `
+        <div class="ht-doc">
         <div class="header-container">
           <div class="invoice-title-section">
-            <h1>INVOICE #${invoice.invoice_number}</h1>
-            <div class="status status-${invoice.status}">${invoice.status.toUpperCase()}</div>
-            
+            <h1>${title} #${invoice.invoice_number}</h1>
+            <div class="status status-${invoice.status}">${statusText}</div>
+
             <div class="invoice-details">
-              <div><strong>Invoice Date:</strong> ${formatDate(invoice.issue_date)}</div>
+              <div><strong>Date:</strong> ${formatDate(invoice.issue_date)}</div>
               <div><strong>Due Date:</strong> ${formatDate(invoice.due_date)}</div>
               <div><strong>Job:</strong> ${jobName}</div>
             </div>
-            
+
             <div class="client-info">
               <h3>Bill To:</h3>
               <div>${invoice.client?.name || 'Client Name'}</div>
@@ -127,11 +154,11 @@ export const generateInvoiceHTML = (invoice, items, companyInfo) => {
               <div>${invoice.client?.email || 'client@example.com'}</div>
             </div>
           </div>
-          
+
           <div>
             <div class="logo">
-              ${companyInfo?.logo_url ? 
-                `<img src="${companyInfo.logo_url}" alt="${companyInfo.business_name || 'Company'} Logo">` : 
+              ${companyInfo?.logo_url ?
+                `<img src="${companyInfo.logo_url}" alt="${companyInfo.business_name || 'Company'} Logo">` :
                 `<div class="logo-text">${companyInfo?.business_name || 'COMPANY LOGO'}</div>`
               }
             </div>
@@ -143,7 +170,7 @@ export const generateInvoiceHTML = (invoice, items, companyInfo) => {
             </div>
           </div>
         </div>
-        
+
         <table>
           <thead>
             <tr>
@@ -164,7 +191,7 @@ export const generateInvoiceHTML = (invoice, items, companyInfo) => {
             `).join('')}
           </tbody>
         </table>
-        
+
         <div class="totals">
           <div class="total-row">
             <div>Subtotal:</div>
@@ -179,14 +206,15 @@ export const generateInvoiceHTML = (invoice, items, companyInfo) => {
             <div>$${invoice.total.toFixed(2)}</div>
           </div>
         </div>
-        
+
         ${invoice.notes ? `
           <div class="notes">
             <div><strong>Notes:</strong></div>
             <div>${invoice.notes}</div>
           </div>
         ` : ''}
-      </body>
-    </html>
+        </div>
   `;
+
+  return { css, markup };
 };

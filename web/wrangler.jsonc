@@ -1,0 +1,29 @@
+// Cloudflare Workers configuration for the HandyTally web app (HT-31).
+//
+// The app is a static Expo export (`npx expo export --platform web` -> dist/).
+// This is an assets-only Worker: there is no script, Cloudflare just serves dist/
+// from its edge. CI (.github/workflows/ci.yml) builds dist/ and runs
+// `wrangler deploy` from this directory on every push to master.
+//
+// The routes below take handytally.com over from Vercel (HT-31 Phase B). Both
+// hostnames already have proxied DNS records on Cloudflare; a Worker route wins
+// over the origin, so nothing at Vercel needs to change for the cutover and
+// removing the routes is the rollback. HT-37 adds `*.handytally.com/*` for the
+// customer subdomains together with the wildcard DNS record.
+{
+  "name": "handytally-web",
+  "compatibility_date": "2026-09-15",
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "handytally.com/*", "zone_name": "handytally.com" },
+    { "pattern": "www.handytally.com/*", "zone_name": "handytally.com" }
+  ],
+  "assets": {
+    "directory": "./dist",
+    // Expo Router emits one HTML file per route, and dynamic routes such as
+    // jobs/[id].tsx become literal `jobs/[id].html`, which no host serves for
+    // /jobs/123. Fall back to index.html so the router resolves deep links
+    // client-side instead of returning a 404.
+    "not_found_handling": "single-page-application"
+  }
+}
