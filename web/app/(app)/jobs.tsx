@@ -8,6 +8,8 @@ import { sendJobInvite } from '../../utils/sendJobInvite';
 import { useRouter } from 'expo-router';
 import { exportWorkbook, pickWorkbook, sheetRows, confirmAction } from '../../utils/excel';
 import { ImportExportButtons } from '../../components/ImportExportButtons';
+import { useOrganizationMembers } from '../../hooks/useOrganizationMembers';
+import { assigneeLabel } from '../../utils/inviteUser';
 
 type Job = {
   uid: number;
@@ -19,6 +21,8 @@ type Job = {
   end_date: string;
   status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
   created_at: string;
+  // HT-35: user id of the organisation member the job is assigned to.
+  assigned_to: string | null;
 };
 
 type Client = {
@@ -58,6 +62,10 @@ export default function JobsScreen() {
   const [selectedAmPm, setSelectedAmPm] = useState<"AM" | "PM">("AM");
   const [datePickerMode, setDatePickerMode] = useState<'start' | 'end'>('start');
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  // HT-35: resolves jobs.assigned_to to a name for the column, sort and export.
+  const { members, loading: membersLoading } = useOrganizationMembers();
+  const assigneeName = (job: Pick<Job, 'assigned_to'>) =>
+    membersLoading && job.assigned_to ? '…' : assigneeLabel(job.assigned_to, members);
 
   useEffect(() => {
     fetchJobs();
@@ -289,7 +297,8 @@ export default function JobsScreen() {
         client_id: clientId, // Use the validated number
         status: jobData.status || 'pending',
         start_date: jobData.start_date,
-        end_date: jobData.end_date
+        end_date: jobData.end_date,
+        assigned_to: jobData.assigned_to ?? null,
       };
       
       // Remove any undefined values
@@ -379,7 +388,8 @@ export default function JobsScreen() {
       filtered = filtered.filter(job => 
         job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         job.client_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        job.description?.toLowerCase().includes(searchQuery.toLowerCase())
+        job.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        assigneeName(job).toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
     
@@ -398,6 +408,9 @@ export default function JobsScreen() {
           break;
         case 'client_name':
           comparison = (a.client_name || '').localeCompare(b.client_name || '');
+          break;
+        case 'assigned_to':
+          comparison = assigneeName(a).localeCompare(assigneeName(b));
           break;
         case 'start_date':
           comparison = new Date(a.start_date || 0).getTime() - new Date(b.start_date || 0).getTime();
@@ -512,6 +525,8 @@ export default function JobsScreen() {
         description: job.description || '',
         client_id: job.client_id,
         client_name: job.clients?.name || '',
+        assigned_to: job.assigned_to || '',
+        assigned_to_name: job.assigned_to ? assigneeName(job) : '',
         start_date: job.start_date || '',
         end_date: job.end_date || '',
         status: job.status || '',
@@ -520,7 +535,7 @@ export default function JobsScreen() {
       }));
       
       await exportWorkbook('jobs.xlsx', [
-        { name: 'Jobs', rows: jobsForExport, columnWidths: [36, 30, 40, 36, 30, 15, 15, 15, 25, 10] },
+        { name: 'Jobs', rows: jobsForExport, columnWidths: [36, 30, 40, 36, 30, 36, 30, 15, 15, 15, 25, 10] },
         { name: 'Job Costs', rows: jobCostsData || [], columnWidths: [36, 36, 25, 15, 15, 20, 25] },
         { name: 'Job Attachments', rows: jobAttachmentsData || [], columnWidths: [36, 36, 40, 50, 20, 15, 25] },
       ]);
@@ -592,6 +607,16 @@ export default function JobsScreen() {
             continue;
           }
           
+          // HT-35: assigned_to must be an active member of this organisation;
+          // anything else (a name typed by hand, a user who left) imports as
+          // unassigned. assigned_to_name is display-only, like client_name.
+          const assignedTo = String(job.assigned_to ?? '').trim();
+          const assignedToValid = assignedTo !== '' &&
+            members.some(m => m.user_id === assignedTo && m.is_active);
+          if (assignedTo !== '' && !assignedToValid) {
+            console.warn(`Row for "${job.title}": assigned_to "${assignedTo}" is not an active user; importing as unassigned`);
+          }
+
           // Prepare job data
           const jobData = {
             title: job.title || '',
@@ -599,7 +624,8 @@ export default function JobsScreen() {
             client_id: job.client_id || null,
             start_date: job.start_date || null,
             end_date: job.end_date || null,
-            status: job.status || 'pending'
+            status: job.status || 'pending',
+            assigned_to: assignedToValid ? assignedTo : null,
           };
           
           if (job.uid) {
@@ -991,7 +1017,13 @@ export default function JobsScreen() {
             >
               Client
             </DataTable.Title>
-            <DataTable.Title 
+            <DataTable.Title
+              onPress={() => handleSort('assigned_to')}
+              sortDirection={sortColumn === 'assigned_to' ? sortDirection : undefined}
+            >
+              Assigned to
+            </DataTable.Title>
+            <DataTable.Title
               onPress={() => handleSort('status')}
               sortDirection={sortColumn === 'status' ? sortDirection : undefined}
             >
@@ -1028,6 +1060,7 @@ export default function JobsScreen() {
               <DataTable.Row key={job.uid} style={{ backgroundColor: '#ffffff' }}>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{job.title}</DataTable.Cell>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{job.client_name}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{assigneeName(job)}</DataTable.Cell>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
                   <select
                     value={job.status}

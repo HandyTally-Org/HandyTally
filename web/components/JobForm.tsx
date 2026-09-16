@@ -15,6 +15,9 @@ import { JobStatusSelector } from './JobStatusSelector';
 import { formatDateInput, isValidDate } from '../utils/date';
 import { MaterialIcons } from '@expo/vector-icons';
 import { DateTimePickerDialog, formatDateTimeLabel } from './DateTimePickerDialog';
+import { useAuth } from '../contexts/AuthContext';
+import { useOrganizationMembers } from '../hooks/useOrganizationMembers';
+import { memberDisplayName, assigneeLabel } from '../utils/inviteUser';
 
 type Job = {
   uid: number;  // Changed from string to number to match bigint8 in database
@@ -26,6 +29,8 @@ type Job = {
   end_date: string | null;
   start_time: string | null;
   end_time: string | null;
+  // HT-35: user id of the organisation member the job is assigned to.
+  assigned_to: string | null;
 };
 
 type JobFormProps = {
@@ -49,8 +54,16 @@ export function JobForm({ job, defaults, onSubmit, onCancel, submitting = false,
     end_date: job?.end_date || defaults?.end_date || null,
     start_time: job?.start_time || null,
     end_time: job?.end_time || null,
+    assigned_to: job?.assigned_to || null,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // HT-35: the Assigned to dropdown lists the active members of the caller's
+  // organisation. A user with no organisation sees it disabled.
+  const { organization } = useAuth();
+  const { members, loading: loadingMembers } = useOrganizationMembers();
+  const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
+  const assigneeButtonRef = useRef<TouchableOpacity>(null);
+  const [assigneeButtonLayout, setAssigneeButtonLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [clients, setClients] = useState<Client[]>([]);
   const [loadingClients, setLoadingClients] = useState(true);
   const [showClientMenu, setShowClientMenu] = useState(false);
@@ -106,6 +119,7 @@ export function JobForm({ job, defaults, onSubmit, onCancel, submitting = false,
         end_date: job.end_date || null,
         start_time: job.start_time || null,
         end_time: job.end_time || null,
+        assigned_to: job.assigned_to || null,
       });
     } else {
       // Reset form for new job
@@ -118,6 +132,7 @@ export function JobForm({ job, defaults, onSubmit, onCancel, submitting = false,
         end_date: defaults?.end_date || null,
         start_time: null,
         end_time: null,
+        assigned_to: null,
       });
     }
   }, [job]);
@@ -209,9 +224,10 @@ export function JobForm({ job, defaults, onSubmit, onCancel, submitting = false,
         client_id: clientId,
         // Use the timezone-adjusted dates directly - they already have the correct date
         start_date: formData.start_date,
-        end_date: formData.end_date
+        end_date: formData.end_date,
+        assigned_to: formData.assigned_to || null,
       };
-      
+
       // If this is an edit operation and we have a uid, include it
       if (job && job.uid) {
         const jobId = typeof job.uid === 'number' ? job.uid : Number(job.uid);
@@ -645,7 +661,120 @@ export function JobForm({ job, defaults, onSubmit, onCancel, submitting = false,
           )}
         </View>
           </View>
-          
+
+          {/* HT-35: Assigned to. Same anchored-Portal pattern as Client and Status. */}
+          <View style={styles.formField}>
+            <Text style={styles.label}>Assigned to</Text>
+        <View style={{ position: 'relative' }}>
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: '#e0e0e0',
+              borderRadius: 4,
+              padding: 12,
+              backgroundColor: '#ffffff',
+              opacity: !organization || submitting ? 0.6 : 1,
+            }}
+            onPress={() => {
+              if (assigneeButtonRef.current) {
+                assigneeButtonRef.current.measure((fx: number, fy: number, width: number, height: number, px: number, py: number) => {
+                  setAssigneeButtonLayout({ x: px, y: py, width, height });
+                  setShowAssigneeDropdown(true);
+                });
+              } else {
+                setShowAssigneeDropdown(true);
+              }
+            }}
+            ref={assigneeButtonRef}
+            disabled={!organization || submitting || loadingMembers}
+            accessibilityRole="button"
+            accessibilityLabel="Assigned to"
+          >
+            <Text>
+              {!organization
+                ? 'Join an organisation to assign jobs'
+                : loadingMembers
+                  ? 'Loading users...'
+                  : assigneeLabel(formData.assigned_to, members)}
+            </Text>
+            <MaterialIcons name="arrow-drop-down" size={24} color="#000000" />
+          </TouchableOpacity>
+
+          {showAssigneeDropdown && (
+            <Portal>
+              <View
+                style={{
+                  position: 'absolute',
+                  top: assigneeButtonLayout.y + assigneeButtonLayout.height,
+                  left: assigneeButtonLayout.x,
+                  width: assigneeButtonLayout.width,
+                  backgroundColor: '#ffffff',
+                  borderWidth: 1,
+                  borderColor: '#e0e0e0',
+                  borderRadius: 4,
+                  zIndex: 9999,
+                  elevation: 9,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 3.84,
+                  maxHeight: 300,
+                }}
+              >
+                <ScrollView style={{ maxHeight: 300 }}>
+                  {[{ user_id: null as string | null, label: 'Unassigned' }]
+                    .concat(
+                      members
+                        .filter(m => m.is_active)
+                        .map(m => ({ user_id: m.user_id as string | null, label: memberDisplayName(m) })),
+                    )
+                    .map((option, index, all) => (
+                      <Pressable
+                        key={option.user_id ?? 'unassigned'}
+                        style={({ hovered }) => ({
+                          padding: 12,
+                          borderBottomWidth: index < all.length - 1 ? 1 : 0,
+                          borderBottomColor: '#f0f0f0',
+                          backgroundColor: hovered
+                            ? '#f5f5f5'
+                            : option.user_id === formData.assigned_to ? '#f0f0f0' : '#ffffff',
+                        })}
+                        onPress={() => {
+                          handleChange('assigned_to', option.user_id);
+                          setShowAssigneeDropdown(false);
+                        }}
+                      >
+                        <Text style={option.user_id ? undefined : { color: '#6B7280' }}>{option.label}</Text>
+                      </Pressable>
+                    ))}
+                  {members.filter(m => m.is_active).length === 0 ? (
+                    <View style={{ padding: 12 }}>
+                      <Text style={{ color: '#6B7280' }}>No active users in your organisation</Text>
+                    </View>
+                  ) : null}
+                </ScrollView>
+              </View>
+
+              {/* Transparent overlay to close the dropdown on an outside press */}
+              <Pressable
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: 'transparent',
+                }}
+                onPress={() => setShowAssigneeDropdown(false)}
+              />
+            </Portal>
+          )}
+        </View>
+          </View>
+
           <View style={styles.formField}>
             <Text style={styles.label}>Start Date & Time</Text>
             {renderDateTimeField('start', formData.start_date, () => setShowStartDatePicker(true))}

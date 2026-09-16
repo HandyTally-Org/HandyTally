@@ -163,7 +163,7 @@ Authoritative source: `supabase/migrations/`. The 2025 files are dumps of the ho
 | Table | Key columns |
 | --- | --- |
 | `clients` | Contact fields, `tag`, `organization_id` |
-| `jobs` | `client_id`, `name`, dates, `status`, `notes`, `total`, `calendar_event_id`, `organization_id` |
+| `jobs` | `client_id`, `name`, dates, `status`, `notes`, `total`, `calendar_event_id`, `organization_id`, `created_by` (who made it), `assigned_to` (who does it, HT-35) |
 | `job_costs` | Cost lines per job |
 | `jobs_attachments` | Files per job, `organization_id` |
 | `job_calendar_events` | Mirror of the Nylas event per job (`job_calender_events` is a misspelled predecessor still present) |
