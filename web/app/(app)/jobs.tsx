@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text, Button, Searchbar, Card, DataTable, Chip, IconButton, Dialog, Portal, Snackbar, TextInput, RadioButton, ActivityIndicator, Tooltip } from 'react-native-paper';
 import { supabase } from '../../lib/api';
 import { styles as globalStyles } from '../../styles';
-import { JobForm } from '../../components/JobForm';
+import { JobDialog } from '../../components/JobDialog';
 import { sendJobInvite } from '../../utils/sendJobInvite';
 import { useRouter } from 'expo-router';
 import { exportWorkbook, pickWorkbook, sheetRows, confirmAction } from '../../utils/excel';
@@ -1271,13 +1271,13 @@ export default function JobsScreen() {
         </Dialog>
       </Portal>
       
-      {showAddForm && (
-        <JobForm
-          clients={clients}
-          onSubmit={handleAddJob}
-          onCancel={() => setShowAddForm(false)}
-        />
-      )}
+      <JobDialog
+        visible={showAddForm}
+        subtitle="Schedule work for a client"
+        submitting={loading}
+        onDismiss={() => setShowAddForm(false)}
+        onSubmit={handleAddJob}
+      />
 
       {/* Date & Time Picker Dropdown for Start Date */}
       <Portal>

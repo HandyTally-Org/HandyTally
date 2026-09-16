@@ -1,10 +1,10 @@
 import React, { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Modal, Portal, Snackbar } from 'react-native-paper';
+import { Snackbar } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { sendJobInvite } from '../../utils/sendJobInvite';
-import { JobForm } from '../../components/JobForm';
+import { JobDialog } from '../../components/JobDialog';
 import {
   Calendar,
   CalendarEvent,
@@ -178,22 +178,14 @@ export default function ScheduleScreen() {
 
       <EventDialog event={selected} onDismiss={() => setSelected(null)} actions={eventActions} />
 
-      <Portal>
-        <Modal
-          visible={newJobDefaults !== null}
-          onDismiss={() => !savingJob && setNewJobDefaults(null)}
-          contentContainerStyle={styles.jobFormModal}
-        >
-          {newJobDefaults && (
-            <JobForm
-              defaults={newJobDefaults}
-              submitting={savingJob}
-              onSubmit={handleAddJob}
-              onCancel={() => setNewJobDefaults(null)}
-            />
-          )}
-        </Modal>
-      </Portal>
+      <JobDialog
+        visible={newJobDefaults !== null}
+        subtitle="Schedule work for a client"
+        defaults={newJobDefaults ?? undefined}
+        submitting={savingJob}
+        onDismiss={() => !savingJob && setNewJobDefaults(null)}
+        onSubmit={handleAddJob}
+      />
 
       <Snackbar visible={snackbar !== null} onDismiss={() => setSnackbar(null)} duration={4000}>
         {snackbar ?? ''}
@@ -207,15 +199,5 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
     backgroundColor: '#ffffff',
-  },
-  jobFormModal: {
-    alignSelf: 'center',
-    width: '95%',
-    maxWidth: 720,
-    height: '90%',
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
-    overflow: 'hidden',
   },
 });

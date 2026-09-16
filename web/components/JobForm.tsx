@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { forwardRef, useImperativeHandle, useState, useEffect, useRef } from 'react';
 import { View, ScrollView, Dimensions, StyleSheet, TouchableOpacity, Pressable, TextInput as RNTextInput, ScrollView as RNScrollView } from 'react-native';
 import { TextInput, Button, Card, Text, ActivityIndicator, HelperText, Menu, Portal, IconButton } from 'react-native-paper';
 import { styles } from '../styles';
@@ -33,18 +33,28 @@ type Job = {
   assigned_to: string | null;
 };
 
+export type JobFormDefaults = Partial<Pick<Job, 'start_date' | 'end_date'>>;
+
+/** What a parent can ask of the form through a ref. */
+export type JobFormHandle = { submit: () => void };
+
 type JobFormProps = {
   job?: Job | null;
   // Start/end to prefill when creating a job (e.g. from a calendar cell).
   // Ignored while editing an existing job.
-  defaults?: Partial<Pick<Job, 'start_date' | 'end_date'>>;
+  defaults?: JobFormDefaults;
   onSubmit: (job: any) => void;
   onCancel: () => void;
   submitting?: boolean;
   onChange?: () => void;
+  /** Inside a FormDialog: no scroll wrapper of its own and no buttons; the dialog footer submits through the ref. */
+  embedded?: boolean;
 };
 
-export function JobForm({ job, defaults, onSubmit, onCancel, submitting = false, onChange }: JobFormProps) {
+export const JobForm = forwardRef<JobFormHandle, JobFormProps>(function JobForm(
+  { job, defaults, onSubmit, onCancel, submitting = false, onChange, embedded = false },
+  ref
+) {
   const [formData, setFormData] = useState<Omit<Job, 'uid'>>({
     client_id: job?.client_id || 0,  // Always ensure client_id exists
     title: job?.title || '',
@@ -430,15 +440,16 @@ export function JobForm({ job, defaults, onSubmit, onCancel, submitting = false,
     </TouchableOpacity>
   );
 
+  useImperativeHandle(ref, () => ({ submit: submitFormToDatabase }));
+
+  // Inside a dialog the FormDialog scrolls; on its own the form scrolls itself.
+  const Wrapper: any = embedded ? View : ScrollView;
+  const wrapperProps = embedded
+    ? {}
+    : { style: { flex: 1, backgroundColor: '#ffffff', height: '100%' }, contentContainerStyle: { paddingBottom: 80 } };
+
   return (
-        <ScrollView 
-      style={{ 
-        flex: 1, 
-        backgroundColor: '#ffffff',
-        height: '100%' // Ensure it takes full height
-      }}
-      contentContainerStyle={{ paddingBottom: 80 }} // Extra padding at bottom
-        >
+    <Wrapper {...wrapperProps}>
           <View style={styles.formField}>
             <Text style={styles.label}>Client</Text>
         <View style={{ position: 'relative' }}>
@@ -806,6 +817,8 @@ export function JobForm({ job, defaults, onSubmit, onCancel, submitting = false,
             onConfirm={(iso) => handleDateTimeConfirm(iso, 'end')}
           />
           
+          {!embedded && (
+          <>
           <View style={[styles.row, { justifyContent: 'flex-end', gap: 8, marginTop: 24, marginBottom: 24 }]}>
             <Button mode="outlined" onPress={onCancel} disabled={submitting}>
               Cancel
@@ -826,9 +839,13 @@ export function JobForm({ job, defaults, onSubmit, onCancel, submitting = false,
               <Text style={styles.loadingText}>Saving...</Text>
             </View>
           )}
-        </ScrollView>
+          </>
+          )}
+    </Wrapper>
   );
-} 
+});
+
+
 
 // Styles for the date & time trigger fields; the popup itself lives in DateTimePickerDialog.
 const fieldStyles = StyleSheet.create({
