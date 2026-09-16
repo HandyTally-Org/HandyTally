@@ -6,6 +6,7 @@ import { supabase } from '../../lib/api';
 import { styles as globalStyles } from '../../styles';
 import { formatDate } from '../../utils/formatting';
 import { MaterialIcons } from '@expo/vector-icons';
+import { NotesSection } from '../../components/NotesSection';
 
 export default function ClientDetailsScreen() {
   const router = useRouter();
@@ -274,6 +275,22 @@ export default function ClientDetailsScreen() {
             <Text style={{ color: '#666', fontWeight: 'bold', fontSize: 12 }}>DOCUMENTATION</Text>
           </View>
           
+          {/* Notes section */}
+          <TouchableOpacity 
+            style={{ 
+              padding: 16,
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: activeSection === 'notes' ? '#ccc' : 'transparent'
+            }}
+            onPress={() => setActiveSection('notes')}
+          >
+            <View style={{ width: 24, marginRight: 12 }}>
+              <MaterialIcons name="sticky-note-2" size={20} color={activeSection === 'notes' ? '#000' : '#666666'} />
+            </View>
+            <Text style={{ color: activeSection === 'notes' ? '#000' : '#666666' }}>Notes</Text>
+          </TouchableOpacity>
+          
           {/* Logs section */}
           <TouchableOpacity 
             style={{ 
@@ -522,6 +539,8 @@ export default function ClientDetailsScreen() {
               </DataTable>
             </View>
           )}
+          
+          {activeSection === 'notes' && <NotesSection clientId={String(id)} />}
           
           {activeSection === 'logs' && (
             <View>

@@ -13,6 +13,7 @@ import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDay }
 import { JobForm } from '../../../components/JobForm';
 import { InvoiceDetails } from '../../../components/InvoiceDetails';
 import { InvoiceForm } from '../../../components/InvoiceForm';
+import { NotesSection } from '../../../components/NotesSection';
 
 // Let's create a simple calendar component using the existing libraries
 interface SimpleCalendarProps {
@@ -1577,6 +1578,8 @@ export default function JobDetailsScreen() {
       case 'costs':
         return renderCostsTab();
 
+      case 'notes':
+        return <NotesSection jobId={String(id)} />;
       case 'attachments':
         return renderAttachmentsTab();
       case 'logs':
@@ -2530,6 +2533,28 @@ export default function JobDetailsScreen() {
               selectedTab === 'costs' && styles.selectedText,
               (editMode && hasUnsavedChanges) ? { color: '#cccccc' } : {}
             ]}>Costs</Text>
+          </TouchableOpacity>
+
+          <Text style={[styles.sectionTitle, { marginTop: 16 }]}>DOCUMENTATION</Text>
+
+          <TouchableOpacity
+            style={[
+              styles.navigationItem,
+              selectedTab === 'notes' && styles.selectedItem
+            ]}
+            onPress={() => handleNavigationItemClick('notes')}
+            disabled={editMode && hasUnsavedChanges}
+          >
+            <MaterialCommunityIcons
+              name="note-text-outline"
+              size={24}
+              color={selectedTab === 'notes' ? '#000000' : '#666666'}
+            />
+            <Text style={[
+              styles.navigationText,
+              selectedTab === 'notes' && styles.selectedText,
+              (editMode && hasUnsavedChanges) ? { color: '#cccccc' } : {}
+            ]}>Notes</Text>
           </TouchableOpacity>
          
           

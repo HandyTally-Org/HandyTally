@@ -5,6 +5,7 @@ All notable changes to HandyTally are recorded here. Ticket numbers refer to `HT
 ## Unreleased
 
 ### Added
+- **HT-32** — Notes on clients and jobs: a Notes entry under DOCUMENTATION on the client detail and job detail screens lists titled notes, and Add note opens a compact popup with a title and a text box. Notes can be edited and deleted. New `notes` table (`20260916150000_notes.sql`).
 - **HT-34** — Invoices page exports to Excel (an `Invoices` sheet plus an `Invoice Items` sheet) and imports the `Invoices` sheet back: rows with a `uid` update that invoice, rows with `delete` set to `y` remove it with its line items, and other rows are added.
 - **HT-34** — Excel export and import work in the phone app as well as the browser: an export opens the share sheet and an import uses the document picker.
 - **HT-1** — **Send calendar invite** button on each job (Jobs list row and job detail) emails the `.ics` for the job's start and finish times on demand, to the client, the job's creator and whoever pressed the button.
