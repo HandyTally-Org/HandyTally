@@ -55,14 +55,21 @@ export const renderInvoiceDocument = (invoice: any, items: any[], companyInfo: a
             color: #333;
           }
           .ht-doc .header-container {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 0;
             margin-bottom: 5px;
+          }
+          .ht-doc .header-container td {
+            vertical-align: top;
             padding: 5px;
+            border-bottom: none;
           }
           .ht-doc .invoice-title-section {
-            flex: 1;
+            width: 100%;
+          }
+          .ht-doc .company-column {
+            text-align: right;
           }
           .ht-doc .logo {
             text-align: right;
@@ -136,40 +143,42 @@ export const renderInvoiceDocument = (invoice: any, items: any[], companyInfo: a
 
   const markup = `
         <div class="ht-doc">
-        <div class="header-container">
-          <div class="invoice-title-section">
-            <h1>${title} #${invoice.invoice_number}</h1>
-            <div class="status status-${invoice.status}">${statusText}</div>
+        <table class="header-container" role="presentation" cellpadding="0" cellspacing="0">
+          <tr>
+            <td class="invoice-title-section">
+              <h1>${title} #${invoice.invoice_number}</h1>
+              <div class="status status-${invoice.status}">${statusText}</div>
 
-            <div class="invoice-details">
-              <div><strong>Date:</strong> ${formatDate(invoice.issue_date)}</div>
-              <div><strong>Due Date:</strong> ${formatDate(invoice.due_date)}</div>
-              <div><strong>Job:</strong> ${jobName}</div>
-            </div>
+              <div class="invoice-details">
+                <div><strong>Date:</strong> ${formatDate(invoice.issue_date)}</div>
+                <div><strong>Due Date:</strong> ${formatDate(invoice.due_date)}</div>
+                <div><strong>Job:</strong> ${jobName}</div>
+              </div>
 
-            <div class="client-info">
-              <h3>Bill To:</h3>
-              <div>${invoice.client?.name || 'Client Name'}</div>
-              <div>${invoice.client?.address || 'Client Address'}</div>
-              <div>${invoice.client?.email || 'client@example.com'}</div>
-            </div>
-          </div>
+              <div class="client-info">
+                <h3>Bill To:</h3>
+                <div>${invoice.client?.name || 'Client Name'}</div>
+                <div>${invoice.client?.address || 'Client Address'}</div>
+                <div>${invoice.client?.email || 'client@example.com'}</div>
+              </div>
+            </td>
 
-          <div>
-            <div class="logo">
-              ${companyInfo?.logo_url ?
-                `<img src="${companyInfo.logo_url}" alt="${companyInfo.business_name || 'Company'} Logo">` :
-                `<div class="logo-text">${companyInfo?.business_name || 'COMPANY LOGO'}</div>`
-              }
-            </div>
-            <div class="company-info">
-              <div><strong>${companyInfo?.business_name || 'Your Company'}</strong></div>
-              <div>${companyInfo?.address || 'Company Address'}</div>
-              <div>${companyInfo?.email || 'company@example.com'}</div>
-              <div>${companyInfo?.phone || '(123) 456-7890'}</div>
-            </div>
-          </div>
-        </div>
+            <td class="company-column">
+              <div class="logo">
+                ${companyInfo?.logo_url ?
+                  `<img src="${companyInfo.logo_url}" alt="${companyInfo.business_name || 'Company'} Logo">` :
+                  `<div class="logo-text">${companyInfo?.business_name || 'COMPANY LOGO'}</div>`
+                }
+              </div>
+              <div class="company-info">
+                <div><strong>${companyInfo?.business_name || 'Your Company'}</strong></div>
+                <div>${companyInfo?.address || 'Company Address'}</div>
+                <div>${companyInfo?.email || 'company@example.com'}</div>
+                <div>${companyInfo?.phone || '(123) 456-7890'}</div>
+              </div>
+            </td>
+          </tr>
+        </table>
 
         <table>
           <thead>
