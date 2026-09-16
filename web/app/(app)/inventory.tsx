@@ -492,6 +492,8 @@ export default function MaterialsScreen() {
               </Button>
 
               <ImportExportButtons onExport={handleExport} onImport={handleImport} />
+            </View>
+          </View>
           
           <View style={{
             flex: 1,
