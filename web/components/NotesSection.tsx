@@ -55,7 +55,7 @@ export function NotesSection({ clientId, jobId }: NotesSectionProps) {
       setNotes(data || []);
     } catch (error: any) {
       console.error('Error loading notes:', error);
-      setMessage(`Could not load notes: ${error.message}`);
+      setMessage(`Could not load notes: ${error?.message ?? String(error)}`);
     } finally {
       setLoading(false);
     }
@@ -87,7 +87,7 @@ export function NotesSection({ clientId, jobId }: NotesSectionProps) {
       await fetchNotes();
     } catch (error: any) {
       console.error('Error saving note:', error);
-      setMessage(`Could not save note: ${error.message}`);
+      setMessage(`Could not save note: ${error?.message ?? String(error)}`);
     } finally {
       setSubmitting(false);
     }
@@ -103,7 +103,7 @@ export function NotesSection({ clientId, jobId }: NotesSectionProps) {
       setMessage('Note deleted');
     } catch (error: any) {
       console.error('Error deleting note:', error);
-      setMessage(`Could not delete note: ${error.message}`);
+      setMessage(`Could not delete note: ${error?.message ?? String(error)}`);
     } finally {
       setSubmitting(false);
       setNoteToDelete(null);
