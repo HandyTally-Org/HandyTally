@@ -139,9 +139,9 @@ const supabaseAnonKey = '<anon JWT literal>';
 
 `admin-app/src/services/supabase.ts` already reads `process.env.EXPO_PUBLIC_SUPABASE_URL` / `_ANON_KEY`.
 
-**Impact:** the anon key is public by design, so this is not a secret leak — but it means every environment (local, preview, production) points at production, the key cannot be rotated without a code change, and the `.env.example` / Amplify variables documented in the README are silently ignored by the main app. Note the anon JWT has `exp: 4921443600` (year 2125).
+**Impact:** the anon key is public by design, so this is not a secret leak — but it means every environment (local, preview, production) points at production, the key cannot be rotated without a code change, and the `.env.example` / CI variables documented in the README are silently ignored by the main app. Note the anon JWT has `exp: 4921443600` (year 2125).
 
-**Fix:** read from `process.env.EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` with a startup assertion that both are set; set them in Amplify. Consider a shorter anon-key expiry when the self-hosted instance's JWT secret is next rotated.
+**Fix:** read from `process.env.EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` with a startup assertion that both are set; set them as repository variables for CI. Consider a shorter anon-key expiry when the self-hosted instance's JWT secret is next rotated.
 
 ---
 
@@ -274,7 +274,7 @@ Each mixes Supabase queries, state, modals and styles in one component.
 
 (Measured by diffing `package.json` against every `from '…'` import under `web/app`, `web/components`, `web/contexts`, `web/lib`, `web/utils`, `web/hooks`.)
 
-**Impact:** larger bundles and install times; `latest` makes builds non-reproducible and is the most likely cause of a surprise Amplify failure.
+**Impact:** larger bundles and install times; `latest` makes builds non-reproducible and is the most likely cause of a surprise CI build failure.
 
 **Fix:** `npx depcheck` in `web/`, remove what it reports, pin the two `latest` entries to the versions `npx expo install --check` recommends.
 

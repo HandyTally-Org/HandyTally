@@ -20,7 +20,7 @@ Auth-schema helpers (`get_all_users`, `admin_*`) are not migrations — they liv
 | --- | --- | --- |
 | `send-invoice` | Called from the web app when a user clicks **Send** on an invoice or estimate | Emails the invoice HTML to the client via Resend. The caller renders the HTML with `web/utils/invoiceHtml.ts` and posts `{ to, subject, html, attachments? }`. Requires a signed-in user's bearer token. |
 | `upsert-calendar-event` | Database webhook on `jobs` (insert / update / delete), and the **Send calendar invite** button on the Jobs screens (`{ action: "send", jobId }` with the user's token) | Emails an iCalendar invitation through Resend to the client and to the user who created the job (`jobs.created_by`), so the job appears on both of their calendars. Updates resend the same UID with a higher sequence; deletes send a cancellation. Stores the UID in `jobs.calendar_event_id`. Configure the webhook in **Database → Webhooks** after deploying. |
-| `create-organization` | Called from the admin app | Validates the requested subdomain, inserts the organization, creates a Route 53 record and attaches the domain in Vercel. Caller must be an active `superuser`. |
+| `create-organization` | Called from the admin app | Validates the requested subdomain and inserts the organization as `active`; the Cloudflare wildcard route serves the new host, so nothing else is provisioned. Caller must be an active `superuser`. |
 | `send-estimate-approval` | **Send for Approval** on an estimate in the web app | Emails the estimate to the client and to the user who created it (`invoices.created_by`), with the subject and message typed in the dialog, the total and an **Approve** button linking to `<app origin>/approve?token=<invoices.approval_token>`. The caller posts `{ invoiceId, subject, message, document: { css, markup } }` with a signed-in user's bearer token; the token and the creator's email are read with the service role. HT-10. |
 | `approve-estimate` | The public `/approve` page, opened from the Approve button in that email | Checks `{ token }` against `invoices.approval_token` and, if the row is still an estimate, sets `status = work_order` and `approved_at`, then emails the creator. Idempotent: a second click reports `already_approved`. No user session (`verify_jwt = false`); anyone holding the link can approve. HT-10. |
 
@@ -49,7 +49,7 @@ Set with `supabase secrets set KEY=value` (or in the dashboard under **Edge Func
 | --- | --- |
 | `send-invoice` | `RESEND_API_KEY`, `INVOICE_FROM_ADDRESS`, `INVOICE_REPLY_TO` (optional) |
 | `upsert-calendar-event` | `RESEND_API_KEY`, `INVOICE_FROM_ADDRESS` (shared with `send-invoice`); `CALENDAR_FROM_ADDRESS`, `INVOICE_REPLY_TO` (optional) |
-| `create-organization` | `BASE_DOMAIN`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_HOSTED_ZONE_ID`, `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, `GITHUB_TOKEN`, `GITHUB_REPO` |
+| `create-organization` | `BASE_DOMAIN` (defaults to `handytally.com`) |
 | `send-estimate-approval` | `RESEND_API_KEY`, `INVOICE_FROM_ADDRESS` (shared with `send-invoice`); `INVOICE_REPLY_TO`, `APP_URL` (optional; otherwise the request's `Origin` is used for the approval link) |
 | `approve-estimate` | `RESEND_API_KEY`, `INVOICE_FROM_ADDRESS` (for the creator notification); `INVOICE_REPLY_TO`, `APP_URL` (optional) |
 

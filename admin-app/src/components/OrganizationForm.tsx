@@ -182,20 +182,9 @@ export const OrganizationForm: React.FC<OrganizationFormProps> = ({
                 setSubdomainTouched(false); // Reset touched state
                 setSubdomainCheck({ available: null, checking: false });
 
-                // Show success message with infrastructure details
-                const infraStatus = result.infrastructure;
                 let message = 'Organization created successfully!';
-
-                if (infraStatus?.success) {
-                    message += '\n✅ DNS record created\n✅ Vercel project deployed';
-                    if (infraStatus.domain) {
-                        message += `\n🌐 Available at: ${infraStatus.domain}`;
-                    }
-                } else if (infraStatus?.errors?.length > 0) {
-                    message += '\n⚠️ Some infrastructure setup failed:';
-                    infraStatus.errors.forEach(error => {
-                        message += `\n• ${error}`;
-                    });
+                if (result.domain) {
+                    message += `\n🌐 Available at: https://${result.domain}`;
                 }
 
                 Alert.alert('Success', message);
@@ -342,9 +331,8 @@ export const OrganizationForm: React.FC<OrganizationFormProps> = ({
 
             <View style={styles.infoContainer}>
                 <Text style={styles.infoTitle}>What happens next:</Text>
-                <Text style={styles.infoText}>• DNS record will be created automatically</Text>
-                <Text style={styles.infoText}>• Vercel project will be deployed</Text>
-                <Text style={styles.infoText}>• Organization will be ready in ~2-3 minutes</Text>
+                <Text style={styles.infoText}>• The subdomain is served immediately by the shared web app</Text>
+                <Text style={styles.infoText}>• No DNS or hosting step is needed per organization</Text>
             </View>
 
             <Button

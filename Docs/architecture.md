@@ -34,7 +34,7 @@ HandyTally is a **thick-client** application. There is no application server: th
 │  └──────────┘  └────┬─────┘  │  upsert-calendar-event   │ │
 │                     │ webhook│      → Resend (.ics)      │ │
 │                     └───────►│  create-organization     │ │
-│                              │     → Route 53, Vercel   │ │
+│                              │     → organizations row  │ │
 │                              └──────────────────────────┘ │
 └───────────────────────────────────────────────────────────┘
 ```
@@ -52,7 +52,7 @@ Consequences of this shape:
 | | |
 | --- | --- |
 | Framework | Expo SDK 52, React Native 0.76, React 18.3, Expo Router 4 (file-based routing), React Native Paper 5 |
-| Targets | Web (primary, static export served by AWS Amplify), iOS, Android |
+| Targets | Web (primary, static export served by a Cloudflare Worker), iOS, Android |
 | Entry | `expo-router/entry` → `app/_layout.tsx` |
 | State | React context (`contexts/AuthContext.tsx`) + local component state; no global store |
 | Data | `lib/supabase.ts` client; ad-hoc queries inside screens; helpers in `lib/api.ts` |
@@ -130,7 +130,7 @@ Postgres ORs permissive policies together, so generation 1 makes generation 2 in
 - `organizations` holds one row per tenant with a unique `subdomain`.
 - `organization_memberships` links users to organizations with a role and `is_active`.
 - `clients`, `jobs`, `jobs_attachments`, `invoices`, `company`, … carry a nullable `organization_id` (added 2025-08-08, indexed).
-- `create-organization` provisions the tenant: validates the subdomain (3–63 chars, `[a-z0-9-]`, not in a reserved list, unique), inserts the row, creates a Route 53 record under `BASE_DOMAIN`, and adds the domain to the Vercel project.
+- `create-organization` creates the tenant: validates the subdomain (3–63 chars, `[a-z0-9-]`, not in a reserved list, unique) and inserts the row with `domain = <sub>.<BASE_DOMAIN>` and `status = active`. Hosting needs nothing per tenant: the Cloudflare Worker serves every `*.handytally.com` host from the one bundle (HT-37).
 - The web app reads `EXPO_PUBLIC_BASE_DOMAIN` to build subdomain URLs.
 
 **Current state:** the schema and policies are org-aware; the web app is not. It never filters by `organization_id` or stamps it on insert, and, per the HT-14 analysis, every existing row has `organization_id = NULL`. Tenant isolation is therefore not yet enforced end-to-end. See [DI-02](dev-issues.md#di-02).
@@ -204,7 +204,7 @@ All three live under `supabase/functions/<name>/index.ts`, use `serve` from `std
 
 - **Caller:** admin-app `src/services/organizations.ts`.
 - **Body:** `{ name, subdomain }`.
-- **Does:** verifies the JWT with `supabase.auth.getUser(token)` using a **service-role** client, requires `user_profiles.role = 'superuser'` and `is_active`, validates and reserves the subdomain, inserts the organization, creates the Route 53 A/CNAME record, attaches the domain in Vercel, optionally fires a GitHub repository dispatch. Partial failures are reported in the response so the operator can retry the missing step.
+- **Does:** verifies the JWT with `supabase.auth.getUser(token)` using a **service-role** client, requires `user_profiles.role = 'superuser'` and `is_active`, validates and reserves the subdomain and inserts the organization as `active`. Returns `{ success, organization, domain }`. No DNS or hosting call is made (HT-31).
 
 ## 7. Key flows
 
@@ -238,18 +238,18 @@ JobForm ─ insert/update jobs ─► Postgres ─ webhook ─► upsert-calenda
 
 ```
 admin-app ─ invoke ─► create-organization ─┬─ verify superuser
-                                           ├─ insert organizations
-                                           ├─ Route 53: <sub>.<BASE_DOMAIN>
-                                           ├─ Vercel: add domain
-                                           └─ (optional) GitHub repository_dispatch
+                                           ├─ validate subdomain
+                                           └─ insert organizations (domain, status = active)
+
+browser ─ https://<sub>.handytally.com ─► Cloudflare wildcard route ─► handytally-web Worker (same bundle)
 ```
 
 ## 8. Build and deployment
 
 | Component | How |
 | --- | --- |
-| Web app | AWS Amplify runs `web/amplify.yml`: `npm ci` → `npx expo export` → serve `dist/`. `app.json` sets `web.output = "static"` and Metro as the bundler. |
-| CI | `.github/workflows/ci.yml` runs the same export on every PR and uploads `dist/` as an artifact. |
+| Web app | `.github/workflows/ci.yml` on push to `master`: `npm ci` → `npx expo export --platform web` → `wrangler deploy`. `web/wrangler.jsonc` defines an assets-only Cloudflare Worker (`handytally-web`) that serves `dist/` with `not_found_handling: single-page-application`, because Expo emits `jobs/[id].html` for dynamic routes and deep links must fall back to `index.html`. `app.json` sets `web.output = "static"` and Metro as the bundler. |
+| CI | The same workflow runs the export on every PR and uploads `dist/` as an artifact; the deploy job is skipped for PRs. |
 | Database | `supabase db push` against the linked self-hosted project. |
 | Edge functions | `supabase functions deploy <name>`; secrets via `supabase secrets set`. |
 | Admin app | No pipeline; run locally with `npx expo start --web`. |
@@ -259,8 +259,9 @@ admin-app ─ invoke ─► create-organization ─┬─ verify superuser
 
 | Where | What |
 | --- | --- |
-| Amplify environment | `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_BASE_DOMAIN`, `EXPO_PUBLIC_VERCEL_TEAM_ID` |
-| Supabase function secrets | `RESEND_API_KEY`, `INVOICE_FROM_ADDRESS`, `INVOICE_REPLY_TO`, `CALENDAR_FROM_ADDRESS`, `BASE_DOMAIN`, `AWS_*`, `VERCEL_*`, `GITHUB_*` |
+| GitHub Actions variables | `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_BASE_DOMAIN` (build) |
+| GitHub Actions secrets | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` (deploy) |
+| Supabase function secrets | `RESEND_API_KEY`, `INVOICE_FROM_ADDRESS`, `INVOICE_REPLY_TO`, `CALENDAR_FROM_ADDRESS`, `BASE_DOMAIN` |
 | Auto-injected into functions | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` |
 | Local | `web/.env`, `admin-app/.env`, `supabase/functions/.env` (templates committed as `.env.example`) |
 

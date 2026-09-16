@@ -28,4 +28,4 @@ You will get an acknowledgement within 3 business days. We ask that you give us 
 
 ## Handling secrets
 
-Supabase service-role keys, Resend, AWS and Vercel credentials live only in Supabase function secrets or deployment environment variables. They must never be committed. If you find one in the repository or its history, report it and it will be rotated.
+Supabase service-role keys and the Resend key live only in Supabase function secrets; the Cloudflare deploy token lives only in GitHub Actions secrets. They must never be committed. If you find one in the repository or its history, report it and it will be rotated.

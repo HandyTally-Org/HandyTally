@@ -17,6 +17,7 @@ All notable changes to HandyTally are recorded here. Ticket numbers refer to `HT
 - Invoice editor rebuilt as a Joist-style document layout.
 
 ### Changed
+- **HT-31** — The web app is deployed to Cloudflare Workers (static assets) by CI on every push to `master` instead of by Vercel. `create-organization` now only validates the subdomain and inserts the organization as `active`; the Route 53 and Vercel provisioning code, its secrets (`AWS_*`, `VERCEL_*`, `GITHUB_*`) and `EXPO_PUBLIC_VERCEL_TEAM_ID` are gone, and the admin app shows the tenant URL instead of Vercel links.
 - New Job (Jobs list and Schedule) and New Client open in the same compact centred dialog as the material and labor forms, with Cancel and the primary button in the dialog footer, instead of a full-width form below the list or a full-height modal. Editing a client from the list uses the same dialog.
 - **HT-23** — Add and edit forms on the Inventory and Labor pages open in a compact centred dialog with a shared header, two-column layout and footer instead of a full-width popup. Labor gains an edit dialog; its pencil icon previously did nothing.
 - **HT-34** — The five list pages share one Excel helper (`web/utils/excel.ts`) and one pair of export/import buttons with hover labels, replacing five copies of the file-reader and hidden-input code.
@@ -34,6 +35,7 @@ All notable changes to HandyTally are recorded here. Ticket numbers refer to `HT
 - A blank `uid` is treated as a new invoice rather than an update; company logo query and empty-id saves fixed; Invoices header padding corrected.
 
 ### Removed
+- **HT-31** — `web/amplify.yml`; AWS Amplify no longer serves the app.
 - Deleted the unused `web/components/MaterialsPage.tsx`; the Excel export/import and material list it duplicated live in `web/app/(app)/inventory.tsx`.
 
 ## 1.04 — 2025-12-15
