@@ -108,9 +108,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [membership, setMembership] = useState<Membership>(null);
   const [membershipLoaded, setMembershipLoaded] = useState(false);
-  const [tenant, setTenant] = useState<TenantState>(
-    tenantSubdomain ? { status: 'loading', subdomain: tenantSubdomain } : { status: 'none' },
-  );
+  // Starts as 'none' on both the static render (no window) and the first client
+  // render, so hydration matches; the effect below switches to 'loading' and
+  // resolves it right after mount.
+  const [tenant, setTenant] = useState<TenantState>({ status: 'none' });
   const [accessDenied, setAccessDenied] = useState<string | null>(null);
 
   useEffect(() => {
@@ -134,6 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!tenantSubdomain) return;
     let cancelled = false;
+    setTenant({ status: 'loading', subdomain: tenantSubdomain });
     fetchTenantOrganization(tenantSubdomain).then(organization => {
       if (cancelled) return;
       setTenant(
@@ -159,6 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     // The effect below re-runs when the tenant resolves.
     if (tenant.status === 'loading') return;
+    if (tenantSubdomain && tenant.status === 'none') return; // not switched to loading yet
 
     const rows = await fetchMembershipRows(userId);
 
