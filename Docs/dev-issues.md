@@ -36,7 +36,7 @@ Severity scale: **Critical** — data exposure or loss is possible today · **Hi
 <a id="di-01"></a>
 ### DI-01 · Anonymous callers can read, modify and delete every application table
 
-**Severity:** Critical · **Status:** Fix written in [PR #8 — HT-14](https://github.com/HandyTally-Org/HandyTally/pull/8), not yet merged.
+**Severity:** Critical · **Status:** Closed by HT-55 (`20260917140000_tenant_scoped_rls.sql`, 2026-09-16): no policy on any application table is granted to PUBLIC any more; anon sees nothing. HT-14's migration was merged but never applied to the live database (HT-28), which is why this stayed open.
 
 **Evidence**
 
@@ -54,7 +54,7 @@ Severity scale: **Critical** — data exposure or loss is possible today · **Hi
 <a id="di-02"></a>
 ### DI-02 · Cross-organization access is not enforced
 
-**Severity:** Critical (becomes the top issue once DI-01 is merged) · **Status:** Open; explicitly deferred by HT-14.
+**Severity:** Critical · **Status:** Closed by HT-55 (2026-09-16): one `tenant_scoped` policy per table enforces `organization_id = current_organization_id()` on customer hosts and membership scoping on the apex; the five mis-bound `auto_set_org_id_*` triggers were rebound.
 
 **Evidence**
 
