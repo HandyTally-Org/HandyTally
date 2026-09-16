@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, ScrollView, Platform } from 'react-native';
-import { Text, Button, Searchbar, Snackbar, Card, DataTable, Chip, IconButton, ActivityIndicator, Dialog, Portal, TextInput } from 'react-native-paper';
+import { useState, useEffect } from 'react';
+import { View, StyleSheet } from 'react-native';
+import { Text, Button, Searchbar, Snackbar, Card, DataTable, IconButton, ActivityIndicator, Dialog, Portal } from 'react-native-paper';
 import { supabase } from '../../lib/supabase';
-import { MaterialForm } from '../../components/MaterialForm';
+import { MaterialDialog, MaterialDraft } from '../../components/MaterialDialog';
+import { ImportExportButtons } from '../../components/ImportExportButtons';
 import { styles as globalStyles } from '../../styles';
-import * as XLSX from 'xlsx';
+import { exportWorkbook, pickWorkbook, sheetRows, hasColumn, confirmAction } from '../../utils/excel';
 
 export type Material = {
   uid: string;
@@ -27,28 +28,16 @@ export default function MaterialsScreen() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
-  // The Add dialog keeps its own draft: sharing `editingMaterial` with it made the
-  // Edit dialog (visible whenever editingMaterial !== null) open on the first keystroke.
-  const [newMaterial, setNewMaterial] = useState<Partial<Material>>({});
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [sortColumn, setSortColumn] = useState<string>('name');
   const [sortDirection, setSortDirection] = useState<'ascending' | 'descending'>('ascending');
 
   useEffect(() => {
     fetchMaterials();
-    checkTableStructure();
-  }, []);
-
-  useEffect(() => {
-    console.log('XLSX library loaded:', XLSX);
-    if (!XLSX) {
-      console.error('XLSX library not available');
-    }
   }, []);
 
   async function fetchMaterials() {
@@ -73,69 +62,20 @@ export default function MaterialsScreen() {
     }
   }
 
-  async function checkTableStructure() {
-    try {
-      const { data, error } = await supabase.rpc('execute_sql', {
-        sql_query: `
-          SELECT column_name, data_type 
-          FROM information_schema.columns 
-          WHERE table_name = 'materials' AND table_schema = 'public'
-          ORDER BY ordinal_position;
-        `
-      });
-      
-      console.log('Materials table structure:', data);
-      
-      if (error) {
-        console.error('Error checking table structure:', error);
-      }
-    } catch (error) {
-      console.error('Error:', error);
-    }
-  }
-
-  const handleAddMaterial = async (material: Partial<Material>) => {
-    const name = (material.name || '').trim();
-    if (!name) {
-      showSnackbar('Material name is required');
-      return;
-    }
-
+  const handleAddMaterial = async (material: MaterialDraft) => {
     try {
       setSubmitting(true);
-      console.log('Adding material:', material);
-
-      // `unit` and `quantity` are numeric columns, so blanks are left out rather than
-      // sent as '' (which Postgres rejects with "invalid input syntax for type numeric").
-      const cost = Number(material.cost);
-      const quantity = Number(material.quantity);
-      const payload: Record<string, unknown> = {
-        sku: (material.sku || '').trim() || null,
-        name,
-        description: material.description || '',
-        cost: Number.isFinite(cost) ? cost : 0,
-        supplier: material.supplier || '',
-        category: material.category || '',
-        is_active: true,
-      };
-      if (Number.isFinite(quantity)) {
-        payload.quantity = quantity;
-      }
-
-      console.log('Insert payload:', payload);
 
       const { error } = await supabase
         .from('materials')
-        .insert([payload]);
+        .insert([{ ...material, is_active: true }]);
 
       if (error) {
         throw new Error(error.message);
       }
 
-      // Refresh the materials list
       await fetchMaterials();
       setShowAddForm(false);
-      setNewMaterial({});
       showSnackbar('Material added successfully');
     } catch (error: any) {
       console.error('Error adding material:', error);
@@ -145,55 +85,20 @@ export default function MaterialsScreen() {
     }
   };
 
-  const handleUpdateMaterial = async (uid: string, updates: Partial<Material>) => {
+  const handleUpdateMaterial = async (uid: string, updates: MaterialDraft) => {
     try {
       setSubmitting(true);
-      
-      console.log('Raw updates:', updates);
-      
-      // Create a copy of updates to modify
-      const formattedUpdates: any = { ...updates };
-      
-      // Handle all possible numeric fields
-      if ('cost' in formattedUpdates) {
-        formattedUpdates.cost = formattedUpdates.cost !== undefined && formattedUpdates.cost !== '' 
-          ? (typeof formattedUpdates.cost === 'string' ? parseFloat(formattedUpdates.cost) : formattedUpdates.cost) 
-          : 0;
-      }
-      
-      if ('quantity' in formattedUpdates) {
-        const quantity = Number(formattedUpdates.quantity);
-        formattedUpdates.quantity = Number.isFinite(quantity) ? quantity : 0;
-      }
 
-      // Blank SKU is stored as NULL, not ''.
-      if ('sku' in formattedUpdates) {
-        const sku = String(formattedUpdates.sku ?? '').trim();
-        formattedUpdates.sku = sku || null;
-      }
-      
-      // Handle supplier_id which might be the bigint field causing issues
-      if ('supplier_id' in formattedUpdates && (formattedUpdates.supplier_id === '' || formattedUpdates.supplier_id === null)) {
-        // Remove the field entirely if it's empty
-        delete formattedUpdates.supplier_id;
-      }
-      
-      console.log('Formatted updates:', formattedUpdates);
-      
       const { error } = await supabase
         .from('materials')
-        .update(formattedUpdates)
+        .update(updates)
         .eq('uid', uid);
 
       if (error) {
-        console.error('Database error:', error);
         throw new Error(error.message);
       }
 
-      // Update local state
-      setMaterials(
-        materials.map((material) => (material.uid === uid ? { ...material, ...formattedUpdates } : material))
-      );
+      setMaterials(materials.map((material) => (material.uid === uid ? { ...material, ...updates } : material)));
       setEditingMaterial(null);
       showSnackbar('Material updated successfully');
     } catch (error: any) {
@@ -234,10 +139,7 @@ export default function MaterialsScreen() {
     setSnackbarVisible(true);
   };
 
-  const closeAddForm = () => {
-    setShowAddForm(false);
-    setNewMaterial({});
-  };
+  const closeAddForm = () => setShowAddForm(false);
 
   const handleSort = (column: string) => {
     if (sortColumn === column) {
@@ -322,43 +224,10 @@ export default function MaterialsScreen() {
         delete: 'n'  // Default to 'n' (don't delete)
       }));
       
-      console.log('Exporting data:', exportData);
-      
-      // Create worksheet from the data
-      const worksheet = XLSX.utils.json_to_sheet(exportData);
-      
-      // Set column widths for better readability
-      if (!worksheet['!cols']) worksheet['!cols'] = [];
-      worksheet['!cols'] = [
-        { wch: 36 }, // uid
-        { wch: 15 }, // sku
-        { wch: 25 }, // name
-        { wch: 30 }, // description
-        { wch: 10 }, // cost
-        { wch: 10 }, // unit
-        { wch: 10 }, // quantity
-        { wch: 15 }, // status
-        { wch: 15 }, // category
-        { wch: 15 }, // supplier
-        { wch: 10 }  // delete
-      ];
-      
-      // Create workbook and add the worksheet
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Materials');
-      
-      // Generate Excel file
-      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-      
-      // For web, create a download link
-      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'materials.xlsx';
-      a.click();
-      URL.revokeObjectURL(url);
-      
+      await exportWorkbook('materials.xlsx', [
+        { name: 'Materials', rows: exportData, columnWidths: [36, 15, 25, 30, 10, 10, 10, 15, 15, 15, 10] },
+      ]);
+
       alert('Materials exported successfully. This file can be used for import.\n\nTo delete a material, change the "delete" column value to "y".');
     } catch (error) {
       console.error('Error exporting materials:', error);
@@ -366,95 +235,23 @@ export default function MaterialsScreen() {
     }
   };
 
-  const handleImportClick = () => {
-    console.log('Import button clicked');
-    if (fileInputRef.current) {
-      console.log('Triggering file input click');
-      fileInputRef.current.click();
-    } else {
-      console.error('File input reference is null');
-      alert('Could not open file selector. Please try again.');
-    }
-  };
-
-  const handleFileSelected = async (event) => {
-    console.log('File selected event triggered', event);
+  const handleImport = async () => {
     try {
-      const file = event.target.files[0];
-      console.log('Selected file:', file);
-      
-      if (!file) {
-        console.log('No file selected');
+      const workbook = await pickWorkbook();
+      if (!workbook) return;
+
+      const rows = sheetRows(workbook);
+      if (!rows || rows.length === 0) {
+        alert('No data found in the spreadsheet.');
         return;
       }
-      
-      // Read the Excel file
-      const reader = new FileReader();
-      
-      reader.onload = async (e) => {
-        console.log('FileReader onload triggered');
-        try {
-          console.log('FileReader result:', e.target.result);
-          
-          // Check if result is valid
-          if (!e.target.result) {
-            console.error('FileReader result is empty');
-            alert('Could not read the file. Please try again.');
-            return;
-          }
-          
-          const data = new Uint8Array(e.target.result);
-          console.log('Data array created, length:', data.length);
-          
-          // Try parsing the Excel file
-          console.log('Attempting to parse Excel file...');
-          const workbook = XLSX.read(data, { type: 'array' });
-          console.log('Workbook parsed:', workbook);
-          
-          // Get the first sheet
-          console.log('Sheet names:', workbook.SheetNames);
-          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-          console.log('First sheet:', firstSheet);
-          
-          // Convert to JSON
-          const jsonData = XLSX.utils.sheet_to_json(firstSheet);
-          console.log('JSON data extracted:', jsonData);
-          
-          if (jsonData.length === 0) {
-            alert('No data found in the Excel file.');
-            return;
-          }
-          
-          // Check if the data has the required fields
-          const firstItem = jsonData[0];
-          console.log('First item in data:', firstItem);
-          
-          if (!firstItem.name) {
-            alert('The Excel file must have a "name" column.');
-            return;
-          }
-          
-          // Confirm import
-          if (confirm(`Are you sure you want to import ${jsonData.length} materials?`)) {
-            await importMaterials(jsonData);
-          }
-        } catch (error) {
-          console.error('Error processing Excel file:', error);
-          alert(`Failed to process Excel file: ${error.message}`);
-        }
-      };
-      
-      reader.onerror = (error) => {
-        console.error('FileReader error:', error);
-        alert('Error reading the file. Please try again.');
-      };
-      
-      console.log('Starting file read as ArrayBuffer');
-      reader.readAsArrayBuffer(file);
-      console.log('File read initiated');
-      
-    } catch (error) {
-      console.error('Error in handleFileSelected:', error);
+      if (!hasColumn(rows, 'name')) {
+        alert('The spreadsheet must have a "name" column.');
+        return;
+      }
+      await importMaterials(rows);
+    } catch (error: any) {
+      console.error('Error importing materials:', error);
       alert(`Failed to import materials: ${error.message}`);
     }
   };
@@ -544,7 +341,7 @@ export default function MaterialsScreen() {
         message.push(`Delete ${materialsToDelete.length} materials`);
       }
       
-      if (!confirm(`Are you sure you want to:\n${message.join('\n')}`)) {
+      if (!(await confirmAction(`Are you sure you want to:\n${message.join('\n')}`, 'Import'))) {
         return;
       }
       
@@ -694,96 +491,9 @@ export default function MaterialsScreen() {
                 Add New Inventory
               </Button>
 
-              <View 
-                style={{ marginLeft: 8 }}
-                accessibilityLabel="Export"
-              >
-                <IconButton
-                  icon="file-export"
-                  mode="contained"
-                  onPress={handleExport}
-                  iconColor="#fff"
-                  containerColor="#4CAF50"
-                  size={20}
-                  aria-label="Export"
-                />
-                {Platform.OS === 'web' && (
-                  <div 
-                    style={{ 
-                      position: 'absolute', 
-                      bottom: -30, 
-                      left: 0, 
-                      backgroundColor: '#333', 
-                      color: 'white', 
-                      padding: '4px 8px', 
-                      borderRadius: 4, 
-                      fontSize: 12,
-                      whiteSpace: 'nowrap',
-                      opacity: 0,
-                      transition: 'opacity 0.2s',
-                      pointerEvents: 'none'
-                    }}
-                    className="tooltip"
-                  >
-                    Export
-                  </div>
-                )}
-              </View>
-              
-              <View 
-                style={{ marginLeft: 8 }}
-                accessibilityLabel="Import"
-              >
-                <IconButton
-                  icon="file-import"
-                  mode="contained"
-                  onPress={() => {
-                    if (fileInputRef.current) {
-                      fileInputRef.current.click();
-                    } else {
-                      console.error("File input ref is null");
-                      alert("Could not open file selector. Please try again.");
-                    }
-                  }}
-                  iconColor="#fff"
-                  containerColor="#2196F3"
-                  size={20}
-                  aria-label="Import"
-                />
-                {Platform.OS === 'web' && (
-                  <div 
-                    style={{ 
-                      position: 'absolute', 
-                      bottom: -30, 
-                      left: 0, 
-                      backgroundColor: '#333', 
-                      color: 'white', 
-                      padding: '4px 8px', 
-                      borderRadius: 4, 
-                      fontSize: 12,
-                      whiteSpace: 'nowrap',
-                      opacity: 0,
-                      transition: 'opacity 0.2s',
-                      pointerEvents: 'none'
-                    }}
-                    className="tooltip"
-                  >
-                    Import
-                  </div>
-                )}
-              </View>
+              <ImportExportButtons onExport={handleExport} onImport={handleImport} />
             </View>
           </View>
-          
-          {/* Hidden file input for Excel import */}
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileSelected}
-            accept=".xlsx,.xls"
-            style={{ display: 'none' }}
-            id="inventory-excel-import"
-          />
           
           <View style={{
             flex: 1,
@@ -920,121 +630,26 @@ export default function MaterialsScreen() {
           </View>
         </View>
         
-        {/* Add Material Dialog */}
-        <Portal>
-          <Dialog visible={showAddForm} onDismiss={closeAddForm} style={{ backgroundColor: '#ffffff' }}>
-            <Dialog.Title style={{ backgroundColor: '#ffffff' }}>Add New Material</Dialog.Title>
-            <Dialog.Content style={{ backgroundColor: '#ffffff' }}>
-              <TextInput
-                label="SKU"
-                value={newMaterial.sku || ''}
-                onChangeText={(text) => setNewMaterial({ ...newMaterial, sku: text })}
-                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-              />
-              <TextInput
-                label="Name"
-                value={newMaterial.name || ''}
-                onChangeText={(text) => setNewMaterial({ ...newMaterial, name: text })}
-                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-              />
-              <TextInput
-                label="Description"
-                value={newMaterial.description || ''}
-                onChangeText={(text) => setNewMaterial({ ...newMaterial, description: text })}
-                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-              />
-              <TextInput
-                label="Quantity"
-                value={newMaterial.quantity?.toString() || ''}
-                onChangeText={(text) => setNewMaterial({ ...newMaterial, quantity: parseFloat(text) })}
-                keyboardType="numeric"
-                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-              />
-              <TextInput
-                label="Unit Cost"
-                value={newMaterial.cost?.toString() || ''}
-                onChangeText={(text) => setNewMaterial({ ...newMaterial, cost: parseFloat(text) })}
-                keyboardType="numeric"
-                left={<TextInput.Affix text="$" />}
-                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-              />
-              <TextInput
-                label="Supplier"
-                value={newMaterial.supplier || ''}
-                onChangeText={(text) => setNewMaterial({ ...newMaterial, supplier: text })}
-                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-              />
-              <TextInput
-                label="Category"
-                value={newMaterial.category || ''}
-                onChangeText={(text) => setNewMaterial({ ...newMaterial, category: text })}
-                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-              />
-            </Dialog.Content>
-            <Dialog.Actions style={{ backgroundColor: '#ffffff' }}>
-              <Button onPress={closeAddForm}>Cancel</Button>
-              <Button onPress={() => handleAddMaterial(newMaterial)} disabled={submitting}>Add</Button>
-            </Dialog.Actions>
-          </Dialog>
-        </Portal>
-        
-        {/* Edit Material Dialog */}
-        <Portal>
-          <Dialog visible={editingMaterial !== null} onDismiss={() => setEditingMaterial(null)} style={{ backgroundColor: '#ffffff' }}>
-            <Dialog.Title style={{ backgroundColor: '#ffffff' }}>Edit Material</Dialog.Title>
-            <Dialog.Content style={{ backgroundColor: '#ffffff' }}>
-              <TextInput
-                label="SKU"
-                value={editingMaterial?.sku || ''}
-                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), sku: text } as any)}
-                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-              />
-              <TextInput
-                label="Name"
-                value={editingMaterial?.name || ''}
-                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), name: text } as any)}
-                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-              />
-              <TextInput
-                label="Description"
-                value={editingMaterial?.description || ''}
-                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), description: text } as any)}
-                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-              />
-              <TextInput
-                label="Quantity"
-                value={editingMaterial?.quantity?.toString() || ''}
-                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), quantity: parseFloat(text) } as any)}
-                keyboardType="numeric"
-                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-              />
-              <TextInput
-                label="Unit Cost"
-                value={editingMaterial?.cost?.toString() || ''}
-                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), cost: parseFloat(text) } as any)}
-                keyboardType="numeric"
-                left={<TextInput.Affix text="$" />}
-                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-              />
-              <TextInput
-                label="Supplier"
-                value={editingMaterial?.supplier || ''}
-                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), supplier: text } as any)}
-                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-              />
-              <TextInput
-                label="Category"
-                value={editingMaterial?.category || ''}
-                onChangeText={(text) => setEditingMaterial({ ...(editingMaterial || {}), category: text } as any)}
-                style={{ marginBottom: 10, backgroundColor: '#ffffff' }}
-              />
-            </Dialog.Content>
-            <Dialog.Actions style={{ backgroundColor: '#ffffff' }}>
-              <Button onPress={() => setEditingMaterial(null)}>Cancel</Button>
-              <Button onPress={() => handleUpdateMaterial(editingMaterial?.uid || '', editingMaterial || {})}>Update</Button>
-            </Dialog.Actions>
-          </Dialog>
-        </Portal>
+        <MaterialDialog
+          visible={showAddForm}
+          title="Add material"
+          subtitle="New stock item for the inventory list"
+          submitLabel="Add material"
+          submitting={submitting}
+          onDismiss={closeAddForm}
+          onSubmit={handleAddMaterial}
+        />
+
+        <MaterialDialog
+          visible={editingMaterial !== null}
+          title="Edit material"
+          subtitle={editingMaterial?.name}
+          material={editingMaterial}
+          submitLabel="Save changes"
+          submitting={submitting}
+          onDismiss={() => setEditingMaterial(null)}
+          onSubmit={(draft) => editingMaterial && handleUpdateMaterial(editingMaterial.uid, draft)}
+        />
         
         {/* Delete Material Dialog */}
         <Portal>

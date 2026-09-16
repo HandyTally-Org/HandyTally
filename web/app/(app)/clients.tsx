@@ -1,13 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity } from 'react-native';
 import { Text, Button, Searchbar, Card, DataTable, IconButton, Dialog, Portal, Snackbar, List, FAB, ActivityIndicator, TextInput } from 'react-native-paper';
 import { supabase } from '../../lib/api';
 import { styles as globalStyles } from '../../styles';
 import { ClientForm } from '../../app/components/clientform';
 import { useRouter } from 'expo-router';
-import * as XLSX from 'xlsx';
-import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+import { exportWorkbook, pickWorkbook, sheetRows, confirmAction } from '../../utils/excel';
+import { ImportExportButtons } from '../../components/ImportExportButtons';
 import { MaterialIcons } from '@expo/vector-icons';
 
 type Client = {
@@ -69,7 +68,6 @@ export default function ClientsScreen() {
   const [showRelatedItemsDialog, setShowRelatedItemsDialog] = useState(false);
   const [filteredClients, setFilteredClients] = useState<Client[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [showClientDetails, setShowClientDetails] = useState(false);
   const [activeDetailTab, setActiveDetailTab] = useState('info');
 
@@ -478,40 +476,9 @@ export default function ClientsScreen() {
         delete: 'n'  // Default to 'n' (don't delete)
       }));
       
-      // Create worksheet from the data
-      const worksheet = XLSX.utils.json_to_sheet(exportData);
-      
-      // Set column widths for better readability
-      if (!worksheet['!cols']) worksheet['!cols'] = [];
-      worksheet['!cols'] = [
-        { wch: 36 }, // id
-        { wch: 25 }, // name
-        { wch: 30 }, // email
-        { wch: 15 }, // phone
-        { wch: 30 }, // address
-        { wch: 15 }, // city
-        { wch: 10 }, // state
-        { wch: 10 }, // zip
-        { wch: 15 }, // tag
-        { wch: 40 }, // notes
-        { wch: 10 }  // delete
-      ];
-      
-      // Create workbook and add the worksheet
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'clients');
-      
-      // Generate Excel file
-      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-      
-      // For web, create a download link
-      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'clients.xlsx';
-      a.click();
-      URL.revokeObjectURL(url);
+      await exportWorkbook('clients.xlsx', [
+        { name: 'clients', rows: exportData, columnWidths: [36, 25, 30, 15, 30, 15, 10, 10, 15, 40, 10] },
+      ]);
       
       alert('Clients exported successfully. This file can be used for import.\n\nTo delete a client, change the "delete" column value to "y".');
     } catch (error) {
@@ -520,109 +487,23 @@ export default function ClientsScreen() {
     }
   };
 
-  const handleFileSelected = async (event: any) => {
+  const handleImport = async () => {
     try {
-      console.log('File selection event triggered', event);
-      let file;
-      
-      if (Platform.OS === 'web') {
-        // For web, get the file from the input element
-        if (event?.target?.files && event.target.files.length > 0) {
-          file = event.target.files[0];
-          console.log('Web file selected:', file.name, file.type, file.size);
-        } else {
-          console.log('No file selected in web environment');
-          return; // No file selected
-        }
-      } else {
-        // For mobile, use Expo's DocumentPicker
-        const result = await DocumentPicker.getDocumentAsync({
-          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          copyToCacheDirectory: true
-        });
-        
-        console.log('Mobile document picker result:', result);
-        
-        if (result.canceled === false && result.assets && result.assets.length > 0) {
-          file = result.assets[0];
-          console.log('Mobile file selected:', file.name, file.uri);
-        } else {
-          console.log('No file selected or picker canceled on mobile');
-          return; // No file selected or canceled
-        }
-      }
-      
-      if (file) {
-        console.log('Proceeding to import with file:', file.name);
-        await handleImport(file);
-      } else {
-        console.log('No valid file to import');
-      }
-    } catch (error) {
-      console.error('Error in handleFileSelected:', error);
-      showSnackbar('Error selecting file: ' + error.message);
-    }
-  };
+      const workbook = await pickWorkbook();
+      if (!workbook) return;
 
-  const handleImport = async (file: any) => {
-    try {
-      setLoading(true);
-      console.log('Starting import process with file:', file.name);
-      
-      // Read the file data differently based on platform
-      let data;
-      if (Platform.OS === 'web') {
-        // For web, use FileReader API which is more reliable
-        data = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            const result = e.target?.result;
-            if (result) {
-              // Convert to ArrayBuffer if it's a string
-              if (typeof result === 'string') {
-                // Base64 string - convert to ArrayBuffer
-                const binary = atob(result.split(',')[1]);
-                const array = new Uint8Array(binary.length);
-                for (let i = 0; i < binary.length; i++) {
-                  array[i] = binary.charCodeAt(i);
-                }
-                resolve(array.buffer);
-              } else {
-                // Already an ArrayBuffer
-                resolve(result);
-              }
-            } else {
-              reject(new Error('Failed to read file'));
-            }
-          };
-          reader.onerror = (e) => {
-            reject(new Error('Error reading file: ' + e.target?.error));
-          };
-          reader.readAsArrayBuffer(file);
-        });
-        
-        console.log('Web file read complete, data size:', data.byteLength);
-      } else {
-        // For mobile
-        const fileUri = file.uri;
-        console.log('Reading mobile file from URI:', fileUri);
-        const fileContent = await FileSystem.readAsStringAsync(fileUri, {
-          encoding: FileSystem.EncodingType.Base64
-        });
-        console.log('Mobile file read complete, content length:', fileContent.length);
-        data = _base64ToArrayBuffer(fileContent);
+      const jsonData = sheetRows<any>(workbook);
+      if (!jsonData || jsonData.length === 0) {
+        showSnackbar('No data found in the spreadsheet');
+        return;
       }
-      
-      console.log('File data loaded, parsing XLSX...');
-      const workbook = XLSX.read(data, { type: 'array' });
-      console.log('Workbook parsed, sheets:', workbook.SheetNames);
-      
-      // Get the first worksheet
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      
-      // Convert to JSON
-      const jsonData = XLSX.utils.sheet_to_json(worksheet);
-      console.log('Parsed data:', jsonData.length, 'rows');
+      const proceed = await confirmAction(
+        `Import ${jsonData.length} clients? Rows with an id update that client, and rows with delete set to "y" remove it.`,
+        'Import'
+      );
+      if (!proceed) return;
+
+      setLoading(true);
       
       // Track import stats
       let updated = 0;
@@ -719,17 +600,6 @@ export default function ClientsScreen() {
     }
   };
 
-  // Helper function to convert base64 to ArrayBuffer
-  const _base64ToArrayBuffer = (base64: string) => {
-    const binary_string = atob(base64);
-    const len = binary_string.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-      bytes[i] = binary_string.charCodeAt(i);
-    }
-    return bytes.buffer;
-  };
-
   const toggleTagFilter = (tag: string) => {
     if (selectedTags.includes(tag)) {
       setSelectedTags(selectedTags.filter(t => t !== tag));
@@ -771,97 +641,10 @@ export default function ClientsScreen() {
           Add New Client
         </Button>
           
-          <View 
-            style={{ marginLeft: 8 }}
-            accessibilityLabel="Export"
-          >
-            <IconButton
-              icon="file-export"
-              mode="contained"
-              onPress={handleExport}
-              iconColor="#fff"
-              containerColor="#4CAF50"
-              size={20}
-              aria-label="Export"
-            />
-            {Platform.OS === 'web' && (
-              <div 
-                style={{ 
-                  position: 'absolute', 
-                  bottom: -30, 
-                  left: 0, 
-                  backgroundColor: '#333', 
-                  color: 'white', 
-                  padding: '4px 8px', 
-                  borderRadius: 4, 
-                  fontSize: 12,
-                  whiteSpace: 'nowrap',
-                  opacity: 0,
-                  transition: 'opacity 0.2s',
-                  pointerEvents: 'none'
-                }}
-                className="tooltip"
-              >
-                Export
-              </div>
-            )}
-          </View>
-          
-          <View 
-            style={{ marginLeft: 8 }}
-            accessibilityLabel="Import"
-          >
-            <IconButton
-              icon="file-import"
-              mode="contained"
-              onPress={() => {
-                // Explicitly trigger the file input click
-                if (fileInputRef.current) {
-                  fileInputRef.current.click();
-                } else {
-                  console.error("File input ref is null");
-                  alert("Could not open file selector. Please try again.");
-                }
-              }}
-              iconColor="#fff"
-              containerColor="#2196F3"
-              size={20}
-              aria-label="Import"
-            />
-            {Platform.OS === 'web' && (
-              <div 
-                style={{ 
-                  position: 'absolute', 
-                  bottom: -30, 
-                  left: 0, 
-                  backgroundColor: '#333', 
-                  color: 'white', 
-                  padding: '4px 8px', 
-                  borderRadius: 4, 
-                  fontSize: 12,
-                  whiteSpace: 'nowrap',
-                  opacity: 0,
-                  transition: 'opacity 0.2s',
-                  pointerEvents: 'none'
-                }}
-                className="tooltip"
-              >
-                Import
-              </div>
-            )}
-          </View>
+          <ImportExportButtons onExport={handleExport} onImport={handleImport} />
         </View>
       </View>
       
-      {/* Hidden file input for Excel import */}
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileSelected}
-        accept=".xlsx,.xls"
-        style={{ display: 'none' }}
-        id="client-excel-import"
-      />
       
           <View style={{ 
             flexDirection: 'row', 

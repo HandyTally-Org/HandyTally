@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text, Button, Searchbar, Card, DataTable, Chip, IconButton, Dialog, Portal, Snackbar, TextInput, RadioButton, ActivityIndicator, Tooltip } from 'react-native-paper';
 import { supabase } from '../../lib/api';
 import { styles as globalStyles } from '../../styles';
 import { JobForm } from '../../components/JobForm';
 import { sendJobInvite } from '../../utils/sendJobInvite';
 import { useRouter } from 'expo-router';
-import * as XLSX from 'xlsx';
+import { exportWorkbook, pickWorkbook, sheetRows, confirmAction } from '../../utils/excel';
+import { ImportExportButtons } from '../../components/ImportExportButtons';
 import { useOrganizationMembers } from '../../hooks/useOrganizationMembers';
 import { assigneeLabel } from '../../utils/inviteUser';
 
@@ -52,7 +53,6 @@ export default function JobsScreen() {
   const [sortColumn, setSortColumn] = useState<string>('name');
   const [sortDirection, setSortDirection] = useState<'ascending' | 'descending'>('ascending');
   const [showClientDropdown, setShowClientDropdown] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
@@ -534,64 +534,11 @@ export default function JobsScreen() {
         delete: 'n'  // Default to 'n' (don't delete)
       }));
       
-      // Create a new workbook
-      const wb = XLSX.utils.book_new();
-      
-      // Add jobs sheet
-      const jobsWs = XLSX.utils.json_to_sheet(jobsForExport);
-      XLSX.utils.book_append_sheet(wb, jobsWs, "Jobs");
-      
-      // Set column widths for jobs sheet
-      const jobsCols = [
-        { wch: 36 }, // uid
-        { wch: 30 }, // title
-        { wch: 40 }, // description
-        { wch: 36 }, // client_id
-        { wch: 30 }, // client_name
-        { wch: 36 }, // assigned_to
-        { wch: 30 }, // assigned_to_name
-        { wch: 15 }, // start_date
-        { wch: 15 }, // end_date
-        { wch: 15 }, // status
-        { wch: 25 }, // created_at
-        { wch: 10 }  // delete
-      ];
-      jobsWs['!cols'] = jobsCols;
-      
-      // Add job_costs sheet
-      const jobCostsWs = XLSX.utils.json_to_sheet(jobCostsData || []);
-      XLSX.utils.book_append_sheet(wb, jobCostsWs, "Job Costs");
-      
-      // Set column widths for job_costs sheet
-      const jobCostsCols = [
-        { wch: 36 }, // uid
-        { wch: 36 }, // job_id
-        { wch: 25 }, // description
-        { wch: 15 }, // amount
-        { wch: 15 }, // date
-        { wch: 20 }, // category
-        { wch: 25 }  // created_at
-      ];
-      jobCostsWs['!cols'] = jobCostsCols;
-      
-      // Add job_attachments sheet
-      const jobAttachmentsWs = XLSX.utils.json_to_sheet(jobAttachmentsData || []);
-      XLSX.utils.book_append_sheet(wb, jobAttachmentsWs, "Job Attachments");
-      
-      // Set column widths for job_attachments sheet
-      const jobAttachmentsCols = [
-        { wch: 36 }, // uid
-        { wch: 36 }, // job_id
-        { wch: 40 }, // file_name
-        { wch: 50 }, // file_url
-        { wch: 20 }, // file_type
-        { wch: 15 }, // file_size
-        { wch: 25 }  // created_at
-      ];
-      jobAttachmentsWs['!cols'] = jobAttachmentsCols;
-      
-      // Generate Excel file
-      XLSX.writeFile(wb, "jobs.xlsx");
+      await exportWorkbook('jobs.xlsx', [
+        { name: 'Jobs', rows: jobsForExport, columnWidths: [36, 30, 40, 36, 30, 36, 30, 15, 15, 15, 25, 10] },
+        { name: 'Job Costs', rows: jobCostsData || [], columnWidths: [36, 36, 25, 15, 15, 20, 25] },
+        { name: 'Job Attachments', rows: jobAttachmentsData || [], columnWidths: [36, 36, 40, 50, 20, 15, 25] },
+      ]);
       
       showSnackbar('Jobs data exported successfully');
     } catch (error) {
@@ -603,62 +550,30 @@ export default function JobsScreen() {
   };
   
   // Import functionality
-  const handleImportClick = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-  
-  const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImport = async () => {
     try {
-      const files = event.target.files;
-      if (!files || files.length === 0) return;
-      
-      const file = files[0];
-      const reader = new FileReader();
-      
-      reader.onload = async (e) => {
-        try {
-          const data = new Uint8Array(e.target?.result as ArrayBuffer);
-          const workbook = XLSX.read(data, { type: 'array' });
-          
-          // Process Jobs sheet
-          const jobsSheetName = workbook.SheetNames.find(name => 
-            name.toLowerCase() === 'jobs' || name.toLowerCase() === 'job'
-          );
-          
-          if (!jobsSheetName) {
-            showSnackbar('Error: Jobs sheet not found in the Excel file');
-            return;
-          }
-          
-          const jobsSheet = workbook.Sheets[jobsSheetName];
-          const jobsData = XLSX.utils.sheet_to_json(jobsSheet);
-          
-          if (jobsData.length === 0) {
-            showSnackbar('No job data found in the Excel file');
-            return;
-          }
-          
-          // Confirm import
-          if (confirm(`Are you sure you want to import ${jobsData.length} jobs? This will update existing jobs and may delete jobs marked for deletion.`)) {
-            await importJobs(jobsData);
-          }
-        } catch (error) {
-          console.error('Error processing Excel file:', error);
-          showSnackbar('Error processing Excel file');
-        }
-      };
-      
-      reader.readAsArrayBuffer(file);
-      
-      // Reset the file input
-      if (event.target) {
-        event.target.value = '';
+      const workbook = await pickWorkbook();
+      if (!workbook) return;
+
+      const jobsData = sheetRows<any>(workbook, 'Jobs', 'Job');
+      if (!jobsData) {
+        showSnackbar('Error: Jobs sheet not found in the Excel file');
+        return;
+      }
+      if (jobsData.length === 0) {
+        showSnackbar('No job data found in the Excel file');
+        return;
+      }
+      const proceed = await confirmAction(
+        `Are you sure you want to import ${jobsData.length} jobs? This will update existing jobs and may delete jobs marked for deletion.`,
+        'Import'
+      );
+      if (proceed) {
+        await importJobs(jobsData);
       }
     } catch (error) {
-      console.error('Error selecting file:', error);
-      showSnackbar('Error selecting file');
+      console.error('Error processing Excel file:', error);
+      showSnackbar('Error processing Excel file');
     }
   };
   
@@ -1028,97 +943,10 @@ export default function JobsScreen() {
         Add New Job
       </Button>
       
-          <View 
-            style={{ marginLeft: 8 }}
-            accessibilityLabel="Export"
-          >
-            <IconButton
-              icon="file-export"
-              mode="contained"
-              onPress={handleExport}
-              iconColor="#fff"
-              containerColor="#4CAF50"
-              size={20}
-              aria-label="Export"
-            />
-            {Platform.OS === 'web' && (
-              <div 
-                style={{ 
-                  position: 'absolute', 
-                  bottom: -30, 
-                  left: 0, 
-                  backgroundColor: '#333', 
-                  color: 'white', 
-                  padding: '4px 8px', 
-                  borderRadius: 4, 
-                  fontSize: 12,
-                  whiteSpace: 'nowrap',
-                  opacity: 0,
-                  transition: 'opacity 0.2s',
-                  pointerEvents: 'none'
-                }}
-                className="tooltip"
-              >
-                Export
-              </div>
-            )}
-          </View>
-          
-          <View 
-            style={{ marginLeft: 8 }}
-            accessibilityLabel="Import"
-          >
-            <IconButton
-              icon="file-import"
-              mode="contained"
-              onPress={() => {
-                // Explicitly trigger the file input click
-                if (fileInputRef.current) {
-                  fileInputRef.current.click();
-                } else {
-                  console.error("File input ref is null");
-                  alert("Could not open file selector. Please try again.");
-                }
-              }}
-              iconColor="#fff"
-              containerColor="#2196F3"
-              size={20}
-              aria-label="Import"
-            />
-            {Platform.OS === 'web' && (
-              <div 
-                style={{ 
-                  position: 'absolute', 
-                  bottom: -30, 
-                  left: 0, 
-                  backgroundColor: '#333', 
-                  color: 'white', 
-                  padding: '4px 8px', 
-                  borderRadius: 4, 
-                  fontSize: 12,
-                  whiteSpace: 'nowrap',
-                  opacity: 0,
-                  transition: 'opacity 0.2s',
-                  pointerEvents: 'none'
-                }}
-                className="tooltip"
-              >
-                Import
-              </div>
-            )}
-                  </View>
+          <ImportExportButtons onExport={handleExport} onImport={handleImport} />
         </View>
       </View>
       
-      {/* Hidden file input for Excel import */}
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileSelected}
-        accept=".xlsx,.xls"
-        style={{ display: 'none' }}
-        id="job-excel-import"
-      />
       
       <View style={styles.filtersContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll}>
