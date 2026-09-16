@@ -23,6 +23,9 @@ All notable changes to HandyTally are recorded here. Ticket numbers refer to `HT
 - **HT-4** — Send Invoice dialog renders inside the invoice details modal.
 - A blank `uid` is treated as a new invoice rather than an update; company logo query and empty-id saves fixed; Invoices header padding corrected.
 
+### Removed
+- Deleted the unused `web/components/MaterialsPage.tsx`; the Excel export/import and material list it duplicated live in `web/app/(app)/inventory.tsx`.
+
 ## 1.04 — 2025-12-15
 - Migrated to a self-hosted Supabase instance.
 
