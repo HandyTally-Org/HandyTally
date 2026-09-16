@@ -5,18 +5,20 @@
 // from its edge. CI (.github/workflows/ci.yml) builds dist/ and runs
 // `wrangler deploy` from this directory on every push to master.
 //
-// The routes below take handytally.com over from Vercel (HT-31 Phase B). Both
-// hostnames already have proxied DNS records on Cloudflare; a Worker route wins
-// over the origin, so nothing at Vercel needs to change for the cutover and
-// removing the routes is the rollback. HT-37 adds `*.handytally.com/*` for the
-// customer subdomains together with the wildcard DNS record.
+// Routes: the apex and www (HT-31), plus every first-level subdomain (HT-37).
+// One bundle serves all customers; the app works out the organization from the
+// hostname (HT-38). A customer subdomain therefore needs no DNS record, no
+// deploy and no config of its own: the proxied wildcard `*` A record in
+// Cloudflare DNS plus the wildcard route below cover it. Removing a route is
+// the rollback for that hostname.
 {
   "name": "handytally-web",
   "compatibility_date": "2026-09-15",
   "workers_dev": true,
   "routes": [
     { "pattern": "handytally.com/*", "zone_name": "handytally.com" },
-    { "pattern": "www.handytally.com/*", "zone_name": "handytally.com" }
+    { "pattern": "www.handytally.com/*", "zone_name": "handytally.com" },
+    { "pattern": "*.handytally.com/*", "zone_name": "handytally.com" }
   ],
   "assets": {
     "directory": "./dist",
