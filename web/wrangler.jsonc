@@ -5,13 +5,19 @@
 // from its edge. CI (.github/workflows/ci.yml) builds dist/ and runs
 // `wrangler deploy` from this directory on every push to master.
 //
-// Phase A (this file): deploy to the *.workers.dev URL only.
-// Phase B: add `routes` for handytally.com/*, www.handytally.com/* and
-// *.handytally.com/* to take traffic over from Vercel.
+// The routes below take handytally.com over from Vercel (HT-31 Phase B). Both
+// hostnames already have proxied DNS records on Cloudflare; a Worker route wins
+// over the origin, so nothing at Vercel needs to change for the cutover and
+// removing the routes is the rollback. HT-37 adds `*.handytally.com/*` for the
+// customer subdomains together with the wildcard DNS record.
 {
   "name": "handytally-web",
   "compatibility_date": "2026-09-15",
   "workers_dev": true,
+  "routes": [
+    { "pattern": "handytally.com/*", "zone_name": "handytally.com" },
+    { "pattern": "www.handytally.com/*", "zone_name": "handytally.com" }
+  ],
   "assets": {
     "directory": "./dist",
     // Expo Router emits one HTML file per route, and dynamic routes such as
