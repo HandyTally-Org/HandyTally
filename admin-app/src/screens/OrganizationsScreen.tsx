@@ -9,7 +9,6 @@ import { Organization } from '../types';
 import { COLORS, SPACING, FONT_SIZES } from '../utils/constants';
 
 const BASE_DOMAIN = process.env.EXPO_PUBLIC_BASE_DOMAIN || 'handytally.com';
-const VERCEL_TEAM_ID = process.env.EXPO_PUBLIC_VERCEL_TEAM_ID || 'handy-tally-d2726825';
 
 export const OrganizationsScreen: React.FC = () => {
     const [showForm, setShowForm] = useState(false);
@@ -66,18 +65,10 @@ export const OrganizationsScreen: React.FC = () => {
         }
     };
 
-    const getVercelProjectUrl = (projectId: string) => {
-        return `https://vercel.com/${VERCEL_TEAM_ID}/${projectId}`;
-    };
-
-    const getDeploymentUrl = (org: Organization) => {
-        if (org.vercel_deployment_url) {
-            return org.vercel_deployment_url;
-        }
-        if (org.vercel_project_id) {
-            return `https://${org.vercel_project_id}.vercel.app`;
-        }
-        return null;
+    // Every tenant host is served by the one web bundle behind a wildcard
+    // route (HT-31 / HT-37); there is no per-organization deployment.
+    const getLiveUrl = (org: Organization) => {
+        return `https://${org.domain || `${org.subdomain}.${BASE_DOMAIN}`}`;
     };
 
     const renderOrganization = (org: Organization) => (
@@ -107,56 +98,25 @@ export const OrganizationsScreen: React.FC = () => {
                     Created: {new Date(org.created_at).toLocaleDateString()}
                 </Text>
 
-                {/* Vercel Project Link */}
-                {org.vercel_project_id && (
-                    <View style={styles.urlRow}>
-                        <Text style={styles.urlLabel}>Vercel Project:</Text>
-                        <View style={styles.urlContainer}>
-                            <TouchableOpacity
-                                onPress={() => openUrl(getVercelProjectUrl(org.vercel_project_id!), 'Vercel Project')}
-                                style={styles.urlTextContainer}
-                            >
-                                <Text style={styles.urlText} numberOfLines={1}>
-                                    {getVercelProjectUrl(org.vercel_project_id!)}
-                                </Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                onPress={() => copyToClipboard(getVercelProjectUrl(org.vercel_project_id!), 'Vercel Project URL')}
-                                style={styles.copyButton}
-                            >
-                                <Text style={styles.copyIcon}>📋</Text>
-                            </TouchableOpacity>
-                        </View>
+                <View style={styles.urlRow}>
+                    <Text style={styles.urlLabel}>Live Site:</Text>
+                    <View style={styles.urlContainer}>
+                        <TouchableOpacity
+                            onPress={() => openUrl(getLiveUrl(org), 'Live Site')}
+                            style={styles.urlTextContainer}
+                        >
+                            <Text style={styles.urlText} numberOfLines={1}>
+                                {getLiveUrl(org)}
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => copyToClipboard(getLiveUrl(org), 'Live Site URL')}
+                            style={styles.copyButton}
+                        >
+                            <Text style={styles.copyIcon}>📋</Text>
+                        </TouchableOpacity>
                     </View>
-                )}
-
-                {/* Deployment Link */}
-                {getDeploymentUrl(org) && (
-                    <View style={styles.urlRow}>
-                        <Text style={styles.urlLabel}>Live Site:</Text>
-                        <View style={styles.urlContainer}>
-                            <TouchableOpacity
-                                onPress={() => openUrl(getDeploymentUrl(org)!, 'Live Site')}
-                                style={styles.urlTextContainer}
-                            >
-                                <Text style={styles.urlText} numberOfLines={1}>
-                                    {getDeploymentUrl(org)}
-                                </Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                onPress={() => copyToClipboard(getDeploymentUrl(org)!, 'Live Site URL')}
-                                style={styles.copyButton}
-                            >
-                                <Text style={styles.copyIcon}>📋</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                )}
-
-                {/* Fallback if no Vercel info */}
-                {!org.vercel_project_id && (
-                    <Text style={styles.metaText}>No Vercel deployment</Text>
-                )}
+                </View>
             </View>
         </Card>
     );

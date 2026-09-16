@@ -6,13 +6,8 @@ import { Organization, CreateOrganizationData } from '../types';
 interface CreateOrgResult {
     success: boolean;
     organization?: Organization;
-    infrastructure?: {
-        success: boolean;
-        route53: string;
-        vercel: string;
-        domain?: string;
-        errors: string[];
-    };
+    /** The host the organization is served on, e.g. wgelectric.handytally.com */
+    domain?: string;
     error?: any;
 }
 
@@ -42,7 +37,7 @@ export const useOrganizations = () => {
     const createOrganization = async (orgData: CreateOrganizationData): Promise<CreateOrgResult> => {
         setCreating(true);
         try {
-            console.log('Creating organization with infrastructure:', orgData);
+            console.log('Creating organization:', orgData);
 
             // Validate input client-side
             if (!orgData.name?.trim() || !orgData.subdomain?.trim()) {
@@ -77,7 +72,7 @@ export const useOrganizations = () => {
             return {
                 success: true,
                 organization: data.organization,
-                infrastructure: data.infrastructure
+                domain: data.domain
             };
         } catch (error) {
             console.error('Error creating organization:', error);
@@ -112,8 +107,6 @@ export const useOrganizations = () => {
 
     const deleteOrganization = async (orgId: string) => {
         try {
-            // Note: In production, you might want to create a separate Edge Function
-            // to handle cleanup of DNS records and Vercel projects before deletion
             const { error } = await supabase
                 .from('organizations')
                 .delete()

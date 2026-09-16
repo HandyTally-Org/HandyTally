@@ -7,8 +7,6 @@ export interface Organization {
     subdomain: string;
     domain?: string;
     status: OrganizationStatus;
-    route53_hosted_zone_id?: string;
-    vercel_project_id?: string;
     created_at: string;
     updated_at: string;
 }

@@ -1,6 +1,6 @@
 # HandyTally — web app
 
-The main HandyTally application: an [Expo](https://expo.dev) / React Native project using [Expo Router](https://docs.expo.dev/router/introduction) for file-based routing and [React Native Paper](https://reactnativepaper.com) for UI. It targets the web first (deployed on AWS Amplify) and can be run on iOS and Android with the same code.
+The main HandyTally application: an [Expo](https://expo.dev) / React Native project using [Expo Router](https://docs.expo.dev/router/introduction) for file-based routing and [React Native Paper](https://reactnativepaper.com) for UI. It targets the web first (served as a static bundle by a Cloudflare Worker) and can be run on iOS and Android with the same code.
 
 See the [root README](../README.md) for the overall architecture, database and edge-function setup.
 
@@ -20,7 +20,7 @@ Other targets:
 | `npm run ios` / `npm run android` | Start directly on a simulator / emulator |
 | `npm test` | Jest (`jest-expo` preset) in watch mode |
 | `npm run lint` | `expo lint` |
-| `npx expo export --platform web` | Static bundle to `dist/` (what Amplify runs) |
+| `npx expo export --platform web` | Static bundle to `dist/` (what CI deploys) |
 
 ## Structure
 
@@ -44,7 +44,7 @@ lib/api.ts               Data-access helpers
 utils/invoiceHtml.ts     Single source of the invoice document HTML (screen, print, email)
 utils/format.ts, date.ts Formatting helpers
 styles/                  global.css, print.css
-amplify.yml              Amplify build spec
+wrangler.jsonc           Cloudflare Worker config (serves dist/ with an SPA fallback)
 ```
 
 ## Environment
@@ -56,7 +56,6 @@ Variables prefixed `EXPO_PUBLIC_` are inlined into the bundle at build time. Cop
 | `EXPO_PUBLIC_SUPABASE_URL` | Supabase API URL |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
 | `EXPO_PUBLIC_BASE_DOMAIN` | Root domain for organization subdomains |
-| `EXPO_PUBLIC_VERCEL_TEAM_ID` | Vercel team used for subdomain provisioning |
 
 Anything without the `EXPO_PUBLIC_` prefix is not available to the app.
 
@@ -69,4 +68,4 @@ Anything without the `EXPO_PUBLIC_` prefix is not available to the app.
 
 ## Deployment
 
-AWS Amplify runs [`amplify.yml`](amplify.yml): `npm ci` → `npx expo export` → publish `dist/`. Set the environment variables above in the Amplify console for each branch.
+Every push to `master` runs the `web-deploy` job in `.github/workflows/ci.yml`: `npm ci` → `npx expo export --platform web` → `wrangler deploy`, publishing `dist/` as the `handytally-web` Cloudflare Worker defined in [`wrangler.jsonc`](wrangler.jsonc). The `EXPO_PUBLIC_*` variables above are repository variables in GitHub Actions; the deploy needs the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets.

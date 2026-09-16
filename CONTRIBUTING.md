@@ -8,7 +8,7 @@ Follow [Getting started](README.md#getting-started) in the README. You need a Su
 
 ## Branches and tickets
 
-- `master` is the deployable branch. Amplify builds the web app from it.
+- `master` is the deployable branch. CI builds the web app from it and deploys the bundle to Cloudflare Workers.
 - Every change starts from a ticket, `HT-<n>`. Name the branch after it:
 
   ```

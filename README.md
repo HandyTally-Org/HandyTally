@@ -22,7 +22,7 @@
 
 HandyTally is a multi-tenant back-office for small contracting businesses. An organization signs up, gets its own subdomain, and runs its day-to-day from one place: clients, jobs, scheduling, labor, materials inventory, and estimates → work orders → invoices, including emailing the finished invoice to the client.
 
-The product is delivered as an **Expo / React Native** codebase that targets the web first (deployed on AWS Amplify) and can also ship to iOS and Android. **Supabase** (self-hosted) provides Postgres, auth, row-level security, storage and Deno edge functions.
+The product is delivered as an **Expo / React Native** codebase that targets the web first (served as a static bundle from Cloudflare Workers) and can also ship to iOS and Android. **Supabase** (self-hosted) provides Postgres, auth, row-level security, storage and Deno edge functions.
 
 ## Features
 
@@ -66,12 +66,11 @@ flowchart LR
 
   F1 --> RESEND[Resend]
   F2 --> RESEND
-  F3 --> R53[AWS Route 53]
-  F3 --> VERCEL[Vercel domains]
+  F3 --> ORG[(organizations)]
 ```
 
 - **Data access** goes straight from the client to Postgres through `supabase-js`; authorization is enforced by row-level security and `SECURITY DEFINER` functions, not by an application server.
-- **Edge functions** exist only where a secret or a third-party API is involved (email, calendar, DNS).
+- **Edge functions** exist only where a secret or a third-party API is involved (email, calendar, tenant creation with the service role).
 - **Invoice HTML** is rendered once in the client (`web/utils/invoiceHtml.ts`) and reused for on-screen preview, print, and the emailed document, so what the sender sees is what the client receives.
 
 ## Repository layout
@@ -86,7 +85,7 @@ flowchart LR
 │   ├── lib/                supabase client, api helpers
 │   ├── utils/              date/format helpers, invoiceHtml builder
 │   ├── styles/             global + print CSS
-│   └── amplify.yml         AWS Amplify build spec (npm ci → expo export → dist/)
+│   └── wrangler.jsonc      Cloudflare Worker config: serves dist/ with an SPA fallback
 ├── admin-app/              Superuser console (Expo, React Navigation)
 ├── supabase/
 │   ├── config.toml         Local Supabase CLI config
@@ -102,7 +101,7 @@ flowchart LR
 | Layer | Choice |
 | --- | --- |
 | UI | React Native 0.76, React 18, Expo SDK 52, Expo Router 4, React Native Paper 5 |
-| Web build | Metro static export → AWS Amplify |
+| Web build | Metro static export → Cloudflare Workers (static assets) |
 | Data | Supabase (Postgres 15, Auth, Storage), `@supabase/supabase-js` |
 | Serverless | Supabase Edge Functions (Deno) |
 | Email | Resend |
@@ -168,8 +167,7 @@ Each function reads its secrets from the project's function secrets — see [Con
 | --- | --- | --- |
 | `EXPO_PUBLIC_SUPABASE_URL` | web, admin-app | Supabase API URL |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | web, admin-app | Supabase anon key |
-| `EXPO_PUBLIC_BASE_DOMAIN` | web | Base domain used to build per-organization subdomains |
-| `EXPO_PUBLIC_VERCEL_TEAM_ID` | web | Vercel team used for subdomain provisioning |
+| `EXPO_PUBLIC_BASE_DOMAIN` | web, admin-app | Base domain used to build per-organization subdomains |
 
 ### Edge function secrets
 
@@ -182,12 +180,16 @@ Each function reads its secrets from the project's function secrets — see [Con
 | | `CALENDAR_FROM_ADDRESS` | Optional sender override for invites only |
 | | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Provided automatically by Supabase |
 | `create-organization` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Service-role client for cross-tenant writes |
-| | `BASE_DOMAIN` | Root domain for tenant subdomains |
-| | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_HOSTED_ZONE_ID` | Route 53 record creation |
-| | `VERCEL_TOKEN`, `VERCEL_TEAM_ID` | Attach the subdomain to the Vercel project |
-| | `GITHUB_TOKEN`, `GITHUB_REPO` | Optional repository dispatch after provisioning |
+| | `BASE_DOMAIN` | Root domain for tenant subdomains (default `handytally.com`) |
 
 Set them with `supabase secrets set KEY=value`. Never commit them; `.env*` is git-ignored.
+
+### CI secrets (GitHub Actions)
+
+| Secret | Purpose |
+| --- | --- |
+| `CLOUDFLARE_API_TOKEN` | Token from the "Edit Cloudflare Workers" template; used by the `web-deploy` job |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account that owns the `handytally-web` Worker |
 
 ## Data model
 
@@ -215,9 +217,9 @@ Core tables (see `supabase/migrations/` for the authoritative definitions):
 
 ## Deployment
 
-- **Web** — AWS Amplify builds from [`web/amplify.yml`](web/amplify.yml): `npm ci` → `npx expo export` → serve `dist/`. Set the `EXPO_PUBLIC_*` variables in the Amplify environment.
+- **Web** — every push to `master` runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml): `npm ci` → `npx expo export --platform web` → `wrangler deploy`, which publishes `dist/` as the `handytally-web` Cloudflare Worker described in [`web/wrangler.jsonc`](web/wrangler.jsonc). Pull requests run the build only.
 - **Database & functions** — `supabase db push` and `supabase functions deploy` against the linked project. Function secrets are managed with `supabase secrets set`.
-- **Tenant subdomains** — created at runtime by `create-organization` (Route 53 record + Vercel domain), not by the deploy pipeline.
+- **Tenant subdomains** — `create-organization` only inserts the row. A wildcard route on the Worker plus a proxied `*.handytally.com` DNS record serve every subdomain from the same bundle (HT-37); nothing is provisioned per tenant.
 
 ## Development workflow
 

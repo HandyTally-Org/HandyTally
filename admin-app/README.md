@@ -7,7 +7,7 @@ Only users whose `user_profiles.role` is `superuser` and `is_active` can sign in
 ## What it does
 
 - **Dashboard** — total users, organizations and active organizations at a glance
-- **Organizations** — create a new organization; this calls the `create-organization` edge function, which validates the subdomain, inserts the row, creates the Route 53 record and attaches the domain in Vercel
+- **Organizations** — create a new organization; this calls the `create-organization` edge function, which validates the subdomain and inserts the row; the wildcard Cloudflare route serves the new host with no further provisioning
 - **Users** — list, create and edit users and their organization memberships
 
 ## Run locally
