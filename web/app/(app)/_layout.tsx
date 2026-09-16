@@ -350,7 +350,7 @@ function CustomDrawerContent(props: any) {
 export default function AppLayout() {
   // HT-12: the (app) group needs a session. Nothing enforced this before; a
   // signed-out visitor got every screen with empty data.
-  const { session, isLoading } = useAuth();
+  const { session, isLoading, membershipLoaded, tenant } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -360,6 +360,12 @@ export default function AppLayout() {
   }, [isLoading, session, router]);
 
   if (isLoading || !session) {
+    return null;
+  }
+
+  // HT-38: on a customer host, wait for the membership check so a non-member
+  // never sees another organisation's screens before being signed out.
+  if (tenant.status === 'found' && !membershipLoaded) {
     return null;
   }
 
