@@ -28,6 +28,27 @@ export type OrganizationMember = {
   last_sign_in_at: string | null;
 };
 
+// "First Last", or the email when no name is on file. One rule for the Users
+// page and for everywhere a job's assignee is shown (HT-35).
+export function memberDisplayName(
+  m: Pick<OrganizationMember, 'first_name' | 'last_name' | 'email'>,
+): string {
+  return [m.first_name, m.last_name].filter(Boolean).join(' ') || m.email;
+}
+
+// HT-35: what to show for jobs.assigned_to. The members list comes from
+// list_organization_members, so a user who left the organisation (or belongs
+// to another one) resolves to "Unknown user" rather than a blank.
+export function assigneeLabel(
+  userId: string | null | undefined,
+  members: OrganizationMember[],
+): string {
+  if (!userId) return 'Unassigned';
+  const member = members.find(m => m.user_id === userId);
+  if (!member) return 'Unknown user';
+  return member.is_active ? memberDisplayName(member) : `${memberDisplayName(member)} (inactive)`;
+}
+
 export type InviteUserInput = {
   organizationId: string;
   email: string;

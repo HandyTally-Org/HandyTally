@@ -8,6 +8,7 @@ import {
   listOrganizationMembers,
   setMemberRole,
   setMemberActive,
+  memberDisplayName,
   ROLE_LABELS,
   type InvitableRole,
   type OrganizationMember,
@@ -156,8 +157,7 @@ export default function UsersScreen() {
   // which has no SMTP on the self-hosted instance (HT-30) and drops the mail
   // while reporting success. Invitations go through Resend instead.
 
-  const displayName = (m: OrganizationMember) =>
-    [m.first_name, m.last_name].filter(Boolean).join(' ') || m.email;
+  const displayName = memberDisplayName;
 
   const formatDate = (dateString?: string | null) => {
     if (!dateString) return 'Never';
