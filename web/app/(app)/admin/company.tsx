@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Image, ScrollView } from 'react-native';
 import { TextInput, Button, Text, Card, ActivityIndicator, IconButton, Snackbar } from 'react-native-paper';
-import { supabase } from '../lib/api';
+import { supabase } from '../../../lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useRequireAdmin } from '../../../hooks/useRequireAdmin';
