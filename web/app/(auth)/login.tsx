@@ -31,7 +31,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { signIn } = useAuth();
+  const { signIn, tenant, accessDenied } = useAuth();
   const router = useRouter();
 
   const handleLogin = async () => {
@@ -73,10 +73,13 @@ export default function LoginScreen() {
             style={styles.logoImage}
             resizeMode="contain"
           />
-          <Text style={styles.subtitle}>Sign in to your account</Text>
+          <Text style={styles.subtitle}>
+            {/* HT-38: on a customer subdomain the hostname names the organisation. */}
+            {tenant.status === 'found' ? `Sign in to ${tenant.organization.name}` : 'Sign in to your account'}
+          </Text>
         </View>
         
-        {error && <Text style={styles.error}>{error}</Text>}
+        {(error ?? accessDenied) && <Text style={styles.error}>{error ?? accessDenied}</Text>}
         
         <TextInput
           label="Email"
@@ -105,12 +108,15 @@ export default function LoginScreen() {
           Sign In
         </Button>
         
+        {/* HT-38: members of a customer organisation are invited by its admin, not self-registered. */}
+        {tenant.status !== 'found' && (
         <View style={styles.footer}>
           <Text>Don't have an account? </Text>
           <Link href="/(auth)/signup">
             <Text style={styles.link}>Sign up</Text>
           </Link>
         </View>
+        )}
       </View>
     </View>
   );

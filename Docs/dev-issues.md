@@ -128,7 +128,7 @@ Then, ideally, accept an `invoice_uid` instead of raw `to`/`html`, load the invo
 <a id="di-05"></a>
 ### DI-05 · Supabase URL and anon key hard-coded in the web client
 
-**Severity:** High · **Status:** Open.
+**Severity:** High · **Status:** Fixed by HT-38 (2026-09-16): `web/lib/supabase.ts` reads `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` with the production values as the fallback, and CI passes repository variables when they are set.
 
 **Evidence** — `web/lib/supabase.ts:6-7`:
 

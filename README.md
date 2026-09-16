@@ -36,7 +36,7 @@ The product is delivered as an **Expo / React Native** codebase that targets the
 | **Inventory & Services** | Materials with stock levels and low-stock warnings; service catalog with rates |
 | **Labor** | Labor entries against jobs |
 | **Admin** | Company profile and logo, user management backed directly by `auth.users` |
-| **Multi-tenancy** | Organizations with per-org subdomains, memberships and roles (`user`, `admin`, `superuser`) |
+| **Multi-tenancy** | Organizations with per-org subdomains, memberships and roles (`user`, `admin`, `superuser`); the subdomain in the address bar selects the organization and gates sign-in to its members |
 | **Superuser console** | Separate `admin-app` for creating organizations and managing users across tenants |
 
 ## Architecture
@@ -167,7 +167,7 @@ Each function reads its secrets from the project's function secrets — see [Con
 | --- | --- | --- |
 | `EXPO_PUBLIC_SUPABASE_URL` | web, admin-app | Supabase API URL |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | web, admin-app | Supabase anon key |
-| `EXPO_PUBLIC_BASE_DOMAIN` | web, admin-app | Base domain used to build per-organization subdomains |
+| `EXPO_PUBLIC_BASE_DOMAIN` | web, admin-app | Root domain; the web app derives the tenant from `<subdomain>.<base>` in the address bar (HT-38) |
 
 ### Edge function secrets
 

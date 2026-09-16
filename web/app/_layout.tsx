@@ -14,6 +14,7 @@ import { ActivityIndicator } from 'react-native-paper';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider } from '../contexts/AuthContext';
+import { TenantGate } from '../components/TenantGate';
 import '../styles/print.css';
 import { usePathname } from 'expo-router';
 import { supabase } from '../lib/supabase';
@@ -157,6 +158,8 @@ export default function RootLayout() {
       <PaperProvider theme={theme}>
         <SafeAreaProvider>
           <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+            {/* HT-38: unknown customer subdomains stop here. */}
+            <TenantGate>
             <Stack
               screenOptions={{
                 headerShown: false,
@@ -226,6 +229,7 @@ export default function RootLayout() {
           {isServer && <Slot />}
         </ThemeProvider>
             </Stack>
+            </TenantGate>
           </View>
         </SafeAreaProvider>
       </PaperProvider>

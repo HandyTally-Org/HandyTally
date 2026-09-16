@@ -17,11 +17,11 @@ jobs:
       run:
         working-directory: web
     env:
-      # Repository variables when set; placeholders otherwise so a PR can still
-      # be built. web/lib/supabase.ts currently hard-codes its URL and key
-      # (DI-05), so the bundle does not depend on these yet.
-      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || 'https://example.supabase.co' }}
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'ci-placeholder' }}
+      # Repository variables when set. The fallbacks are the production values,
+      # which are public by construction (they ship in the bundle) and match the
+      # defaults in web/lib/supabase.ts (HT-38).
+      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || 'https://supabase.axiappm.com' }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc2NTc3MDAwMCwiZXhwIjo0OTIxNDQzNjAwLCJyb2xlIjoiYW5vbiJ9.gO1H0XzlOU2T9ayabs3A5k6RsNLqqCUv93IG8k3wflk' }}
       EXPO_PUBLIC_BASE_DOMAIN: ${{ vars.EXPO_PUBLIC_BASE_DOMAIN || 'handytally.com' }}
     steps:
       - uses: actions/checkout@v4
@@ -34,6 +34,11 @@ jobs:
 
       - name: Install
         run: npm ci
+
+      - name: Unit tests
+        # Pure-function tests only (tenant hostname parsing, HT-38); no native or
+        # rendering setup is involved.
+        run: npx jest --ci --watchAll=false lib/tenant.test.ts
 
       - name: Export static web bundle
         # The same bundle the deploy job ships, so a PR that breaks the export
