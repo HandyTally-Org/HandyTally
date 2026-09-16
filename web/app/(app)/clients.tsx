@@ -4,6 +4,7 @@ import { Text, Button, Searchbar, Card, DataTable, IconButton, Dialog, Portal, S
 import { supabase } from '../../lib/api';
 import { styles as globalStyles } from '../../styles';
 import { ClientForm } from '../../app/components/clientform';
+import { ClientDialog } from '../../components/ClientDialog';
 import { useRouter } from 'expo-router';
 import { exportWorkbook, pickWorkbook, sheetRows, confirmAction } from '../../utils/excel';
 import { ImportExportButtons } from '../../components/ImportExportButtons';
@@ -819,35 +820,25 @@ export default function ClientsScreen() {
         </DataTable>
           </View>
       
-      {showAddForm && (
-        <View style={{ 
-          backgroundColor: '#ffffff',
-          borderRadius: 8,
-          marginTop: 16,
-          padding: 0,
-          elevation: 4,
-          shadowColor: 'rgba(0,0,0,0.1)',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.8,
-          shadowRadius: 2,
-        }}>
-          <ClientForm
-            client={editingClient}
-            onSubmit={(clientData) => {
-              if (editingClient) {
-                handleUpdateClient(editingClient.uid, clientData);
-              } else {
-                handleAddClient(clientData);
-              }
-            }}
-            onCancel={() => {
-              setShowAddForm(false);
-              setEditingClient(null);
-            }}
-            submitting={loading}
-          />
-        </View>
-      )}
+      <ClientDialog
+        visible={showAddForm}
+        title={editingClient ? 'Edit client' : 'Add client'}
+        subtitle={editingClient ? editingClient.name : 'A customer you do work for'}
+        client={editingClient}
+        submitLabel={editingClient ? 'Save changes' : 'Add client'}
+        submitting={loading}
+        onDismiss={() => {
+          setShowAddForm(false);
+          setEditingClient(null);
+        }}
+        onSubmit={(draft) => {
+          if (editingClient) {
+            handleUpdateClient(editingClient.uid, draft);
+          } else {
+            handleAddClient(draft);
+          }
+        }}
+      />
       
       {/* Delete Client Dialog */}
       <Portal>

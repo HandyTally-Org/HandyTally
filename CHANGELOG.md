@@ -17,6 +17,7 @@ All notable changes to HandyTally are recorded here. Ticket numbers refer to `HT
 - Invoice editor rebuilt as a Joist-style document layout.
 
 ### Changed
+- New Job (Jobs list and Schedule) and New Client open in the same compact centred dialog as the material and labor forms, with Cancel and the primary button in the dialog footer, instead of a full-width form below the list or a full-height modal. Editing a client from the list uses the same dialog.
 - **HT-23** — Add and edit forms on the Inventory and Labor pages open in a compact centred dialog with a shared header, two-column layout and footer instead of a full-width popup. Labor gains an edit dialog; its pencil icon previously did nothing.
 - **HT-34** — The five list pages share one Excel helper (`web/utils/excel.ts`) and one pair of export/import buttons with hover labels, replacing five copies of the file-reader and hidden-input code.
 - **HT-1** — Calendar invites are now iCalendar attachments emailed through Resend instead of events created on a Nylas calendar. Updates resend the same event; deletes send a cancellation. The `NYLAS_*` secrets are no longer used and the Nylas subscription can be dropped.
