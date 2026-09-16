@@ -3,24 +3,29 @@ import { ActivityIndicator, Linking, StyleSheet, Text, TouchableOpacity, View } 
 import { useAuth } from '../contexts/AuthContext';
 import { BASE_DOMAIN } from '../lib/tenant';
 
-// HT-38: on a customer subdomain, nothing renders until the hostname has been
-// resolved to an organisation, and an unknown subdomain gets this page
-// instead of the login form. Hosts without a tenant pass straight through.
+// HT-38: on a customer subdomain, an opaque layer covers the app until the
+// hostname has been resolved to an organisation, and an unknown subdomain
+// keeps the layer up with a "no company here" message.
+//
+// The children always render: Expo Router requires the root navigator to be
+// mounted on the very first render, so the gate cannot replace it (doing so
+// gave a blank page with "Attempted to navigate before mounting the Root
+// Layout"). Hosts without a tenant never show the layer.
 export function TenantGate({ children }: { children: ReactNode }) {
   const { tenant } = useAuth();
 
+  let layer: ReactNode = null;
+
   if (tenant.status === 'loading') {
-    return (
-      <View style={styles.center}>
+    layer = (
+      <View style={styles.layer}>
         <ActivityIndicator size="large" color="#444444" />
       </View>
     );
-  }
-
-  if (tenant.status === 'not_found') {
+  } else if (tenant.status === 'not_found') {
     const host = `${tenant.subdomain}.${BASE_DOMAIN}`;
-    return (
-      <View style={styles.center}>
+    layer = (
+      <View style={styles.layer}>
         <View style={styles.card}>
           <Text style={styles.title}>No company found at this address</Text>
           <Text style={styles.body}>
@@ -34,12 +39,19 @@ export function TenantGate({ children }: { children: ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      {layer}
+    </>
+  );
 }
 
 const styles = StyleSheet.create({
-  center: {
-    flex: 1,
+  layer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1000,
+    elevation: 1000,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
