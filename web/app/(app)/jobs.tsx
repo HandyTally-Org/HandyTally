@@ -12,6 +12,7 @@ import { useOrganizationMembers } from '../../hooks/useOrganizationMembers';
 import { assigneeLabel } from '../../utils/inviteUser';
 import { useLabels } from '../../hooks/useLabels';
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
+import { formatClientAddress, formatDateTime } from '../../utils/formatting';
 
 type Job = {
   uid: number;
@@ -19,6 +20,9 @@ type Job = {
   description: string;
   client_id: number;
   client_name: string;
+  // HT-56: read-only lookups from the selected client, shown as list columns.
+  client_address: string;
+  client_phone: string;
   start_date: string;
   end_date: string;
   status: string;
@@ -35,6 +39,9 @@ type Client = {
   email?: string;
   phone?: string;
   address?: string;
+  city?: string;
+  state?: string;
+  zip?: number | string;
 };
 
 export default function JobsScreen() {
@@ -80,22 +87,24 @@ export default function JobsScreen() {
     try {
       setLoading(true);
       
-      // Fetch jobs with client names
+      // Fetch jobs with the client's name and, for HT-56, address and phone
       const { data, error } = await supabase
         .from('jobs')
         .select(`
           *,
-          clients:client_id (name)
+          clients:client_id (name, address, city, state, zip, phone)
         `)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
       
       if (data) {
-        // Transform the data to include client_name
+        // Transform the data to include client_name, client_address, client_phone
         const transformedData = data.map(job => ({
           ...job,
-          client_name: job.clients?.name || 'Unknown Client'
+          client_name: job.clients?.name || 'Unknown Client',
+          client_address: formatClientAddress(job.clients),
+          client_phone: job.clients?.phone || ''
         }));
         
         setJobs(transformedData);
@@ -250,7 +259,9 @@ export default function JobsScreen() {
         ...editingJob,
         uid: jobId,           // Ensure uid is a number
         client_id: clientId,  // Ensure client_id is a number
-        client_name: client ? client.name : 'Unknown Client'
+        client_name: client ? client.name : 'Unknown Client',
+        client_address: formatClientAddress(client),
+        client_phone: client?.phone || ''
       };
       
       // Update the jobs list with the edited job
@@ -329,7 +340,9 @@ export default function JobsScreen() {
         ...data[0],
         uid: Number(data[0].uid),      // Ensure uid is a number
         client_id: clientId,           // Ensure client_id is a number
-        client_name: client ? client.name : 'Unknown Client'
+        client_name: client ? client.name : 'Unknown Client',
+        client_address: formatClientAddress(client),
+        client_phone: client?.phone || ''
       };
       
       setJobs([newJob, ...jobs]);
@@ -340,35 +353,6 @@ export default function JobsScreen() {
       alert(`Error: ${error.message || 'Failed to add job'}`);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const formatDate = (dateString: string | undefined) => {
-    if (!dateString) return '';
-    
-    try {
-      // Create a Date object from the ISO string
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return '';
-      
-      // Adjust for timezone to prevent date shifting
-      // This creates a local date object that preserves the date as stored
-      const timezoneOffset = date.getTimezoneOffset() * 60000; // offset in milliseconds
-      const localDate = new Date(date.getTime() - timezoneOffset);
-      
-      // Format date in MM/DD/YYYY format with proper timezone consideration
-      const formattedDate = localDate.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        timeZone: 'UTC' // Using UTC here prevents further shifting
-      });
-      
-      console.log(`Original date: ${dateString}, Formatted: ${formattedDate}`);
-      return formattedDate;
-    } catch (error) {
-      console.error('Error formatting date:', error);
-      return dateString; // Return original if there's an error
     }
   };
 
@@ -388,6 +372,8 @@ export default function JobsScreen() {
       filtered = filtered.filter(job => 
         job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         job.client_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        job.client_address?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        job.client_phone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         job.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         assigneeName(job).toLowerCase().includes(searchQuery.toLowerCase())
       );
@@ -408,6 +394,12 @@ export default function JobsScreen() {
           break;
         case 'client_name':
           comparison = (a.client_name || '').localeCompare(b.client_name || '');
+          break;
+        case 'client_address':
+          comparison = (a.client_address || '').localeCompare(b.client_address || '');
+          break;
+        case 'client_phone':
+          comparison = (a.client_phone || '').localeCompare(b.client_phone || '');
           break;
         case 'assigned_to':
           comparison = assigneeName(a).localeCompare(assigneeName(b));
@@ -987,6 +979,19 @@ export default function JobsScreen() {
               Client
             </DataTable.Title>
             <DataTable.Title
+              style={{ flex: 2 }}
+              onPress={() => handleSort('client_address')}
+              sortDirection={sortColumn === 'client_address' ? sortDirection : undefined}
+            >
+              Address
+            </DataTable.Title>
+            <DataTable.Title
+              onPress={() => handleSort('client_phone')}
+              sortDirection={sortColumn === 'client_phone' ? sortDirection : undefined}
+            >
+              Phone
+            </DataTable.Title>
+            <DataTable.Title
               onPress={() => handleSort('assigned_to')}
               sortDirection={sortColumn === 'assigned_to' ? sortDirection : undefined}
             >
@@ -1015,20 +1020,22 @@ export default function JobsScreen() {
           
           {loading ? (
             <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
-              <DataTable.Cell style={{ flex: 6 }}>
+              <DataTable.Cell style={{ flex: 8 }}>
                 <ActivityIndicator size="small" style={{ marginRight: 8 }} />
                 Loading jobs...
               </DataTable.Cell>
             </DataTable.Row>
           ) : getFilteredJobs().length === 0 ? (
             <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
-              <DataTable.Cell style={{ flex: 6 }}>No jobs found</DataTable.Cell>
+              <DataTable.Cell style={{ flex: 8 }}>No jobs found</DataTable.Cell>
             </DataTable.Row>
           ) : (
             getFilteredJobs().map(job => (
               <DataTable.Row key={job.uid} style={{ backgroundColor: '#ffffff' }}>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{job.title}</DataTable.Cell>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{job.client_name}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff', flex: 2 }}>{job.client_address}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{job.client_phone}</DataTable.Cell>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{assigneeName(job)}</DataTable.Cell>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
                   <select
@@ -1048,8 +1055,8 @@ export default function JobsScreen() {
                     ))}
                   </select>
                 </DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(job.start_date)}</DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(job.end_date)}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDateTime(job.start_date)}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDateTime(job.end_date)}</DataTable.Cell>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
                   <View style={styles.actionButtons}>
                     <IconButton
