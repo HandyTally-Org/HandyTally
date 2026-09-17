@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, Image, ScrollView } from 'react-native';
 import { TextInput, Button, Text, Card, ActivityIndicator, IconButton, Snackbar } from 'react-native-paper';
 import { supabase } from '../../../lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useRequireAdmin } from '../../../hooks/useRequireAdmin';
+import { useRefreshOnFocus } from '../../../hooks/useRefreshOnFocus';
 
 interface CompanyData {
   uid?: string;
@@ -47,10 +48,10 @@ export default function AdminPage() {
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const router = useRouter();
 
-  useEffect(() => {
+  useRefreshOnFocus(() => {
     fetchCompanyInfo();
     fetchSettings();
-  }, []);
+  });
 
   const fetchCompanyInfo = async () => {
     try {
