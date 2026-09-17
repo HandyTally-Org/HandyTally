@@ -109,7 +109,7 @@ export default function ClientDetailsScreen() {
     // HT-66: clients.zip is numeric, so a cleared field must go up as null and
     // anything that is not a number is rejected here instead of by Postgres.
     const zipText = String(editedClient.zip ?? '').trim();
-    if (zipText && !/^d+$/.test(zipText)) {
+    if (zipText && !/^\d+$/.test(zipText)) {
       alert('ZIP must contain digits only');
       return;
     }
