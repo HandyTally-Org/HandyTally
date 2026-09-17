@@ -30,6 +30,7 @@ All notable changes to HandyTally are recorded here. Ticket numbers refer to `HT
 - Invoice HTML generation extracted to `web/utils/invoiceHtml.ts` and shared by preview, print and email.
 
 ### Fixed
+- A signed-in user who lands on the login page (reload, back button, or an old cached bundle) is taken into the app instead of being shown the login form again.
 - Signing in reliably opens the app. The login screen navigated before the auth context had heard about the new session, so the app layout bounced the visitor straight back to the login page whenever the async auth event lost the race; the session is now set from the sign-in response itself.
 - **HT-55** — The Clients, Jobs, client detail, company settings and sidebar screens used their own Supabase client (`web/lib/api.ts` and two copies under `web/app/`) instead of the shared one, so their requests carried no tenant and bypassed the per-organization scoping; they now share the single client. Rows a superuser creates on `handytally.com` are stamped with their own organization instead of none, and the tenant lookup no longer errors on a request with no tenant header (`20260917150000_tenant_header_hardening.sql`). `handytally.com` and `www` no longer serve the app: they show where to sign in (your company's subdomain, or the demo) and the app runs only on customer hosts.
 - **HT-34** — Importing a Labor export failed for every row because the blank `unit` text was sent to a numeric column; the value is now parsed as a number and left out when blank.

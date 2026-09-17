@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, StyleSheet, Image } from 'react-native';
 import { Button, Text, TextInput } from 'react-native-paper';
 import { Link, useRouter } from 'expo-router';
@@ -31,8 +31,20 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { signIn, tenant, accessDenied } = useAuth();
+  const { signIn, tenant, accessDenied, session, isLoading, membershipLoaded } = useAuth();
   const router = useRouter();
+
+  // Someone who already has a session does not belong on the login page: a
+  // reload, the back button, or a lost navigation race (the pre-#54 bundle)
+  // could all leave a signed-in user staring at the login form. Wait for the
+  // membership check on customer hosts so a non-member is signed out (with
+  // the accessDenied message) instead of bounced into the app.
+  useEffect(() => {
+    if (isLoading || !session) return;
+    if (tenant.status === 'loading') return;
+    if (tenant.status === 'found' && !membershipLoaded) return;
+    router.replace('/');
+  }, [isLoading, session, tenant.status, membershipLoaded, router]);
 
   const handleLogin = async () => {
     if (!email || !password) {
