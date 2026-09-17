@@ -10,7 +10,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from 'date-fns';
-import { JobForm } from '../../../components/JobForm';
+import { JobForm, type JobFormHandle } from '../../../components/JobForm';
 import { useOrganizationMembers } from '../../../hooks/useOrganizationMembers';
 import { assigneeLabel } from '../../../utils/inviteUser';
 import { InvoiceDetails } from '../../../components/InvoiceDetails';
@@ -202,6 +202,8 @@ export default function JobDetailsScreen() {
   // HT-35: turns jobs.assigned_to into a name on the Info tab.
   const { members, loading: membersLoading } = useOrganizationMembers();
   const [selectedTab, setSelectedTab] = useState('info');
+  // HT-61: lets the Unsaved Changes dialog's Save button submit the edit form.
+  const jobFormRef = useRef<JobFormHandle>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [invoices, setInvoices] = useState([]);
   const [attachments, setAttachments] = useState([]);
@@ -1188,29 +1190,37 @@ export default function JobDetailsScreen() {
     };
   }, [editMode, hasUnsavedChanges]);
 
-  // Add a function to handle navigation item clicks
+  // HT-61: switching tabs from the left nav. The edit form only lives on the
+  // Info tab, so leaving Info ends edit mode; if the form has unsaved changes
+  // the Unsaved Changes dialog asks first and finishes the switch afterwards.
   const handleNavigationItemClick = (tab) => {
-    if (editMode && hasUnsavedChanges) {
-      // Show confirmation dialog
-      setShowExitConfirmation(true);
-      // Store the tab they were trying to navigate to
+    if (editMode && hasUnsavedChanges && tab !== 'info') {
       setPendingNavigation(tab);
-    } else {
-      // If not in edit mode or no unsaved changes, just switch tabs
-      setSelectedTab(tab);
+      setShowExitConfirmation(true);
+      return;
     }
+    if (editMode && tab !== 'info') {
+      setEditMode(false);
+    }
+    setSelectedTab(tab);
   };
 
-  // Add a function to handle job form changes
+  // JobForm reports every edit here; the flag drives the tab guard above,
+  // Cancel, and the browser's leave-page warning.
   const handleJobFormChange = () => {
-    setHasChanges(true);
+    setHasUnsavedChanges(true);
   };
 
-  // Add a function to handle form submission
+  // Save from the form (or from the Unsaved Changes dialog) leaves edit mode
+  // and, when a tab click prompted the save, moves on to that tab.
   const handleUpdateJobWithConfirmation = async (updatedJobData) => {
     await handleUpdateJob(updatedJobData);
     setHasUnsavedChanges(false);
     setEditMode(false);
+    if (pendingNavigation) {
+      setSelectedTab(pendingNavigation);
+      setPendingNavigation(null);
+    }
   };
 
   // Add a function to handle cancellation
@@ -1567,11 +1577,12 @@ export default function JobDetailsScreen() {
   }
 
   const renderContent = () => {
-    // If in edit mode, show the JobForm instead of the regular content
-    if (editMode) {
+    // The edit form replaces the Info tab only; every other tab keeps its own content
+    if (editMode && selectedTab === 'info') {
       return (
         <View style={styles.editFormContainer}>
-          <JobForm 
+          <JobForm
+            ref={jobFormRef}
             job={job}
             onSubmit={handleUpdateJobWithConfirmation}
             onCancel={handleCancelEdit}
@@ -2496,13 +2507,11 @@ export default function JobDetailsScreen() {
               selectedTab === 'info' && styles.selectedItem
             ]}
             onPress={() => handleNavigationItemClick('info')}
-            disabled={editMode && hasUnsavedChanges}
           >
             <MaterialIcons name="dashboard" size={24} color="#666666" />
             <Text style={[
               styles.navigationText,
-              selectedTab === 'info' && styles.selectedText,
-              (editMode && hasUnsavedChanges) ? { color: '#cccccc' } : {}
+              selectedTab === 'info' && styles.selectedText
             ]}>Info</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -2511,7 +2520,6 @@ export default function JobDetailsScreen() {
               selectedTab === 'invoices' && styles.selectedItem
             ]}
             onPress={() => handleNavigationItemClick('invoices')}
-            disabled={editMode && hasUnsavedChanges}
           >
             <MaterialCommunityIcons
               name="file-document-outline"
@@ -2520,8 +2528,7 @@ export default function JobDetailsScreen() {
             />
             <Text style={[
               styles.navigationText,
-              selectedTab === 'invoices' && styles.selectedText,
-              (editMode && hasUnsavedChanges) ? { color: '#cccccc' } : {}
+              selectedTab === 'invoices' && styles.selectedText
             ]}>Invoices</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -2530,7 +2537,6 @@ export default function JobDetailsScreen() {
               selectedTab === 'costs' && styles.selectedItem
             ]}
             onPress={() => handleNavigationItemClick('costs')}
-            disabled={editMode && hasUnsavedChanges}
           >
             <MaterialCommunityIcons
               name="currency-usd"
@@ -2539,8 +2545,7 @@ export default function JobDetailsScreen() {
             />
             <Text style={[
               styles.navigationText,
-              selectedTab === 'costs' && styles.selectedText,
-              (editMode && hasUnsavedChanges) ? { color: '#cccccc' } : {}
+              selectedTab === 'costs' && styles.selectedText
             ]}>Costs</Text>
           </TouchableOpacity>
 
@@ -2552,7 +2557,6 @@ export default function JobDetailsScreen() {
               selectedTab === 'notes' && styles.selectedItem
             ]}
             onPress={() => handleNavigationItemClick('notes')}
-            disabled={editMode && hasUnsavedChanges}
           >
             <MaterialCommunityIcons
               name="note-text-outline"
@@ -2561,8 +2565,7 @@ export default function JobDetailsScreen() {
             />
             <Text style={[
               styles.navigationText,
-              selectedTab === 'notes' && styles.selectedText,
-              (editMode && hasUnsavedChanges) ? { color: '#cccccc' } : {}
+              selectedTab === 'notes' && styles.selectedText
             ]}>Notes</Text>
           </TouchableOpacity>
          
@@ -2681,14 +2684,18 @@ export default function JobDetailsScreen() {
               setShowExitConfirmation(false);
             }}>Discard</Button>
             
-            <Button onPress={() => setShowExitConfirmation(false)}>Cancel</Button>
-            
-            <Button mode="contained" onPress={() => {
-              // Trigger save function
-              // This would need to call your form's submit handler
-              // After saving, it would navigate to the pending tab
-              // For now, just close the dialog
+            <Button onPress={() => {
+              // Stay on the form; forget the tab that was clicked
+              setPendingNavigation(null);
               setShowExitConfirmation(false);
+            }}>Cancel</Button>
+
+            <Button mode="contained" onPress={() => {
+              // Submit the form; handleUpdateJobWithConfirmation then leaves
+              // edit mode and opens the pending tab. A validation failure
+              // keeps the form open with its own message.
+              setShowExitConfirmation(false);
+              jobFormRef.current?.submit();
             }}>Save</Button>
           </Dialog.Actions>
         </Dialog>
