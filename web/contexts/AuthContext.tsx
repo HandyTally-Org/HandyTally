@@ -192,15 +192,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshMembership();
   }, [isLoading, refreshMembership]);
 
+  // The session is set from the response, not only from onAuthStateChange:
+  // the login screen navigates to the (app) group as soon as signIn resolves,
+  // and that group's layout bounces any visitor without a session back to
+  // /login. Waiting for the async auth event loses that race, which showed up
+  // as "signing in just refreshes the login page" (the second half of HT-29).
   const signIn = async (email: string, password: string) => {
     setAccessDenied(null);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
+    if (data.session) setSession(data.session);
   };
 
   const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) throw error;
+    if (data.session) setSession(data.session);
   };
 
   const signOut = async () => {
