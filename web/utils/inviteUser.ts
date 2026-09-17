@@ -141,3 +141,33 @@ export type DeleteUserResult = {
 export async function deleteUserAccount(input: { userId: string; organizationId: string }): Promise<DeleteUserResult> {
   return invokeFunction<DeleteUserResult>('delete-user', input);
 }
+
+export type UserImportUpdate = {
+  user_id: string;
+  role?: InvitableRole;
+  is_active?: boolean;
+  first_name?: string;
+  last_name?: string;
+};
+
+export type UserImportRemoval = {
+  user_id: string;
+  /** Memberships the person still holds elsewhere; 0 means the account can go. */
+  memberships_left: number;
+};
+
+// HT-46: apply the membership half of an Excel import in one transaction;
+// the database refuses the whole call when any row breaks a guard.
+export async function applyUserImport(
+  organizationId: string,
+  updates: UserImportUpdate[],
+  removals: string[],
+): Promise<UserImportRemoval[]> {
+  const { data, error } = await supabase.rpc('apply_user_import', {
+    org_id: organizationId,
+    updates,
+    removals,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as UserImportRemoval[];
+}
