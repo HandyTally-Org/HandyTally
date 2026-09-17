@@ -9,6 +9,8 @@ import { useRefreshOnFocus } from '../../../hooks/useRefreshOnFocus';
 import { TwoPane } from '../../../components/TwoPane';
 import { NAV_ITEMS, type NavItem } from '../../../constants/navigation';
 import { DEFAULT_NAV_SETTINGS, editableNavOrder, toNavSettings, type NavSettings } from '../../../constants/organizationSettings';
+import { NAV_KEY_TO_SECTION } from '../../../constants/customFields';
+import { CustomFieldsEditor } from '../../../components/settings/CustomFieldsEditor';
 
 // HT-50: Admin > Settings. Left: the sidebar entries in the organisation's
 // order, each with a drag handle (web), up/down buttons, a visibility switch
@@ -19,7 +21,9 @@ import { DEFAULT_NAV_SETTINGS, editableNavOrder, toNavSettings, type NavSettings
 // editor back to the built-in order without saving.
 
 /** Sections that have records of their own, and so a gear. */
-const SECTIONS_WITH_FIELDS = new Set(['clients', 'jobs', 'invoices', 'labor', 'inventory']);
+const SECTIONS_WITH_FIELDS = new Set(Object.keys(NAV_KEY_TO_SECTION));
+/** Sections whose records carry a custom_fields column today (HT-52); jobs and invoices follow with HT-53. */
+const SECTIONS_WITH_FIELD_STORAGE = new Set(['clients', 'inventory', 'labor']);
 /** Sections with status or tag values a Labels tab can rename (HT-49 sections). */
 const SECTIONS_WITH_LABELS = new Set(['clients', 'jobs', 'invoices']);
 
@@ -41,7 +45,13 @@ export default function SettingsScreen() {
 
   // Take the saved settings whenever they (re)load, unless the admin is mid-edit.
   const draft = useMemo(() => toNavSettings(ordered, hidden), [ordered, hidden]);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(savedNav);
+  // Compare against what the saved settings resolve to, so an empty saved
+  // order (the defaults) does not count as a change.
+  const savedDraft = useMemo(
+    () => toNavSettings(editableNavOrder(NAV_ITEMS, savedNav), new Set(savedNav.hidden)),
+    [savedNav],
+  );
+  const dirty = JSON.stringify(draft) !== JSON.stringify(savedDraft);
   useEffect(() => {
     if (!settingsLoaded || dirty) return;
     setOrdered(editableNavOrder(NAV_ITEMS, settings.nav));
@@ -114,14 +124,18 @@ export default function SettingsScreen() {
             updated_by: (await supabase.auth.getUser()).data.user?.id ?? null,
           },
           { onConflict: 'organization_id' },
-        );
+        )
+        // Ask for the row back: PostgREST answers a failed minimal-return
+        // upsert with an empty body, which would hide the reason.
+        .select('organization_id');
       if (error) throw error;
       setSavedNav(draft);
       await refreshSettings();
       setSnackbar('Settings saved');
     } catch (error: any) {
       console.error('Error saving settings:', error);
-      setSnackbar(`Could not save: ${error.message}`);
+      const reason = error?.message || error?.details || error?.hint || (typeof error === 'string' ? error : JSON.stringify(error));
+      setSnackbar(`Could not save: ${reason}`);
     } finally {
       setSaving(false);
     }
@@ -209,7 +223,6 @@ export default function SettingsScreen() {
 
   const detail = selected ? (
     <View style={styles.detail}>
-      <Text variant="titleMedium" style={styles.paneTitle}>{selected.label}</Text>
       <SegmentedButtons
         value={tab}
         onValueChange={value => setTab(value as PaneTab)}
@@ -220,9 +233,13 @@ export default function SettingsScreen() {
         style={styles.tabs}
       />
       {tab === 'fields' ? (
-        <Text style={styles.hint}>
-          Custom fields for {selected.label} are on their way: they will show on the add/edit form and the detail page.
-        </Text>
+        SECTIONS_WITH_FIELD_STORAGE.has(selected.key) ? (
+          <CustomFieldsEditor section={NAV_KEY_TO_SECTION[selected.key]} sectionLabel={selected.label} />
+        ) : (
+          <Text style={styles.hint}>
+            Custom fields for {selected.label} are on their way: they will show on the add/edit form and the detail page.
+          </Text>
+        )
       ) : (
         <Text style={styles.hint}>
           Renaming and recolouring {selected.label} statuses and tags is on its way.
@@ -319,6 +336,6 @@ const styles = StyleSheet.create({
   pinnedNote: { color: '#999', fontSize: 12, marginRight: 8 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16, flexWrap: 'wrap' },
   unsaved: { color: '#b45309' },
-  detail: { padding: 16 },
+  detail: { padding: 16, flex: 1 },
   tabs: { marginBottom: 16, maxWidth: 320 },
 });

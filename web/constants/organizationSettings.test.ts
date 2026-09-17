@@ -64,5 +64,11 @@ describe('parseOrganizationSettings', () => {
     expect(parsed.nav).toEqual({ order: ['jobs'], hidden: [] });
     expect(parsed.labels).toEqual({});
     expect(parsed.customFields).toEqual({});
+    expect(
+      parseOrganizationSettings({
+        organization_id: 'x',
+        custom_fields: { clients: [{ key: 'po', label: 'PO', type: 'text', required: false }] },
+      }).customFields.clients,
+    ).toEqual([{ key: 'po', label: 'PO', type: 'text', required: false, options: undefined }]);
   });
 });

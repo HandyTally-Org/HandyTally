@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import { TextInput } from 'react-native-paper';
+import { CustomFieldInputs } from './CustomFields';
+import { useCustomFields } from '../hooks/useCustomFields';
+import { normalizeCustomValues, validateCustomValues, type CustomFieldValues } from '../constants/customFields';
 import { FormDialog, FormDialogFooter, FormField, FormRow, inputStyle } from './FormDialog';
 
 // The add/edit popup for a client on the Clients list, in the same shell as
@@ -12,11 +15,13 @@ export type ClientDraft = {
   phone: string;
   address: string;
   notes: string;
+  /** HT-52: values of the organisation's custom fields, keyed by field key. */
+  custom_fields: CustomFieldValues;
 };
 
 type ClientLike = Partial<ClientDraft> & { uid?: string };
 
-type Values = ClientDraft;
+type Values = Omit<ClientDraft, 'custom_fields'>;
 type Errors = Partial<Record<keyof Values, string>>;
 
 const EMPTY: Values = { name: '', email: '', phone: '', address: '', notes: '' };
@@ -56,13 +61,24 @@ export function ClientDialog({
 }: ClientDialogProps) {
   const [values, setValues] = useState<Values>(EMPTY);
   const [errors, setErrors] = useState<Errors>({});
+  // HT-52: the organisation's custom fields for this section.
+  const customDefs = useCustomFields('clients');
+  const [customValues, setCustomValues] = useState<CustomFieldValues>({});
+  const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
 
   // Start from the client (or blank) every time the popup opens.
   useEffect(() => {
     if (!visible) return;
     setValues(toValues(client));
     setErrors({});
+    setCustomValues({ ...(client?.custom_fields ?? {}) });
+    setCustomErrors({});
   }, [visible, client]);
+
+  const changeCustom = (key: string, value: unknown) => {
+    setCustomValues((current) => ({ ...current, [key]: value }));
+    if (customErrors[key]) setCustomErrors((current) => ({ ...current, [key]: '' }));
+  };
 
   const change = (field: keyof Values) => (text: string) => {
     setValues((current) => ({ ...current, [field]: text }));
@@ -75,8 +91,10 @@ export function ClientDialog({
       name: values.name.trim() ? undefined : 'Name is required',
       email: email && !/\S+@\S+\.\S+/.test(email) ? 'Enter a valid email address' : undefined,
     };
-    if (Object.values(next).some(Boolean)) {
+    const nextCustom = validateCustomValues(customDefs, customValues);
+    if (Object.values(next).some(Boolean) || Object.keys(nextCustom).length > 0) {
       setErrors(next);
+      setCustomErrors(nextCustom);
       return;
     }
     onSubmit({
@@ -85,6 +103,7 @@ export function ClientDialog({
       phone: values.phone.trim(),
       address: values.address.trim(),
       notes: values.notes.trim(),
+      custom_fields: normalizeCustomValues(customDefs, customValues),
     });
   };
 
@@ -157,6 +176,8 @@ export function ClientDialog({
           style={inputStyle}
         />
       </FormField>
+
+      <CustomFieldInputs defs={customDefs} values={customValues} errors={customErrors} onChange={changeCustom} />
     </FormDialog>
   );
 }

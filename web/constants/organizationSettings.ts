@@ -1,4 +1,5 @@
 import type { OrganizationLabels } from './labels';
+import { parseCustomFieldDefs, type OrganizationCustomFields } from './customFields';
 import type { NavItem } from './navigation';
 
 // HT-50: the organisation's Settings row (organization_settings) as the app
@@ -17,8 +18,8 @@ export type NavSettings = {
 export type OrganizationSettings = {
   nav: NavSettings;
   labels: OrganizationLabels;
-  /** HT-52 / HT-53 define the shape; carried through untouched until then. */
-  customFields: Record<string, unknown>;
+  /** organization_settings.custom_fields: field definitions per section (HT-52). */
+  customFields: OrganizationCustomFields;
 };
 
 export const DEFAULT_NAV_SETTINGS: NavSettings = { order: [], hidden: [] };
@@ -50,7 +51,7 @@ export function parseOrganizationSettings(row: OrganizationSettingsRow | null | 
   return {
     nav: { order: stringList(nav.order), hidden: stringList(nav.hidden) },
     labels: record(row.labels) as OrganizationLabels,
-    customFields: record(row.custom_fields),
+    customFields: parseCustomFieldDefs(row.custom_fields),
   };
 }
 

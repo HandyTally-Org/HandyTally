@@ -37,8 +37,9 @@ jobs:
 
       - name: Unit tests
         # Pure-function tests only (tenant hostname parsing, HT-38; label merging,
-        # HT-49; nav order rules, HT-50); no native or rendering setup is involved.
-        run: npx jest --ci --watchAll=false lib/tenant.test.ts constants/labels.test.ts constants/organizationSettings.test.ts
+        # HT-49; nav order rules, HT-50; custom field rules, HT-52); no native or
+        # rendering setup is involved.
+        run: npx jest --ci --watchAll=false lib/tenant.test.ts constants/labels.test.ts constants/organizationSettings.test.ts constants/customFields.test.ts
 
       - name: Export static web bundle
         # The same bundle the deploy job ships, so a PR that breaks the export
