@@ -106,6 +106,15 @@ export default function ClientDetailsScreen() {
     setCustomErrors(nextCustomErrors);
     if (Object.keys(nextCustomErrors).length > 0) return;
 
+    // HT-66: clients.zip is numeric, so a cleared field must go up as null and
+    // anything that is not a number is rejected here instead of by Postgres.
+    const zipText = String(editedClient.zip ?? '').trim();
+    if (zipText && !/^d+$/.test(zipText)) {
+      alert('ZIP must contain digits only');
+      return;
+    }
+    const zip = zipText ? Number(zipText) : null;
+
     try {
       setSaving(true);
       
@@ -119,7 +128,7 @@ export default function ClientDetailsScreen() {
           address: editedClient.address,
           city: editedClient.city,
           state: editedClient.state,
-          zip: editedClient.zip,
+          zip,
           tag: editedClient.tag,
           notes: editedClient.notes
         })
