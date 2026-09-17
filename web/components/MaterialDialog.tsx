@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { TextInput } from 'react-native-paper';
+import { CustomFieldInputs } from './CustomFields';
+import { useCustomFields } from '../hooks/useCustomFields';
+import { normalizeCustomValues, validateCustomValues, type CustomFieldValues } from '../constants/customFields';
 import { FormDialog, FormDialogFooter, FormField, FormRow, inputStyle } from './FormDialog';
 import type { Material } from '../app/(app)/inventory';
 
 /** The fields a user can type for a material; everything else is set by the database. */
-export type MaterialDraft = Pick<Material, 'sku' | 'name' | 'description' | 'cost' | 'quantity' | 'supplier' | 'category'>;
+export type MaterialDraft = Pick<Material, 'sku' | 'name' | 'description' | 'cost' | 'quantity' | 'supplier' | 'category' | 'custom_fields'>;
 
 type Values = Record<'sku' | 'name' | 'description' | 'quantity' | 'cost' | 'supplier' | 'category', string>;
 type Errors = Partial<Record<keyof Values, string>>;
@@ -53,13 +56,24 @@ export function MaterialDialog({
 }: MaterialDialogProps) {
   const [values, setValues] = useState<Values>(EMPTY);
   const [errors, setErrors] = useState<Errors>({});
+  // HT-52: the organisation's custom fields for this section.
+  const customDefs = useCustomFields('materials');
+  const [customValues, setCustomValues] = useState<CustomFieldValues>({});
+  const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
 
   // Start from the material (or blank) every time the popup opens.
   useEffect(() => {
     if (!visible) return;
     setValues(toValues(material));
     setErrors({});
+    setCustomValues({ ...(material?.custom_fields ?? {}) });
+    setCustomErrors({});
   }, [visible, material]);
+
+  const changeCustom = (key: string, value: unknown) => {
+    setCustomValues((current) => ({ ...current, [key]: value }));
+    if (customErrors[key]) setCustomErrors((current) => ({ ...current, [key]: '' }));
+  };
 
   const change = (field: keyof Values) => (text: string) => {
     setValues((current) => ({ ...current, [field]: text }));
@@ -72,8 +86,10 @@ export function MaterialDialog({
       cost: numberError(values.cost),
       quantity: numberError(values.quantity),
     };
-    if (Object.values(next).some(Boolean)) {
+    const nextCustom = validateCustomValues(customDefs, customValues);
+    if (Object.values(next).some(Boolean) || Object.keys(nextCustom).length > 0) {
       setErrors(next);
+      setCustomErrors(nextCustom);
       return;
     }
     onSubmit({
@@ -84,6 +100,7 @@ export function MaterialDialog({
       quantity: values.quantity.trim() ? Number(values.quantity) : 0,
       supplier: values.supplier.trim(),
       category: values.category.trim(),
+      custom_fields: normalizeCustomValues(customDefs, customValues),
     });
   };
 
@@ -164,6 +181,8 @@ export function MaterialDialog({
           style={inputStyle}
         />
       </FormField>
+
+      <CustomFieldInputs defs={customDefs} values={customValues} errors={customErrors} onChange={changeCustom} />
     </FormDialog>
   );
 }

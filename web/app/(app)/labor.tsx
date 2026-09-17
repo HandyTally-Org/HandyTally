@@ -15,6 +15,8 @@ export type Service = {
   rate: number;
   unit: string;
   category: string;
+  /** HT-52: values of the organisation's custom fields, keyed by field key. */
+  custom_fields?: Record<string, unknown>;
 };
 
 export default function ServicesScreen() {

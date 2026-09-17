@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import { TextInput } from 'react-native-paper';
+import { CustomFieldInputs } from './CustomFields';
+import { useCustomFields } from '../hooks/useCustomFields';
+import { normalizeCustomValues, validateCustomValues, type CustomFieldValues } from '../constants/customFields';
 import { FormDialog, FormDialogFooter, FormField, FormRow, inputStyle } from './FormDialog';
 import type { Service } from '../app/(app)/labor';
 
@@ -8,7 +11,7 @@ import type { Service } from '../app/(app)/labor';
 // "hour" whenever the column is empty.
 
 /** The fields a user can type for a labor code; everything else is set by the database. */
-export type ServiceDraft = Pick<Service, 'name' | 'description' | 'rate' | 'category'>;
+export type ServiceDraft = Pick<Service, 'name' | 'description' | 'rate' | 'category' | 'custom_fields'>;
 
 type Values = Record<'name' | 'description' | 'rate' | 'category', string>;
 type Errors = Partial<Record<keyof Values, string>>;
@@ -54,13 +57,24 @@ export function ServiceDialog({
 }: ServiceDialogProps) {
   const [values, setValues] = useState<Values>(EMPTY);
   const [errors, setErrors] = useState<Errors>({});
+  // HT-52: the organisation's custom fields for this section.
+  const customDefs = useCustomFields('services');
+  const [customValues, setCustomValues] = useState<CustomFieldValues>({});
+  const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
 
   // Start from the service (or blank) every time the popup opens.
   useEffect(() => {
     if (!visible) return;
     setValues(toValues(service));
     setErrors({});
+    setCustomValues({ ...(service?.custom_fields ?? {}) });
+    setCustomErrors({});
   }, [visible, service]);
+
+  const changeCustom = (key: string, value: unknown) => {
+    setCustomValues((current) => ({ ...current, [key]: value }));
+    if (customErrors[key]) setCustomErrors((current) => ({ ...current, [key]: '' }));
+  };
 
   const change = (field: keyof Values) => (text: string) => {
     setValues((current) => ({ ...current, [field]: text }));
@@ -72,8 +86,10 @@ export function ServiceDialog({
       name: values.name.trim() ? undefined : 'Name is required',
       rate: rateError(values.rate),
     };
-    if (Object.values(next).some(Boolean)) {
+    const nextCustom = validateCustomValues(customDefs, customValues);
+    if (Object.values(next).some(Boolean) || Object.keys(nextCustom).length > 0) {
       setErrors(next);
+      setCustomErrors(nextCustom);
       return;
     }
     onSubmit({
@@ -81,6 +97,7 @@ export function ServiceDialog({
       description: values.description.trim(),
       rate: Number(values.rate),
       category: values.category.trim(),
+      custom_fields: normalizeCustomValues(customDefs, customValues),
     });
   };
 
@@ -141,6 +158,8 @@ export function ServiceDialog({
           style={inputStyle}
         />
       </FormField>
+
+      <CustomFieldInputs defs={customDefs} values={customValues} errors={customErrors} onChange={changeCustom} />
     </FormDialog>
   );
 }

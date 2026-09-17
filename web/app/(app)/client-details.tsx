@@ -8,6 +8,9 @@ import { formatDate } from '../../utils/formatting';
 import { MaterialIcons } from '@expo/vector-icons';
 import { NotesSection } from '../../components/NotesSection';
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
+import { useCustomFields } from '../../hooks/useCustomFields';
+import { CustomFieldInputs } from '../../components/CustomFields';
+import { normalizeCustomValues, validateCustomValues } from '../../constants/customFields';
 
 export default function ClientDetailsScreen() {
   const router = useRouter();
@@ -17,8 +20,11 @@ export default function ClientDetailsScreen() {
   const [invoices, setInvoices] = useState([]);
   const [activeSection, setActiveSection] = useState('info');
   const [loading, setLoading] = useState(true);
-  const [editedClient, setEditedClient] = useState(null);
+  const [editedClient, setEditedClient] = useState<any>(null);
   const [saving, setSaving] = useState(false);
+  // HT-52: the organisation's custom fields, edited alongside the built-in ones.
+  const customDefs = useCustomFields('clients');
+  const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
   const [jobToDelete, setJobToDelete] = useState<string | null>(null);
   const [invoiceToDelete, setInvoiceToDelete] = useState<string | null>(null);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
@@ -93,12 +99,18 @@ export default function ClientDetailsScreen() {
   const handleSaveClient = async () => {
     if (!editedClient) return;
     
+    const customValues = editedClient.custom_fields ?? {};
+    const nextCustomErrors = validateCustomValues(customDefs, customValues);
+    setCustomErrors(nextCustomErrors);
+    if (Object.keys(nextCustomErrors).length > 0) return;
+
     try {
       setSaving(true);
       
       const { error } = await supabase
         .from('clients')
         .update({
+          custom_fields: normalizeCustomValues(customDefs, customValues),
           name: editedClient.name,
           email: editedClient.email,
           phone: editedClient.phone,
@@ -418,7 +430,17 @@ export default function ClientDetailsScreen() {
                   multiline
                   numberOfLines={4}
                 />
-                
+
+                <CustomFieldInputs
+                  defs={customDefs}
+                  values={editedClient?.custom_fields ?? {}}
+                  errors={customErrors}
+                  onChange={(key, value) => {
+                    setEditedClient({ ...editedClient, custom_fields: { ...(editedClient?.custom_fields ?? {}), [key]: value } });
+                    if (customErrors[key]) setCustomErrors(current => ({ ...current, [key]: '' }));
+                  }}
+                />
+
                 <Button 
                   mode="contained" 
                   onPress={handleSaveClient}
