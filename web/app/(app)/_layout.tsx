@@ -1,16 +1,17 @@
 import { Drawer } from 'expo-router/drawer';
 import { usePathname, useRouter } from 'expo-router';
-import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions } from 'react-native';
-import { DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawer';
+import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import { DrawerContentScrollView } from '@react-navigation/drawer';
 import { useState, useEffect } from 'react';
 import {supabase} from "@/lib/supabase";
 import { useAuth } from '../../contexts/AuthContext';
+import { NAV_ITEMS } from '../../constants/navigation';
 
 // Custom drawer content component
 function CustomDrawerContent(props: any) {
   const [isCollapsed, setIsCollapsed] = useState(true);
-  const [adminExpanded, setAdminExpanded] = useState(false);
+  const [submenuOpen, setSubmenuOpen] = useState<Record<string, boolean>>({});
   const router = useRouter();
   const pathname = usePathname();
   // HT-12: only organisation admins (and superusers) see the Admin section.
@@ -21,9 +22,8 @@ function CustomDrawerContent(props: any) {
     setIsCollapsed(!isCollapsed);
   };
 
-  // Function to toggle admin submenu
-  const toggleAdminSubmenu = () => {
-    setAdminExpanded(!adminExpanded);
+  const toggleSubmenu = (key: string) => {
+    setSubmenuOpen(open => ({ ...open, [key]: !open[key] }));
   };
 
   // Check if a path is active (exact match)
@@ -49,10 +49,12 @@ function CustomDrawerContent(props: any) {
         }
     };
 
-  // Auto-expand admin menu if on an admin page
+  // Open a submenu when one of its pages is reached by URL.
   useEffect(() => {
-    if (pathname.startsWith('/admin/') && !adminExpanded) {
-      setAdminExpanded(true);
+    for (const item of NAV_ITEMS) {
+      if (item.children && pathname.startsWith(`${item.route}/`) && !submenuOpen[item.key]) {
+        setSubmenuOpen(open => ({ ...open, [item.key]: true }));
+      }
     }
   }, [pathname]);
   
@@ -66,250 +68,73 @@ function CustomDrawerContent(props: any) {
         </View>
         
       <DrawerContentScrollView {...props} contentContainerStyle={{ flexGrow: 1 }}>
-        {/* Custom drawer items with conditional rendering based on collapsed state */}
+        {/* HT-48: every entry comes from constants/navigation.ts */}
         <View style={styles.drawerContent}>
-          {/* Dashboard */}
-          <TouchableOpacity
-            onPress={() => router.push('/')}
-            style={[
-              styles.drawerItem,
-              isPathActive('/') && styles.drawerItemFocused,
-              isCollapsed && styles.drawerItemCollapsed
-            ]}
-          >
-            <View style={styles.drawerItemIcon}>
-              <Ionicons name="grid-outline" size={24} color={isPathActive('/') ? '#333' : '#666'} />
-            </View>
-            {!isCollapsed && (
-              <Text style={[
-                styles.drawerItemLabel,
-                isPathActive('/') && styles.drawerItemLabelFocused
-              ]}>
-                Dashboard
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Clients */}
-          <TouchableOpacity
-            onPress={() => router.push('/clients')}
-            style={[
-              styles.drawerItem,
-              isPathActive('/clients') && styles.drawerItemFocused,
-              isCollapsed && styles.drawerItemCollapsed
-            ]}
-          >
-            <View style={styles.drawerItemIcon}>
-              <Ionicons name="people-outline" size={24} color={isPathActive('/clients') ? '#333' : '#666'} />
-            </View>
-            {!isCollapsed && (
-              <Text style={[
-                styles.drawerItemLabel,
-                isPathActive('/clients') && styles.drawerItemLabelFocused
-              ]}>
-                Clients
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Jobs */}
-          <TouchableOpacity
-            onPress={() => router.push('/jobs')}
-            style={[
-              styles.drawerItem,
-              isPathActive('/jobs') && styles.drawerItemFocused,
-              isCollapsed && styles.drawerItemCollapsed
-            ]}
-          >
-            <View style={styles.drawerItemIcon}>
-              <Ionicons name="briefcase-outline" size={24} color={isPathActive('/jobs') ? '#333' : '#666'} />
-            </View>
-            {!isCollapsed && (
-              <Text style={[
-                styles.drawerItemLabel,
-                isPathActive('/jobs') && styles.drawerItemLabelFocused
-              ]}>
-                Jobs
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Invoices */}
-          <TouchableOpacity
-            onPress={() => router.push('/invoices')}
-            style={[
-              styles.drawerItem,
-              isPathActive('/invoices') && styles.drawerItemFocused,
-              isCollapsed && styles.drawerItemCollapsed
-            ]}
-          >
-            <View style={styles.drawerItemIcon}>
-              <Ionicons name="document-text-outline" size={24} color={isPathActive('/invoices') ? '#333' : '#666'} />
-            </View>
-            {!isCollapsed && (
-              <Text style={[
-                styles.drawerItemLabel,
-                isPathActive('/invoices') && styles.drawerItemLabelFocused
-              ]}>
-                Invoices
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Labor */}
-          <TouchableOpacity
-            onPress={() => router.push('/labor')}
-            style={[
-              styles.drawerItem,
-              isPathActive('/labor') && styles.drawerItemFocused,
-              isCollapsed && styles.drawerItemCollapsed
-            ]}
-          >
-            <View style={styles.drawerItemIcon}>
-              <Ionicons name="hammer-outline" size={24} color={isPathActive('/labor') ? '#333' : '#666'} />
-            </View>
-            {!isCollapsed && (
-              <Text style={[
-                styles.drawerItemLabel,
-                isPathActive('/labor') && styles.drawerItemLabelFocused
-              ]}>
-                Labor
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Inventory */}
-          <TouchableOpacity
-            onPress={() => router.push('/inventory')}
-            style={[
-              styles.drawerItem,
-              isPathActive('/inventory') && styles.drawerItemFocused,
-              isCollapsed && styles.drawerItemCollapsed
-            ]}
-          >
-            <View style={styles.drawerItemIcon}>
-              <Ionicons name="cube-outline" size={24} color={isPathActive('/inventory') ? '#333' : '#666'} />
-            </View>
-            {!isCollapsed && (
-              <Text style={[
-                styles.drawerItemLabel,
-                isPathActive('/inventory') && styles.drawerItemLabelFocused
-              ]}>
-                Inventory
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Schedule */}
-          <TouchableOpacity
-            onPress={() => router.push('/schedule')}
-            style={[
-              styles.drawerItem,
-              isPathActive('/schedule') && styles.drawerItemFocused,
-              isCollapsed && styles.drawerItemCollapsed
-            ]}
-          >
-            <View style={styles.drawerItemIcon}>
-              <Ionicons name="calendar-outline" size={24} color={isPathActive('/schedule') ? '#333' : '#666'} />
-            </View>
-            {!isCollapsed && (
-              <Text style={[
-                styles.drawerItemLabel,
-                isPathActive('/schedule') && styles.drawerItemLabelFocused
-              ]}>
-                Schedule
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Admin with submenu: admins only (HT-12) */}
-          {isAdmin && (
-          <View>
-            <TouchableOpacity
-              onPress={toggleAdminSubmenu}
-              style={[
-                styles.drawerItem,
-                isPathActive('/admin') && styles.drawerItemFocused,
-                isCollapsed && styles.drawerItemCollapsed
-              ]}
-            >
-              <View style={styles.drawerItemIcon}>
-                <Ionicons 
-                  name="settings-outline" 
-                  size={24} 
-                  color={isPathActive('/admin') ? '#333' : '#666'} 
-                />
-              </View>
-              {!isCollapsed && (
-                <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={[
-                    styles.drawerItemLabel,
-                    isPathActive('/admin') && styles.drawerItemLabelFocused
-                  ]}>
-                    Admin
-                  </Text>
-                  <Ionicons 
-                    name={adminExpanded ? "chevron-down" : "chevron-forward"} 
-                    size={16} 
-                    color="#666" 
-                  />
-                </View>
-              )}
-            </TouchableOpacity>
-
-            {/* Admin submenu items */}
-            {(adminExpanded || isPathPartOfRoute('/admin/')) && (
-              <View style={[
-                styles.submenu,
-                isCollapsed && styles.submenuCollapsed
-              ]}>
-                {/* Admin/Users */}
+          {NAV_ITEMS.map(item => {
+            if (item.adminOnly && !isAdmin) return null;
+            const active = isPathActive(item.route);
+            const color = active ? '#333' : '#666';
+            const children = item.children;
+            const expanded = !!children && (submenuOpen[item.key] || isPathPartOfRoute(`${item.route}/`));
+            return (
+              <View key={item.key}>
                 <TouchableOpacity
-                  onPress={() => router.push('/admin/users')}
+                  onPress={() => (children ? toggleSubmenu(item.key) : router.push(item.route as any))}
                   style={[
-                    styles.submenuItem,
-                    isPathActive('/admin/users') && styles.submenuItemFocused,
-                    isCollapsed && styles.submenuItemCollapsed
+                    styles.drawerItem,
+                    active && styles.drawerItemFocused,
+                    isCollapsed && styles.drawerItemCollapsed
                   ]}
                 >
-                  <View style={[styles.submenuItemIcon, isCollapsed && { marginRight: 0 }]}>
-                    <Ionicons name="people" size={20} color={isPathActive('/admin/users') ? '#333' : '#666'} />
+                  <View style={styles.drawerItemIcon}>
+                    <Ionicons name={item.icon} size={24} color={color} />
                   </View>
                   {!isCollapsed && (
-                    <Text style={[
-                      styles.submenuItemLabel,
-                      isPathActive('/admin/users') && styles.submenuItemLabelFocused
-                    ]}>
-                      Users
-                    </Text>
+                    children ? (
+                      <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={[styles.drawerItemLabel, active && styles.drawerItemLabelFocused]}>
+                          {item.label}
+                        </Text>
+                        <Ionicons name={expanded ? 'chevron-down' : 'chevron-forward'} size={16} color="#666" />
+                      </View>
+                    ) : (
+                      <Text style={[styles.drawerItemLabel, active && styles.drawerItemLabelFocused]}>
+                        {item.label}
+                      </Text>
+                    )
                   )}
                 </TouchableOpacity>
 
-                {/* Admin/Company */}
-                <TouchableOpacity
-                  onPress={() => router.push('/admin/company')}
-                  style={[
-                    styles.submenuItem,
-                    isPathActive('/admin/company') && styles.submenuItemFocused,
-                    isCollapsed && styles.submenuItemCollapsed
-                  ]}
-                >
-                  <View style={[styles.submenuItemIcon, isCollapsed && { marginRight: 0 }]}>
-                    <Ionicons name="business" size={20} color={isPathActive('/admin/company') ? '#333' : '#666'} />
+                {children && expanded && (
+                  <View style={[styles.submenu, isCollapsed && styles.submenuCollapsed]}>
+                    {children.map(child => {
+                      const childActive = isPathActive(child.route);
+                      return (
+                        <TouchableOpacity
+                          key={child.key}
+                          onPress={() => router.push(child.route as any)}
+                          style={[
+                            styles.submenuItem,
+                            childActive && styles.submenuItemFocused,
+                            isCollapsed && styles.submenuItemCollapsed
+                          ]}
+                        >
+                          <View style={[styles.submenuItemIcon, isCollapsed && { marginRight: 0 }]}>
+                            <Ionicons name={child.icon} size={20} color={childActive ? '#333' : '#666'} />
+                          </View>
+                          {!isCollapsed && (
+                            <Text style={[styles.submenuItemLabel, childActive && styles.submenuItemLabelFocused]}>
+                              {child.label}
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
-                  {!isCollapsed && (
-                    <Text style={[
-                      styles.submenuItemLabel,
-                      isPathActive('/admin/company') && styles.submenuItemLabelFocused
-                    ]}>
-                      Company
-                    </Text>
-                  )}
-                </TouchableOpacity>
+                )}
               </View>
-            )}
-          </View>
-          )}
+            );
+          })}
         </View>
 
         {/* Add the HandyTally logo at the bottom */}
@@ -387,95 +212,29 @@ export default function AppLayout() {
         },
       }}
     >
-      <Drawer.Screen
-        name="index"
-        options={{
-          drawerLabel: 'Dashboard',
-          title: 'Dashboard',
-          drawerIcon: ({ color }) => <Ionicons name="grid-outline" size={22} color={color} />,
-        }}
-      />
-      <Drawer.Screen
-        name="clients"
-        options={{
-          drawerLabel: 'Clients',
-          title: 'Clients',
-          drawerIcon: ({ color }) => <Ionicons name="people-outline" size={22} color={color} />,
-        }}
-      />
-      <Drawer.Screen
-        name="jobs"
-        options={{
-          drawerLabel: 'Jobs',
-          title: 'Jobs',
-          drawerIcon: ({ color }) => <Ionicons name="briefcase-outline" size={22} color={color} />,
-        }}
-      />
-      <Drawer.Screen
-        name="calendar"
-        options={{
-          drawerLabel: "Calendar",
-          title: "Calendar",
-          drawerIcon: ({ color }) => <Ionicons name="calendar-outline" size={22} color={color} />,
-        }}
-      />
-      <Drawer.Screen
-        name="invoices"
-        options={{
-          drawerLabel: 'Invoices',
-          title: 'Invoices',
-          drawerIcon: ({ color }) => <Ionicons name="document-text-outline" size={22} color={color} />,
-        }}
-      />
-      <Drawer.Screen
-        name="labor"
-        options={{
-          drawerLabel: 'Labor',
-          title: 'Labor',
-          drawerIcon: ({ color }) => <Ionicons name="hammer-outline" size={22} color={color} />,
-        }}
-      />
-      <Drawer.Screen
-        name="inventory"
-        options={{
-          drawerLabel: 'Inventory',
-          title: 'Inventory',
-          drawerIcon: ({ color }) => <Ionicons name="cube-outline" size={22} color={color} />,
-        }}
-      />
-      <Drawer.Screen
-        name="schedule"
-        options={{
-          drawerLabel: "Schedule",
-          title: "Schedule",
-          drawerIcon: ({ color }) => <Ionicons name="calendar-outline" size={22} color={color} />,
-        }}
-      />
-      <Drawer.Screen
-        name="admin"
-        options={{
-          drawerLabel: 'Admin',
-          title: 'Admin',
-          drawerIcon: ({ color }) => <Ionicons name="settings-outline" size={22} color={color} />,
-        }}
-      />
-      {/* These screens are hidden in the drawer but still accessible via routes */}
-      <Drawer.Screen
-        name="admin/users"
-        options={{
-          drawerLabel: () => null,
-          title: 'Users',
-          drawerItemStyle: { height: 0 },
-        }}
-      />
-      <Drawer.Screen
-        name="admin/company"
-        options={{
-          drawerLabel: () => null,
-          title: 'Company',
-          drawerItemStyle: { height: 0 },
-        }}
-      />
+      {/* HT-48: one registration per nav entry; submenu pages are routable but hidden from the default list. */}
+      {NAV_ITEMS.map(item => (
+        <Drawer.Screen
+          key={item.key}
+          name={item.screen}
+          options={{
+            drawerLabel: item.label,
+            title: item.label,
+            drawerIcon: ({ color }) => <Ionicons name={item.icon} size={22} color={color} />,
+          }}
+        />
+      ))}
+      {NAV_ITEMS.flatMap(item => item.children ?? []).map(child => (
+        <Drawer.Screen
+          key={child.key}
+          name={child.screen}
+          options={{
+            drawerLabel: () => null,
+            title: child.label,
+            drawerItemStyle: { height: 0 },
+          }}
+        />
+      ))}
     </Drawer>
   );
 }

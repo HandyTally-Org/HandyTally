@@ -15,6 +15,7 @@ import { exportWorkbook, pickWorkbook, sheetRows, confirmAction, toIsoDate } fro
 import { InvoiceStatus, NEW_INVOICE_STATUS } from '../../constants/invoiceStatus';
 import { labelText, labelTextColor } from '../../constants/labels';
 import { useLabels } from '../../hooks/useLabels';
+import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 
 export type Invoice = {
   uid: string;
@@ -125,10 +126,13 @@ export default function InvoicesScreen() {
   const [companyLogo, setCompanyLogo] = useState<string | null>(null);
   const router = useRouter();
 
-  useEffect(() => {
+  useRefreshOnFocus(() => {
     fetchInvoices();
     fetchJobs();
     fetchClients();
+  });
+
+  useEffect(() => {
     checkJobsTable();
     checkInvoicesTables();
     checkDatabaseSchema();

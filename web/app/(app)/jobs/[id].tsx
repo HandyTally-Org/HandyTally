@@ -18,6 +18,7 @@ import { InvoiceForm } from '../../../components/InvoiceForm';
 import { NotesSection } from '../../../components/NotesSection';
 import { useLabels } from '../../../hooks/useLabels';
 import { labelColor, labelText, labelTextColor } from '../../../constants/labels';
+import { useRefreshOnFocus } from '../../../hooks/useRefreshOnFocus';
 
 // Let's create a simple calendar component using the existing libraries
 interface SimpleCalendarProps {
@@ -304,14 +305,15 @@ export default function JobDetailsScreen() {
   const [startDatePickerVisible, setStartDatePickerVisible] = useState(false);
   const [endDatePickerVisible, setEndDatePickerVisible] = useState(false);
 
-  useEffect(() => {
-    if (id) {
-      fetchJobDetails();
-      fetchServices();
-      fetchMaterials();
-      fetchInvoices();
-      fetchClientsAndJobs();
-    }
+  useRefreshOnFocus(() => {
+    if (!id) return;
+    // Coming back mid-edit must not discard what the user has typed.
+    if (editMode && hasUnsavedChanges) return;
+    fetchJobDetails();
+    fetchServices();
+    fetchMaterials();
+    fetchInvoices();
+    fetchClientsAndJobs();
   }, [id]);
 
   useEffect(() => {
@@ -994,11 +996,20 @@ export default function JobDetailsScreen() {
         return false;
       }
       
+      // The form only carries client_id, so re-read the client row: without
+      // it the Info tab showed "No client" until the page was reloaded (HT-13).
+      const { data: clientRow } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('uid', clientId)
+        .maybeSingle();
+
       // Make sure to update the job in state with the correct types
       const updatedJob = {
         ...updatedJobData,
         uid: jobId,         // Ensure it's stored as a number
-        client_id: clientId  // Ensure it's stored as a number
+        client_id: clientId,  // Ensure it's stored as a number
+        client: clientRow ?? job?.client ?? null,
       };
       
       setJob(updatedJob);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { Text, Button, TextInput, Card, DataTable, IconButton, Dialog, Portal, Snackbar, Chip, Menu } from 'react-native-paper';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -13,6 +13,7 @@ import {
   type InvitableRole,
   type OrganizationMember,
 } from '../../../utils/inviteUser';
+import { useRefreshOnFocus } from '../../../hooks/useRefreshOnFocus';
 
 // HT-12: the organisation's members. Admins invite people by email with a
 // role, change roles and deactivate. The account is created server-side and
@@ -72,7 +73,7 @@ export default function UsersScreen() {
     }
   }, [organization]);
 
-  useEffect(() => {
+  useRefreshOnFocus(() => {
     if (allowed) fetchMembers();
   }, [allowed, fetchMembers]);
 

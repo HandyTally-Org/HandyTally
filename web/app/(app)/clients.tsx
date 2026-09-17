@@ -11,6 +11,7 @@ import { ImportExportButtons } from '../../components/ImportExportButtons';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLabels } from '../../hooks/useLabels';
 import { labelColor } from '../../constants/labels';
+import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 
 type Client = {
   uid: string;
@@ -72,9 +73,7 @@ export default function ClientsScreen() {
   const [showClientDetails, setShowClientDetails] = useState(false);
   const [activeDetailTab, setActiveDetailTab] = useState('info');
 
-  useEffect(() => {
-    fetchClients();
-  }, []);
+  useRefreshOnFocus(fetchClients);
 
   useEffect(() => {
     if (clients.length > 0) {

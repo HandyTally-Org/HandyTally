@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text, Button, Card, DataTable, TextInput, ActivityIndicator, IconButton, Portal, Dialog, Snackbar } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -7,6 +7,7 @@ import { styles as globalStyles } from '../../styles';
 import { formatDate } from '../../utils/formatting';
 import { MaterialIcons } from '@expo/vector-icons';
 import { NotesSection } from '../../components/NotesSection';
+import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 
 export default function ClientDetailsScreen() {
   const router = useRouter();
@@ -25,7 +26,7 @@ export default function ClientDetailsScreen() {
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
 
-  useEffect(() => {
+  useRefreshOnFocus(() => {
     if (id) {
       fetchClientDetails();
     }

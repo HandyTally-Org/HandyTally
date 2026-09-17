@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text, Button, Searchbar, Card, DataTable, Chip, IconButton, Dialog, Portal, Snackbar, TextInput, RadioButton, ActivityIndicator, Tooltip } from 'react-native-paper';
 import { supabase } from '../../lib/api';
@@ -11,6 +11,7 @@ import { ImportExportButtons } from '../../components/ImportExportButtons';
 import { useOrganizationMembers } from '../../hooks/useOrganizationMembers';
 import { assigneeLabel } from '../../utils/inviteUser';
 import { useLabels } from '../../hooks/useLabels';
+import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 
 type Job = {
   uid: number;
@@ -68,15 +69,10 @@ export default function JobsScreen() {
   const assigneeName = (job: Pick<Job, 'assigned_to'>) =>
     membersLoading && job.assigned_to ? '…' : assigneeLabel(job.assigned_to, members);
 
-  useEffect(() => {
+  useRefreshOnFocus(() => {
     fetchJobs();
-  }, []);
-
-  useEffect(() => {
-    if (clients.length === 0) {
-      fetchClients();
-    }
-  }, [clients.length]);
+    fetchClients();
+  });
 
   async function fetchJobs() {
     try {

@@ -7,6 +7,7 @@ import { sendJobInvite } from '../../utils/sendJobInvite';
 import { JobDialog } from '../../components/JobDialog';
 import { useLabels } from '../../hooks/useLabels';
 import type { LabelDef } from '../../constants/labels';
+import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 import {
   Calendar,
   CalendarEvent,
@@ -106,6 +107,10 @@ export default function ScheduleScreen() {
   const refresh = useCallback(() => {
     if (range) fetchJobs(range);
   }, [range, fetchJobs]);
+
+  // The calendar loads a range when it first reports one; this re-reads the
+  // same range after a job was edited on its own page (HT-13).
+  useRefreshOnFocus(refresh);
 
   const openJob = useCallback(
     (event: CalendarEvent) => {
