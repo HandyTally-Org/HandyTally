@@ -191,9 +191,18 @@ serve(async (req) => {
     return json({ error: "Organization not found" }, 404);
   }
 
-  const appOrigin = (APP_URL || req.headers.get("Origin") || "").replace(/\/+$/, "");
+  // HT-39: the set-password link must open on the host the admin invited
+  // from (wgelectricus.handytally.com, not the apex), so the request's Origin
+  // is used — but only when it is one of our hosts, since any authenticated
+  // caller can put an arbitrary Origin header on a request and the link goes
+  // into an email.
+  const ALLOWED_ORIGIN = /^https:\/\/([a-z0-9-]+\.)?handytally\.com$|^http:\/\/localhost(:\d+)?$/;
+  const requestOrigin = (req.headers.get("Origin") || "").replace(/\/+$/, "");
+  const appOrigin =
+    (APP_URL || "").replace(/\/+$/, "") ||
+    (ALLOWED_ORIGIN.test(requestOrigin) ? requestOrigin : "");
   if (!appOrigin) {
-    return json({ error: "Cannot build the invite link: set APP_URL on the function" }, 500);
+    return json({ error: "Cannot build the invite link: the request origin is not a HandyTally host and APP_URL is not set" }, 500);
   }
 
   // --- Create the account, or find the existing one ------------------------
