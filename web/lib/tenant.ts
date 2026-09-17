@@ -45,7 +45,7 @@ export function parseTenantSubdomain(
  */
 export function isApexHost(hostname: string | null | undefined, baseDomain: string = BASE_DOMAIN): boolean {
   if (!hostname) return false;
-  const host = hostname.trim().toLowerCase().replace(/.$/, '');
+  const host = hostname.trim().toLowerCase().replace(/\.$/, '');
   const base = baseDomain.trim().toLowerCase();
   return host === base || host === `www.${base}`;
 }
