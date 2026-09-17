@@ -16,6 +16,8 @@ import { assigneeLabel } from '../../../utils/inviteUser';
 import { InvoiceDetails } from '../../../components/InvoiceDetails';
 import { InvoiceForm } from '../../../components/InvoiceForm';
 import { NotesSection } from '../../../components/NotesSection';
+import { useLabels } from '../../../hooks/useLabels';
+import { labelColor, labelText, labelTextColor } from '../../../constants/labels';
 import { useRefreshOnFocus } from '../../../hooks/useRefreshOnFocus';
 
 // Let's create a simple calendar component using the existing libraries
@@ -190,6 +192,8 @@ interface Material {
 
 export default function JobDetailsScreen() {
   const { id } = useLocalSearchParams();
+  // HT-49: statuses, names and colours for every picker and chip on this page.
+  const jobStatuses = useLabels('job_status');
   const router = useRouter();
   // HT-35: turns jobs.assigned_to into a name on the Info tab.
   const { members, loading: membersLoading } = useOrganizationMembers();
@@ -1045,7 +1049,7 @@ export default function JobDetailsScreen() {
   const renderStatusDropdown = () => {
     if (!showStatusDropdown) return null;
     
-    const statuses = ['pending', 'in_progress', 'completed', 'cancelled'];
+    const statuses = jobStatuses;
     
     return (
       <View style={{
@@ -1066,7 +1070,7 @@ export default function JobDetailsScreen() {
       }}>
         {statuses.map((status) => (
           <Pressable
-            key={status}
+            key={status.value}
             style={({ hovered }) => ({
               padding: 16,
               backgroundColor: hovered ? '#f5f5f5' : '#ffffff',
@@ -1074,7 +1078,7 @@ export default function JobDetailsScreen() {
               borderBottomColor: '#f0f0f0',
             })}
             onPress={() => {
-              handleStatusChange(status);
+              handleStatusChange(status.value);
               setShowStatusDropdown(false);
             }}
           >
@@ -1083,11 +1087,11 @@ export default function JobDetailsScreen() {
                 width: 16, 
                 height: 16, 
                 borderRadius: 8, 
-                backgroundColor: getStatusColor(status),
+                backgroundColor: status.color,
                 marginRight: 8 
               }} />
               <Text style={{ textTransform: 'capitalize' }}>
-                {status.replace('_', ' ')}
+                {status.label}
               </Text>
             </View>
           </Pressable>
@@ -1099,7 +1103,7 @@ export default function JobDetailsScreen() {
   const WebStatusDropdown = () => {
     if (!showStatusDropdown) return null;
     
-    const statuses = ['pending', 'in_progress', 'completed', 'cancelled'];
+    const statuses = jobStatuses;
     
     return (
       <div style={{
@@ -1116,9 +1120,9 @@ export default function JobDetailsScreen() {
       }}>
         {statuses.map((status) => (
           <div
-            key={status}
+            key={status.value}
             onClick={() => {
-              handleStatusChange(status);
+              handleStatusChange(status.value);
               setShowStatusDropdown(false);
             }}
             style={{
@@ -1141,11 +1145,11 @@ export default function JobDetailsScreen() {
                 width: '16px', 
                 height: '16px', 
                 borderRadius: '8px', 
-                backgroundColor: getStatusColor(status),
+                backgroundColor: status.color,
                 marginRight: '8px' 
               }} />
               <span style={{ textTransform: 'capitalize' }}>
-                {status.replace('_', ' ')}
+                {status.label}
               </span>
             </div>
           </div>
@@ -1223,21 +1227,6 @@ export default function JobDetailsScreen() {
     if (pendingNavigation) {
       handleNavigationItemClick(pendingNavigation);
       setPendingNavigation(null);
-    }
-  };
-
-  // Add this function near the other utility functions
-  const getInvoiceStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'paid':
-        return '#e8f5e9'; // Light green
-      case 'sent':
-        return '#fff3e0'; // Light orange
-      case 'overdue':
-        return '#ffebee'; // Light red
-      case 'draft':
-      default:
-        return '#f5f5f5'; // Light gray
     }
   };
 
@@ -1652,11 +1641,11 @@ export default function JobDetailsScreen() {
               {membersLoading && job?.assigned_to ? '…' : assigneeLabel(job?.assigned_to, members)}
             </DataTable.Cell>
             <DataTable.Cell>
-              <Chip 
-                style={{backgroundColor: getStatusColor(job?.status)}}
-                textStyle={{color: job?.status === 'Completed' ? '#000' : '#fff'}}
+              <Chip
+                style={{ backgroundColor: labelColor(jobStatuses, job?.status) }}
+                textStyle={{ color: labelTextColor(jobStatuses, job?.status) }}
               >
-                {job?.status || 'Unknown'}
+                {labelText(jobStatuses, job?.status) || 'Unknown'}
               </Chip>
             </DataTable.Cell>
             <DataTable.Cell>{job?.start_date ? formatDate(job.start_date) : 'Not set'}</DataTable.Cell>
@@ -1665,16 +1654,6 @@ export default function JobDetailsScreen() {
         </DataTable>
       </View>
     );
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'pending': return '#FFF9C4';
-      case 'in_progress': return '#BBDEFB';
-      case 'completed': return '#C8E6C9';
-      case 'cancelled': return '#FFCDD2';
-      default: return '#F5F5F5';
-    }
   };
 
   const renderInvoicesTab = () => {
@@ -2640,9 +2619,9 @@ export default function JobDetailsScreen() {
           }}
         >
           <View>
-            {['pending', 'in_progress', 'completed', 'cancelled'].map((status) => (
+            {jobStatuses.map((status) => (
               <Pressable
-                key={status}
+                key={status.value}
                 style={({ hovered }) => ({
                   padding: 16,
                   backgroundColor: hovered ? '#f5f5f5' : '#ffffff',
@@ -2650,7 +2629,7 @@ export default function JobDetailsScreen() {
                   borderBottomColor: '#f0f0f0',
                 })}
                 onPress={() => {
-                  handleStatusChange(status);
+                  handleStatusChange(status.value);
                   setShowStatusDropdown(false);
                 }}
               >
@@ -2659,11 +2638,11 @@ export default function JobDetailsScreen() {
                     width: 16, 
                     height: 16, 
                     borderRadius: 8, 
-                    backgroundColor: getStatusColor(status),
+                    backgroundColor: status.color,
                     marginRight: 8 
                   }} />
                   <Text style={{ textTransform: 'capitalize' }}>
-                    {status.replace('_', ' ')}
+                    {status.label}
                   </Text>
                 </View>
               </Pressable>

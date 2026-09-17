@@ -9,7 +9,8 @@ import { supabase } from '../lib/supabase';
 import { Service } from '../app/(app)/services';
 import { Material } from '../app/(app)/materials';
 import { doc, GREEN, NAVY, BORDER, LABEL, INK, MAX_ITEM_PHOTOS } from './invoiceDocStyles';
-import { INVOICE_STATUS_OPTIONS, NEW_INVOICE_STATUS, invoiceDocumentLabel } from '../constants/invoiceStatus';
+import { NEW_INVOICE_STATUS, invoiceDocumentLabel } from '../constants/invoiceStatus';
+import { useLabels } from '../hooks/useLabels';
 
 type InvoiceFormProps = {
   jobs: Job[];
@@ -61,6 +62,7 @@ function safeParseNumber(value: any): number {
 }
 
 export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCancel, initialInvoice, initialItems = [], isEditing = false, hideTitle = false, forceInvoiceNumber = null, companyLogo }: InvoiceFormProps) {
+  const invoiceStatuses = useLabels('invoice_status');
   const generateNextInvoiceNumber = () => {
     if (!lastInvoiceNumber) {
       return '1001';
@@ -705,7 +707,7 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
                   value={formData.status || NEW_INVOICE_STATUS}
                   onChange={(e: any) => handleStatusChange(e.target.value)}
                 >
-                  {INVOICE_STATUS_OPTIONS.map(option => (
+                  {invoiceStatuses.map(option => (
                     <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>

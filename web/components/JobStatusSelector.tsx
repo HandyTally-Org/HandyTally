@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { View } from 'react-native';
 import { Button, Menu, Text } from 'react-native-paper';
 import { styles } from '../styles';
+import { useLabels } from '../hooks/useLabels';
 
 type JobStatusSelectorProps = {
   status: string;
@@ -14,16 +15,12 @@ export function JobStatusSelector({ status, onStatusChange, disabled = false }: 
   const [buttonLayout, setButtonLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const buttonRef = useRef(null);
 
-  const statusOptions = [
-    { value: 'pending', label: 'PENDING' },
-    { value: 'in_progress', label: 'IN PROGRESS' },
-    { value: 'completed', label: 'COMPLETED' },
-    { value: 'cancelled', label: 'CANCELLED' }
-  ];
+  // HT-49: rendered upper-case, as this selector always was.
+  const statusOptions = useLabels('job_status').map(def => ({ value: def.value, label: def.label.toUpperCase() }));
 
   const getStatusLabel = (value: string) => {
     const option = statusOptions.find(opt => opt.value === value);
-    return option ? option.label : 'PENDING';
+    return option ? option.label : (value || 'PENDING').replace(/_/g, ' ').toUpperCase();
   };
 
   const measureButton = () => {
