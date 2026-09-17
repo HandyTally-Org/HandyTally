@@ -1,5 +1,11 @@
 import { createContext, useState, useEffect, useContext, useCallback, ReactNode } from 'react';
 import type { OrganizationLabels } from '../constants/labels';
+import {
+  DEFAULT_ORGANIZATION_SETTINGS,
+  parseOrganizationSettings,
+  type OrganizationSettings,
+  type OrganizationSettingsRow,
+} from '../constants/organizationSettings';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { tenantSubdomain } from '../lib/tenant';
@@ -60,6 +66,16 @@ type AuthContextType = {
    * through hooks/useLabels.ts, which merges it with the built-ins.
    */
   organizationLabels: OrganizationLabels | null;
+  /**
+   * The organisation's Settings row (HT-50): sidebar order, label overrides,
+   * custom field definitions. Defaults until the row is read, and for an
+   * organisation that has never saved one.
+   */
+  settings: OrganizationSettings;
+  /** False until the settings row for the current organisation has been read. */
+  settingsLoaded: boolean;
+  /** Re-read the settings row, after the Settings page saves. */
+  refreshSettings: () => Promise<void>;
   refreshMembership: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
@@ -120,6 +136,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // resolves it right after mount.
   const [tenant, setTenant] = useState<TenantState>({ status: 'none' });
   const [accessDenied, setAccessDenied] = useState<string | null>(null);
+  const [settings, setSettings] = useState<OrganizationSettings>(DEFAULT_ORGANIZATION_SETTINGS);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   useEffect(() => {
     // Only run on client side
@@ -199,6 +217,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshMembership();
   }, [isLoading, refreshMembership]);
 
+  // HT-50: the Settings row rides on the organisation. organization_id is
+  // sent explicitly (and not inferred from the header) because requests from
+  // the apex, native and psql carry no tenant; RLS still scopes the read.
+  const organizationId = membership?.organization.id ?? null;
+  const refreshSettings = useCallback(async () => {
+    if (!organizationId) {
+      setSettings(DEFAULT_ORGANIZATION_SETTINGS);
+      setSettingsLoaded(true);
+      return;
+    }
+    const { data, error } = await supabase
+      .from('organization_settings')
+      .select('organization_id, nav, labels, custom_fields')
+      .eq('organization_id', organizationId)
+      .maybeSingle();
+    if (error) {
+      console.error('Error loading organization settings:', error);
+    }
+    setSettings(parseOrganizationSettings((data as OrganizationSettingsRow | null) ?? null));
+    setSettingsLoaded(true);
+  }, [organizationId]);
+
+  useEffect(() => {
+    setSettingsLoaded(false);
+    refreshSettings();
+  }, [refreshSettings]);
+
   // The session is set from the response, not only from onAuthStateChange:
   // the login screen navigates to the (app) group as soon as signIn resolves,
   // and that group's layout bounces any visitor without a session back to
@@ -236,7 +281,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         tenant,
         tenantSource: tenant.status === 'found' ? 'hostname' : membership ? 'membership' : null,
         accessDenied,
-        organizationLabels: null,
+        organizationLabels: settings.labels,
+        settings,
+        settingsLoaded,
+        refreshSettings,
         refreshMembership,
         signIn,
         signUp,

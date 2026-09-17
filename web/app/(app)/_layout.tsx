@@ -3,10 +3,11 @@ import { usePathname, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { DrawerContentScrollView } from '@react-navigation/drawer';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {supabase} from "@/lib/supabase";
 import { useAuth } from '../../contexts/AuthContext';
 import { NAV_ITEMS } from '../../constants/navigation';
+import { applyNavSettings } from '../../constants/organizationSettings';
 
 // Custom drawer content component
 function CustomDrawerContent(props: any) {
@@ -15,7 +16,10 @@ function CustomDrawerContent(props: any) {
   const router = useRouter();
   const pathname = usePathname();
   // HT-12: only organisation admins (and superusers) see the Admin section.
-  const { isAdmin } = useAuth();
+  // HT-50: the organisation's saved order and hidden entries apply to every
+  // member; the routes themselves stay registered below whatever is hidden.
+  const { isAdmin, settings } = useAuth();
+  const navItems = useMemo(() => applyNavSettings(NAV_ITEMS, settings.nav), [settings.nav]);
 
   // Function to toggle drawer state
   const toggleDrawer = () => {
@@ -70,7 +74,7 @@ function CustomDrawerContent(props: any) {
       <DrawerContentScrollView {...props} contentContainerStyle={{ flexGrow: 1 }}>
         {/* HT-48: every entry comes from constants/navigation.ts */}
         <View style={styles.drawerContent}>
-          {NAV_ITEMS.map(item => {
+          {navItems.map(item => {
             if (item.adminOnly && !isAdmin) return null;
             const active = isPathActive(item.route);
             const color = active ? '#333' : '#666';
