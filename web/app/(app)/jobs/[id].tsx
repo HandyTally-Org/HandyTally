@@ -992,11 +992,20 @@ export default function JobDetailsScreen() {
         return false;
       }
       
+      // The form only carries client_id, so re-read the client row: without
+      // it the Info tab showed "No client" until the page was reloaded (HT-13).
+      const { data: clientRow } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('uid', clientId)
+        .maybeSingle();
+
       // Make sure to update the job in state with the correct types
       const updatedJob = {
         ...updatedJobData,
         uid: jobId,         // Ensure it's stored as a number
-        client_id: clientId  // Ensure it's stored as a number
+        client_id: clientId,  // Ensure it's stored as a number
+        client: clientRow ?? job?.client ?? null,
       };
       
       setJob(updatedJob);
