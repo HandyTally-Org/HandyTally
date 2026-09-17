@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, Button, TextInput, Card, DataTable, IconButton, Snackbar, Chip, Menu, SegmentedButtons } from 'react-native-paper';
+import { Text, Button, TextInput, Card, DataTable, IconButton, Snackbar, Menu, SegmentedButtons } from 'react-native-paper';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useRequireAdmin } from '../../../hooks/useRequireAdmin';
 import {
@@ -8,17 +8,43 @@ import {
   listOrganizationMembers,
   setMemberRole,
   setMemberActive,
+  removeOrganizationMember,
+  deleteUserAccount,
+  applyUserImport,
   memberDisplayName,
   ROLE_LABELS,
   type InvitableRole,
   type OrganizationMember,
 } from '../../../utils/inviteUser';
+import {
+  USER_SHEET_NAME,
+  USER_SHEET_COLUMN_WIDTHS,
+  membersToSheetRows,
+  planUserImport,
+  describeUpdate,
+  type UserImportPlan,
+} from '../../../utils/userImport';
+import { exportWorkbook, pickWorkbook, sheetRows, hasColumn } from '../../../utils/excel';
+import { ImportExportButtons } from '../../../components/ImportExportButtons';
 import { useRefreshOnFocus } from '../../../hooks/useRefreshOnFocus';
 import { FormDialog, FormDialogFooter, FormField, FormRow, formTheme, inputStyle } from '../../../components/FormDialog';
+import { LabelPill } from '../../../components/LabelPill';
 
 // HT-12: the organisation's members. Admins invite people by email with a
 // role, change roles and deactivate. The account is created server-side and
 // the invitee receives a one-time set-password link; nothing to relay by hand.
+//
+// HT-65: the list also shows the platform superusers (no actions: they hold
+// no membership row and cannot be touched), and admins can Remove someone
+// from this organisation or Delete their account outright. Both confirm in
+// a FormDialog and are refused server-side for the caller's own account and
+// for superusers.
+//
+// HT-46: Excel export and import, like Inventory. The exported sheet is
+// directly re-importable; import validates every row (utils/userImport.ts),
+// shows a preview, and on confirm applies the membership changes in one
+// database transaction (apply_user_import), then invites new addresses and
+// deletes the accounts that are left with no organisation at all.
 
 const INVITABLE_ROLES: { value: InvitableRole; label: string; hint: string }[] = [
   { value: 'user', label: 'Member', hint: 'Everything except Admin' },
@@ -26,9 +52,24 @@ const INVITABLE_ROLES: { value: InvitableRole; label: string; hint: string }[] =
   { value: 'technician', label: 'Technician', hint: 'Same as member for now' },
 ];
 
+// Fixed colours for the role and status pills: these are not tenant labels,
+// so nothing in Settings recolours them.
+const ROLE_PILL: Record<string, { color: string; textColor: string }> = {
+  admin: { color: '#111827', textColor: '#ffffff' },
+  user: { color: '#E5E7EB', textColor: '#111827' },
+  technician: { color: '#DBEAFE', textColor: '#1E3A8A' },
+  superuser: { color: '#FDE68A', textColor: '#78350F' },
+};
+const STATUS_PILL = {
+  active: { color: '#DCFCE7', textColor: '#166534' },
+  inactive: { color: '#F3F4F6', textColor: '#6B7280' },
+};
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const white = { backgroundColor: '#ffffff' };
+
+type Confirmation = { kind: 'remove' | 'delete'; member: OrganizationMember } | null;
 
 export default function UsersScreen() {
   const allowed = useRequireAdmin();
@@ -47,6 +88,18 @@ export default function UsersScreen() {
 
   const [roleMenuFor, setRoleMenuFor] = useState<string | null>(null);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
+
+  // HT-65: the Remove / Delete confirmation, its in-flight flag and the
+  // server's refusal message when there is one.
+  const [confirmation, setConfirmation] = useState<Confirmation>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmError, setConfirmError] = useState('');
+
+  // HT-46: the parsed sheet waiting for confirmation, its in-flight flag and
+  // whatever went wrong while applying it.
+  const [importPlan, setImportPlan] = useState<UserImportPlan | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
 
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
@@ -161,6 +214,149 @@ export default function UsersScreen() {
     }
   };
 
+  const openConfirmation = (kind: 'remove' | 'delete', member: OrganizationMember) => {
+    setConfirmError('');
+    setConfirmation({ kind, member });
+  };
+
+  const dismissConfirmation = () => {
+    if (!confirming) setConfirmation(null);
+  };
+
+  const handleConfirm = async () => {
+    if (!organization || !confirmation) return;
+    const { kind, member } = confirmation;
+    try {
+      setConfirming(true);
+      setConfirmError('');
+      if (kind === 'remove') {
+        await removeOrganizationMember(organization.id, member.user_id);
+        showSnackbar(`${displayName(member)} was removed from ${organization.name}`);
+      } else {
+        await deleteUserAccount({ userId: member.user_id, organizationId: organization.id });
+        showSnackbar(`${displayName(member)}'s account was deleted`);
+      }
+      setMembers(members.filter(m => m.user_id !== member.user_id));
+      setConfirmation(null);
+    } catch (error: any) {
+      console.error(`Error on ${kind}:`, error);
+      setConfirmError(error.message || (kind === 'remove' ? 'Could not remove the member' : 'Could not delete the account'));
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  // --- HT-46: Excel export / import -----------------------------------------
+  const handleExport = async () => {
+    if (!organization) return;
+    try {
+      await exportWorkbook('users.xlsx', [
+        { name: USER_SHEET_NAME, rows: membersToSheetRows(members), columnWidths: USER_SHEET_COLUMN_WIDTHS },
+      ]);
+      showSnackbar('Users exported. Edit the sheet and import it to apply changes; delete = y removes someone from this organization.');
+    } catch (error: any) {
+      console.error('Error exporting users:', error);
+      showSnackbar(error.message || 'Could not export the users');
+    }
+  };
+
+  const handleImport = async () => {
+    if (!organization) return;
+    try {
+      const workbook = await pickWorkbook();
+      if (!workbook) return;
+      const rows = sheetRows(workbook, USER_SHEET_NAME);
+      if (!rows || rows.length === 0) {
+        showSnackbar('No rows found in the spreadsheet');
+        return;
+      }
+      if (!hasColumn(rows, 'email')) {
+        showSnackbar('The spreadsheet must have an "email" column');
+        return;
+      }
+      setImportErrors([]);
+      setImportPlan(planUserImport(rows, members, session?.user?.id));
+    } catch (error: any) {
+      console.error('Error reading the spreadsheet:', error);
+      showSnackbar(error.message || 'Could not read the spreadsheet');
+    }
+  };
+
+  const dismissImport = () => {
+    if (!importing) {
+      setImportPlan(null);
+      setImportErrors([]);
+    }
+  };
+
+  const handleApplyImport = async () => {
+    if (!organization || !importPlan || importPlan.errors.length > 0) return;
+    const problems: string[] = [];
+    try {
+      setImporting(true);
+      setImportErrors([]);
+
+      // 1. Membership changes and removals, all or nothing.
+      const removed = await applyUserImport(
+        organization.id,
+        importPlan.updates.map(({ email: _email, ...update }) => update),
+        importPlan.removals.map(m => m.user_id),
+      );
+
+      // 2. New addresses, one invitation each.
+      let invited = 0;
+      for (const invite of importPlan.invites) {
+        try {
+          await inviteUser({
+            organizationId: organization.id,
+            email: invite.email,
+            firstName: invite.first_name,
+            lastName: invite.last_name,
+            role: invite.role,
+          });
+          invited += 1;
+        } catch (error: any) {
+          problems.push(`${invite.email}: ${error.message || 'could not be invited'}`);
+        }
+      }
+
+      // 3. Accounts that now belong to no organisation are deleted outright.
+      let deleted = 0;
+      for (const r of removed) {
+        if (r.memberships_left > 0) continue;
+        const who = importPlan.removals.find(m => m.user_id === r.user_id);
+        try {
+          await deleteUserAccount({ userId: r.user_id, organizationId: organization.id });
+          deleted += 1;
+        } catch (error: any) {
+          problems.push(`${who?.email ?? r.user_id}: removed from ${organization.name} but the account could not be deleted (${error.message})`);
+        }
+      }
+
+      const summary = [
+        importPlan.updates.length ? `${importPlan.updates.length} updated` : null,
+        invited ? `${invited} invited` : null,
+        importPlan.removals.length ? `${importPlan.removals.length} removed` : null,
+        deleted ? `${deleted} account${deleted === 1 ? '' : 's'} deleted` : null,
+      ].filter(Boolean);
+      showSnackbar(summary.length ? `Import applied: ${summary.join(', ')}` : 'Import applied: nothing to change');
+      await fetchMembers();
+
+      if (problems.length) {
+        // The transactional part is done; show what did not follow.
+        setImportPlan({ ...importPlan, updates: [], removals: [], invites: [], unchanged: 0 });
+        setImportErrors(problems);
+      } else {
+        setImportPlan(null);
+      }
+    } catch (error: any) {
+      console.error('Error applying the import:', error);
+      setImportErrors([error.message || 'The import could not be applied. Nothing was changed.']);
+    } finally {
+      setImporting(false);
+    }
+  };
+
   // No "send password reset" here: that would go through GoTrue's mailer,
   // which has no SMTP on the self-hosted instance (HT-30) and drops the mail
   // while reporting success. Invitations go through Resend instead.
@@ -176,6 +372,12 @@ export default function UsersScreen() {
     return null;
   }
 
+  const confirmTitle = confirmation
+    ? confirmation.kind === 'remove'
+      ? `Remove ${displayName(confirmation.member)}?`
+      : `Delete ${displayName(confirmation.member)}'s account?`
+    : '';
+
   return (
     <View style={{ flex: 1, ...white }}>
       <ScrollView style={{ flex: 1, ...white }}>
@@ -188,14 +390,17 @@ export default function UsersScreen() {
               )}
             </View>
 
-            <Button
-              mode="contained"
-              onPress={() => setShowInvite(true)}
-              icon="account-plus"
-              disabled={!organization}
-            >
-              Invite user
-            </Button>
+            <View style={{ flexDirection: 'row', alignItems: 'center', ...white }}>
+              <Button
+                mode="contained"
+                onPress={() => setShowInvite(true)}
+                icon="account-plus"
+                disabled={!organization}
+              >
+                Invite user
+              </Button>
+              <ImportExportButtons onExport={handleExport} onImport={handleImport} disabled={!organization || loading} />
+            </View>
           </View>
 
           {!organization ? (
@@ -215,7 +420,7 @@ export default function UsersScreen() {
                     <DataTable.Title style={white}>Status</DataTable.Title>
                     <DataTable.Title style={white}>Joined</DataTable.Title>
                     <DataTable.Title style={white}>Last sign in</DataTable.Title>
-                    <DataTable.Title style={white}>Actions</DataTable.Title>
+                    <DataTable.Title style={[white, { flex: 1.4 }]}>Actions</DataTable.Title>
                   </DataTable.Header>
 
                   {loading ? (
@@ -233,8 +438,12 @@ export default function UsersScreen() {
                   ) : (
                     members.map(member => {
                       const isSelf = member.user_id === session?.user?.id;
+                      const isSuperuser = member.role === 'superuser';
                       const busy = busyUserId === member.user_id;
-                      const canEditRole = !isSelf && member.role !== 'superuser' && !busy;
+                      const canEditRole = !isSelf && !isSuperuser && !busy;
+                      const canAct = !isSelf && !isSuperuser && !busy;
+                      const rolePill = ROLE_PILL[member.role] ?? ROLE_PILL.user;
+                      const statusPill = member.is_active ? STATUS_PILL.active : STATUS_PILL.inactive;
                       return (
                         <DataTable.Row key={member.user_id} style={white}>
                           <DataTable.Cell style={white}>
@@ -242,58 +451,84 @@ export default function UsersScreen() {
                           </DataTable.Cell>
                           <DataTable.Cell style={white}>{member.email}</DataTable.Cell>
                           <DataTable.Cell style={white}>
-                            <Menu
-                              visible={roleMenuFor === member.user_id}
-                              onDismiss={() => setRoleMenuFor(null)}
-                              anchor={
-                                <Button
-                                  mode="outlined"
-                                  compact
-                                  disabled={!canEditRole}
-                                  onPress={() => setRoleMenuFor(member.user_id)}
-                                  icon={canEditRole ? 'chevron-down' : undefined}
-                                  contentStyle={{ flexDirection: 'row-reverse' }}
-                                >
-                                  {ROLE_LABELS[member.role] ?? member.role}
-                                </Button>
-                              }
-                            >
-                              {INVITABLE_ROLES.map(r => (
-                                <Menu.Item
-                                  key={r.value}
-                                  title={r.label}
-                                  disabled={r.value === member.role}
-                                  onPress={() => {
-                                    setRoleMenuFor(null);
-                                    handleChangeRole(member, r.value);
-                                  }}
-                                />
-                              ))}
-                            </Menu>
+                            {canEditRole ? (
+                              <Menu
+                                visible={roleMenuFor === member.user_id}
+                                onDismiss={() => setRoleMenuFor(null)}
+                                anchor={
+                                  <LabelPill
+                                    size="sm"
+                                    label={ROLE_LABELS[member.role] ?? member.role}
+                                    color={rolePill.color}
+                                    textColor={rolePill.textColor}
+                                    selected
+                                    onPress={() => setRoleMenuFor(member.user_id)}
+                                    accessibilityLabel={`Change role for ${displayName(member)}`}
+                                  />
+                                }
+                              >
+                                {INVITABLE_ROLES.map(r => (
+                                  <Menu.Item
+                                    key={r.value}
+                                    title={r.label}
+                                    disabled={r.value === member.role}
+                                    onPress={() => {
+                                      setRoleMenuFor(null);
+                                      handleChangeRole(member, r.value);
+                                    }}
+                                  />
+                                ))}
+                              </Menu>
+                            ) : (
+                              <LabelPill
+                                size="sm"
+                                label={ROLE_LABELS[member.role] ?? member.role}
+                                color={rolePill.color}
+                                textColor={rolePill.textColor}
+                              />
+                            )}
                           </DataTable.Cell>
                           <DataTable.Cell style={white}>
-                            <Chip
-                              compact
-                              mode="outlined"
-                              icon={member.is_active ? 'check' : 'cancel'}
-                              textStyle={{ color: member.is_active ? '#2e7d32' : '#999' }}
-                            >
-                              {member.is_active ? 'Active' : 'Inactive'}
-                            </Chip>
+                            <LabelPill
+                              size="sm"
+                              label={member.is_active ? 'Active' : 'Inactive'}
+                              color={statusPill.color}
+                              textColor={statusPill.textColor}
+                            />
                           </DataTable.Cell>
                           <DataTable.Cell style={white}>{formatDate(member.joined_at)}</DataTable.Cell>
                           <DataTable.Cell style={white}>{formatDate(member.last_sign_in_at)}</DataTable.Cell>
-                          <DataTable.Cell style={white}>
-                            <View style={{ flexDirection: 'row', ...white }}>
-                              <IconButton
-                                icon={member.is_active ? 'account-off' : 'account-check'}
-                                size={20}
-                                iconColor={member.is_active ? '#c62828' : '#2e7d32'}
-                                onPress={() => handleToggleActive(member)}
-                                disabled={isSelf || busy}
-                                accessibilityLabel={member.is_active ? 'Deactivate' : 'Reactivate'}
-                              />
-                            </View>
+                          <DataTable.Cell style={[white, { flex: 1.4 }]}>
+                            {isSuperuser ? (
+                              <Text style={styles.platformHint}>Platform-wide account</Text>
+                            ) : (
+                              <View style={{ flexDirection: 'row', ...white }}>
+                                <IconButton
+                                  icon={member.is_active ? 'account-off' : 'account-check'}
+                                  size={20}
+                                  iconColor={member.is_active ? '#c62828' : '#2e7d32'}
+                                  onPress={() => handleToggleActive(member)}
+                                  disabled={!canAct}
+                                  accessibilityLabel={member.is_active ? 'Deactivate' : 'Reactivate'}
+                                />
+                                <IconButton
+                                  icon="account-remove"
+                                  size={20}
+                                  iconColor={formTheme.mutedText}
+                                  onPress={() => openConfirmation('remove', member)}
+                                  disabled={!canAct}
+                                  accessibilityLabel="Remove from organization"
+                                />
+                                <IconButton
+                                  icon="delete"
+                                  size={20}
+                                  iconColor="#c62828"
+                                  onPress={() => openConfirmation('delete', member)}
+                                  disabled={!canAct}
+                                  accessibilityLabel="Delete account"
+                                />
+                              </View>
+                            )}
                           </DataTable.Cell>
                         </DataTable.Row>
                       );
@@ -364,10 +599,98 @@ export default function UsersScreen() {
         </FormField>
       </FormDialog>
 
+      {/* Remove / Delete confirmation (HT-65), on the same shell */}
+      <FormDialog
+        visible={confirmation !== null}
+        title={confirmTitle}
+        subtitle={organization?.name}
+        onDismiss={dismissConfirmation}
+        footer={
+          <FormDialogFooter
+            onCancel={dismissConfirmation}
+            onSubmit={handleConfirm}
+            submitLabel={confirmation?.kind === 'delete' ? 'Delete account' : 'Remove'}
+            submitting={confirming}
+          />
+        }
+      >
+        {confirmation?.kind === 'remove' ? (
+          <Text style={styles.confirmText}>
+            {displayName(confirmation.member)} loses access to {organization?.name}. Their account stays, and so does
+            any other organization they belong to. Jobs and notes they created are kept.
+          </Text>
+        ) : confirmation ? (
+          <Text style={styles.confirmText}>
+            This permanently deletes {displayName(confirmation.member)}'s HandyTally account and their access to every
+            organization. Jobs, notes and invoices they created are kept, with the author left blank. This cannot be
+            undone.
+          </Text>
+        ) : null}
+        {confirmError ? <Text style={styles.confirmError}>{confirmError}</Text> : null}
+      </FormDialog>
+
+      {/* Import preview (HT-46): what the sheet will do, confirmed before anything runs */}
+      <FormDialog
+        visible={importPlan !== null}
+        title="Import users"
+        subtitle={organization?.name}
+        onDismiss={dismissImport}
+        footer={
+          importPlan && importPlan.errors.length === 0 && importErrors.length === 0 ? (
+            <FormDialogFooter
+              onCancel={dismissImport}
+              onSubmit={handleApplyImport}
+              submitLabel={importPlan.removals.length ? 'Apply and remove' : 'Apply'}
+              submitting={importing}
+            />
+          ) : (
+            <Button mode="contained" onPress={dismissImport} disabled={importing}>Close</Button>
+          )
+        }
+      >
+        {importPlan && importPlan.errors.length > 0 ? (
+          <>
+            <Text style={styles.confirmText}>Nothing was changed. Fix these rows and import again:</Text>
+            {importPlan.errors.map((e, i) => (
+              <Text key={i} style={styles.confirmError}>• {e}</Text>
+            ))}
+          </>
+        ) : importErrors.length > 0 ? (
+          <>
+            <Text style={styles.confirmText}>The membership changes were applied, but these steps did not go through:</Text>
+            {importErrors.map((e, i) => (
+              <Text key={i} style={styles.confirmError}>• {e}</Text>
+            ))}
+          </>
+        ) : importPlan ? (
+          <>
+            <Text style={styles.confirmText}>
+              {importPlan.updates.length} to update, {importPlan.invites.length} to invite, {importPlan.removals.length} to remove
+              from {organization?.name}, {importPlan.unchanged} unchanged.
+            </Text>
+            {importPlan.updates.map(u => (
+              <Text key={u.user_id} style={styles.previewLine}>• {describeUpdate(u)}</Text>
+            ))}
+            {importPlan.invites.map(i => (
+              <Text key={i.email} style={styles.previewLine}>• invite {i.email} as {ROLE_LABELS[i.role].toLowerCase()}</Text>
+            ))}
+            {importPlan.removals.map(m => (
+              <Text key={m.user_id} style={[styles.previewLine, { color: '#c62828' }]}>• remove {displayName(m)} ({m.email})</Text>
+            ))}
+            {importPlan.removals.length > 0 ? (
+              <Text style={styles.roleHint}>
+                Removed people keep their account if they belong to another organization; otherwise the account is deleted.
+                Jobs and notes they created are kept with a blank author.
+              </Text>
+            ) : null}
+          </>
+        ) : null}
+      </FormDialog>
+
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
-        duration={5000}
+        duration={6000}
       >
         {snackbarMessage}
       </Snackbar>
@@ -413,5 +736,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: formTheme.mutedText,
     marginTop: 8,
+  },
+  platformHint: {
+    fontSize: 12,
+    color: formTheme.mutedText,
+  },
+  confirmText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: formTheme.text,
+    marginBottom: 12,
+  },
+  confirmError: {
+    fontSize: 13,
+    color: '#c62828',
+    marginBottom: 8,
+  },
+  previewLine: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: formTheme.text,
   },
 });

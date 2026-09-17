@@ -30,12 +30,16 @@ import { tenantSubdomain } from '../lib/tenant';
 // role = null. Everything except Admin still works for them today, because
 // the row-level-security policies are not organisation-scoped yet (HT-14
 // phase 2).
-export type OrgRole = 'admin' | 'user' | 'technician' | 'superuser';
+import {
+  pickMembership,
+  resolveTenantMembership,
+  type Membership,
+  type MembershipRow,
+  type Organization,
+  type OrgRole,
+} from '../lib/tenantAccess';
 
-export type Organization = {
-  id: string;
-  name: string;
-};
+export type { Organization, OrgRole };
 
 export type TenantState =
   /** No tenant in the hostname: apex, www, localhost, workers.dev, native. */
@@ -84,12 +88,11 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-type Membership = { organization: Organization; role: OrgRole } | null;
-type MembershipRow = { org_id: string; org_name: string; user_role: OrgRole; is_active: boolean };
-
 // get_user_organizations(target_user_id) returns one row per membership and,
 // for a superuser, a synthetic 'superuser' row for every organisation they
-// are not a member of.
+// are not a member of. How the rows turn into "the organisation the user is
+// acting in" lives in lib/tenantAccess.ts (pickMembership,
+// resolveTenantMembership) so the HT-38 gate is unit-tested (HT-65).
 //
 // target_user_id is passed explicitly: the database also had an older
 // zero-argument get_user_organizations() returning uuid[], and a call with no
@@ -101,17 +104,6 @@ async function fetchMembershipRows(userId: string): Promise<MembershipRow[]> {
     return [];
   }
   return (data ?? []) as MembershipRow[];
-}
-
-// A real membership wins over a synthetic superuser row, and admin over
-// member, matching auto_set_organization_id(); a superuser with no
-// membership at all falls back to the first organisation.
-function pickMembership(rows: MembershipRow[]): Membership {
-  const active = rows.filter(r => r.is_active);
-  const rank = (r: OrgRole) => (r === 'admin' ? 0 : r === 'superuser' ? 2 : 1);
-  const best = active.sort((a, b) => rank(a.user_role) - rank(b.user_role))[0];
-  if (!best) return null;
-  return { organization: { id: best.org_id, name: best.org_name }, role: best.user_role };
 }
 
 // SECURITY DEFINER lookup callable by the anon role, so the login screen can
@@ -191,7 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const rows = await fetchMembershipRows(userId);
 
     if (tenant.status === 'found') {
-      const here = pickMembership(rows.filter(r => r.org_id === tenant.organization.id));
+      const here = resolveTenantMembership(rows, tenant.organization.id);
       if (!here) {
         // Signed in, but not a member of the organisation at this address.
         // Sign out; the login screen shows the reason.
