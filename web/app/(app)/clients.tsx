@@ -10,7 +10,8 @@ import { exportWorkbook, pickWorkbook, sheetRows, confirmAction } from '../../ut
 import { ImportExportButtons } from '../../components/ImportExportButtons';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLabels } from '../../hooks/useLabels';
-import { labelColor } from '../../constants/labels';
+import { labelColor, labelText, labelTextColor } from '../../constants/labels';
+import { LabelPill, LabelPillRow } from '../../components/LabelPill';
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 
 type Client = {
@@ -625,35 +626,19 @@ export default function ClientsScreen() {
       </View>
       
       
-          <View style={{ 
-            flexDirection: 'row', 
-            marginBottom: 16, 
-            marginTop: 16,
-            justifyContent: 'flex-start',
-            gap: 8
-          }}>
-            <Button
-              mode={selectedTags.length === 0 ? 'contained' : 'outlined'}
-              onPress={() => setSelectedTags([])}
-              style={{ minWidth: 80, borderRadius: 4 }}
-            >
-              All
-            </Button>
+          <LabelPillRow style={{ marginTop: 16 }}>
+            <LabelPill label="All" selected={selectedTags.length === 0} onPress={() => setSelectedTags([])} />
             {CLIENT_TAGS.map(tag => (
-              <Button
+              <LabelPill
                 key={tag.value}
-                mode={selectedTags.includes(tag.value) ? 'contained' : 'outlined'}
+                label={tag.label}
+                color={tag.color}
+                textColor={tag.textColor}
+                selected={selectedTags.includes(tag.value)}
                 onPress={() => toggleTagFilter(tag.value)}
-                style={{
-                  minWidth: 80,
-                  borderRadius: 4,
-                  backgroundColor: selectedTags.includes(tag.value) ? tag.color : undefined
-                }}
-              >
-                {tag.label}
-              </Button>
+              />
             ))}
-          </View>
+          </LabelPillRow>
           
           <View style={{
             margin: 0,
@@ -834,11 +819,12 @@ export default function ClientsScreen() {
                       <Card.Content>
                         <View style={styles.relatedItemHeader}>
                           <Text style={styles.relatedItemTitle}>{job.title}</Text>
-                          <View style={[styles.statusBadge, { backgroundColor: labelColor(jobStatuses, job.status) }]}>
-                            <Text style={styles.statusText}>
-                              {job.status?.replace('_', ' ').toUpperCase()}
-                            </Text>
-                          </View>
+                          <LabelPill
+                            size="sm"
+                            label={labelText(jobStatuses, job.status)}
+                            color={labelColor(jobStatuses, job.status)}
+                            textColor={labelTextColor(jobStatuses, job.status)}
+                          />
                         </View>
                         <Text style={styles.relatedItemDate}>Created: {formatDate(job.created_at)}</Text>
                       </Card.Content>
@@ -857,11 +843,12 @@ export default function ClientsScreen() {
                       <Card.Content>
                         <View style={styles.relatedItemHeader}>
                           <Text style={styles.relatedItemTitle}>Invoice #{invoice.invoice_number}</Text>
-                          <View style={[styles.statusBadge, { backgroundColor: labelColor(invoiceStatuses, invoice.status) }]}>
-                            <Text style={styles.statusText}>
-                              {invoice.status?.toUpperCase()}
-                            </Text>
-                          </View>
+                          <LabelPill
+                            size="sm"
+                            label={labelText(invoiceStatuses, invoice.status)}
+                            color={labelColor(invoiceStatuses, invoice.status)}
+                            textColor={labelTextColor(invoiceStatuses, invoice.status)}
+                          />
                         </View>
                         <Text style={styles.relatedItemAmount}>
                           Amount: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(invoice.total || 0)}
@@ -1095,9 +1082,12 @@ export default function ClientsScreen() {
                         <DataTable.Row key={job.uid}>
                           <DataTable.Cell>{job.title}</DataTable.Cell>
                           <DataTable.Cell>
-                            <View style={[styles.statusBadge, { backgroundColor: labelColor(jobStatuses, job.status) }]}>
-                              <Text style={styles.statusText}>{job.status?.replace('_', ' ').toUpperCase()}</Text>
-                            </View>
+                            <LabelPill
+                              size="sm"
+                              label={labelText(jobStatuses, job.status)}
+                              color={labelColor(jobStatuses, job.status)}
+                              textColor={labelTextColor(jobStatuses, job.status)}
+                            />
                           </DataTable.Cell>
                           <DataTable.Cell>{formatDate(job.start_date)}</DataTable.Cell>
                           <DataTable.Cell>{formatDate(job.end_date)}</DataTable.Cell>
@@ -1158,9 +1148,12 @@ export default function ClientsScreen() {
                             {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(invoice.total || 0)}
                           </DataTable.Cell>
                           <DataTable.Cell>
-                            <View style={[styles.statusBadge, { backgroundColor: labelColor(invoiceStatuses, invoice.status) }]}>
-                              <Text style={styles.statusText}>{invoice.status?.toUpperCase()}</Text>
-                            </View>
+                            <LabelPill
+                              size="sm"
+                              label={labelText(invoiceStatuses, invoice.status)}
+                              color={labelColor(invoiceStatuses, invoice.status)}
+                              textColor={labelTextColor(invoiceStatuses, invoice.status)}
+                            />
                           </DataTable.Cell>
                           <DataTable.Cell>
                             <View style={{ flexDirection: 'row' }}>
@@ -1265,16 +1258,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 16,
     textAlign: 'center',
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-  statusText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: 'bold',
   },
   listContainer: {
     paddingBottom: 80,
