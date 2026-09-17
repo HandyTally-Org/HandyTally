@@ -1,10 +1,33 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { getWeek, isToday } from 'date-fns';
 import type { CalendarEvent } from './types';
 import { hourLabel, isAllDayLike, layoutTimedEvents, layoutWeekRow } from './layout';
 import { EventChip } from './EventChip';
 import { ALL_DAY_LANE_HEIGHT, calendarTheme as t, HOUR_HEIGHT, TIME_GUTTER_WIDTH } from './theme';
+
+// On web the hour grid sits in a vertical ScrollView, whose native scrollbar
+// eats into the row's width. The day headers and the all-day row live outside
+// that ScrollView, so without this they render slightly wider than the hour
+// columns below and drift out of alignment (worst on the rightmost day).
+// Padding both fixed rows by the browser's actual scrollbar width keeps every
+// row the same width. Native has no scrollbar chrome, so this is always 0 there.
+let cachedScrollbarWidth: number | null = null;
+
+function measureScrollbarWidth(): number {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') return 0;
+  if (cachedScrollbarWidth !== null) return cachedScrollbarWidth;
+
+  const outer = document.createElement('div');
+  outer.style.cssText = 'visibility:hidden;position:absolute;top:-9999px;width:100px;height:100px;overflow:scroll;';
+  const inner = document.createElement('div');
+  inner.style.cssText = 'width:100%;height:200px;';
+  outer.appendChild(inner);
+  document.body.appendChild(outer);
+  cachedScrollbarWidth = outer.offsetWidth - inner.offsetWidth;
+  document.body.removeChild(outer);
+  return cachedScrollbarWidth;
+}
 
 interface TimeGridViewProps {
   /** One date for the day view, seven for the week view. */
@@ -23,6 +46,7 @@ const SCROLL_TO_HOUR = 7;
 export function TimeGridView({ days, events, onEventPress, onSlotPress, onDayPress }: TimeGridViewProps) {
   const scrollRef = useRef<ScrollView>(null);
   const [now, setNow] = useState(() => new Date());
+  const [scrollbarWidth] = useState(measureScrollbarWidth);
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000);
@@ -74,6 +98,7 @@ export function TimeGridView({ days, events, onEventPress, onSlotPress, onDayPre
             </TouchableOpacity>
           );
         })}
+        {scrollbarWidth > 0 && <View style={{ width: scrollbarWidth }} />}
       </View>
 
       {/* All-day row */}
@@ -110,6 +135,7 @@ export function TimeGridView({ days, events, onEventPress, onSlotPress, onDayPre
             ))}
           </View>
         </View>
+        {scrollbarWidth > 0 && <View style={{ width: scrollbarWidth }} />}
       </View>
 
       {/* Hours */}
