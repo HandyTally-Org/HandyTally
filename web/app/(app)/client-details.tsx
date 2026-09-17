@@ -11,6 +11,8 @@ import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 import { useCustomFields } from '../../hooks/useCustomFields';
 import { CustomFieldInputs } from '../../components/CustomFields';
 import { normalizeCustomValues, validateCustomValues } from '../../constants/customFields';
+import { FormField, FormRow } from '../../components/FormDialog';
+import { FormActions, FormPanel, FormSection, outlinedInputProps } from '../../components/FormLayout';
 
 export default function ClientDetailsScreen() {
   const router = useRouter();
@@ -345,112 +347,97 @@ export default function ClientDetailsScreen() {
         {/* Main Content */}
         <ScrollView style={{ flex: 1, padding: 16, borderWidth: 0, borderColor: '#e0e0e0' }}>
           {activeSection === 'info' && (
-            <View style={{ backgroundColor: '#ffffff' }}>
-              <Text style={{ fontSize: 20, fontWeight: 'normal', marginBottom: 16, backgroundColor: '#ffffff' }}>Client Information</Text>
-              
-              <View style={{ marginBottom: 16, backgroundColor: '#ffffff' }}>
-                <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Name</Text>
-                <TextInput
-                  value={editedClient?.name || ''}
-                  onChangeText={(text) => setEditedClient({ ...editedClient, name: text })}
-                  style={{ marginBottom: 16 }}
-                  mode="outlined"
-                />
-                
-                <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Email</Text>
-                <TextInput
-                  value={editedClient?.email || ''}
-                  onChangeText={(text) => setEditedClient({ ...editedClient, email: text })}
-                  style={{ marginBottom: 16 }}
-                  mode="outlined"
-                />
-                
-                <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Phone</Text>
-                <TextInput
-                  value={editedClient?.phone || ''}
-                  onChangeText={(text) => setEditedClient({ ...editedClient, phone: text })}
-                  style={{ marginBottom: 16 }}
-                  mode="outlined"
-                />
-                
-                <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Address</Text>
-                <TextInput
-                  value={editedClient?.address || ''}
-                  onChangeText={(text) => setEditedClient({ ...editedClient, address: text })}
-                  style={{ marginBottom: 16 }}
-                  mode="outlined"
-                />
-                
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <View style={{ flex: 2 }}>
-                    <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>City</Text>
+            <FormPanel title="Client Information" subtitle="Contact details, address and notes for this client.">
+              <FormSection title="Contact">
+                <FormField label="Name">
+                  <TextInput
+                    value={editedClient?.name || ''}
+                    onChangeText={(text) => setEditedClient({ ...editedClient, name: text })}
+                    {...outlinedInputProps}
+                  />
+                </FormField>
+                <FormRow>
+                  <FormField label="Email">
+                    <TextInput
+                      value={editedClient?.email || ''}
+                      onChangeText={(text) => setEditedClient({ ...editedClient, email: text })}
+                      {...outlinedInputProps}
+                    />
+                  </FormField>
+                  <FormField label="Phone">
+                    <TextInput
+                      value={editedClient?.phone || ''}
+                      onChangeText={(text) => setEditedClient({ ...editedClient, phone: text })}
+                      {...outlinedInputProps}
+                    />
+                  </FormField>
+                </FormRow>
+              </FormSection>
+
+              <FormSection title="Address">
+                <FormField label="Address">
+                  <TextInput
+                    value={editedClient?.address || ''}
+                    onChangeText={(text) => setEditedClient({ ...editedClient, address: text })}
+                    {...outlinedInputProps}
+                  />
+                </FormField>
+                <FormRow weights={[2, 1, 1]}>
+                  <FormField label="City">
                     <TextInput
                       value={editedClient?.city || ''}
                       onChangeText={(text) => setEditedClient({ ...editedClient, city: text })}
-                      style={{ marginBottom: 16 }}
-                      mode="outlined"
+                      {...outlinedInputProps}
                     />
-                  </View>
-                  
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>State</Text>
+                  </FormField>
+                  <FormField label="State">
                     <TextInput
                       value={editedClient?.state || ''}
                       onChangeText={(text) => setEditedClient({ ...editedClient, state: text })}
-                      style={{ marginBottom: 16 }}
-                      mode="outlined"
+                      {...outlinedInputProps}
                     />
-                  </View>
-                  
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>ZIP</Text>
+                  </FormField>
+                  <FormField label="ZIP">
                     <TextInput
                       value={editedClient?.zip || ''}
                       onChangeText={(text) => setEditedClient({ ...editedClient, zip: text })}
-                      style={{ marginBottom: 16 }}
-                      mode="outlined"
+                      {...outlinedInputProps}
                     />
-                  </View>
-                </View>
-                
-                <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Tag</Text>
-                <TextInput
-                  value={editedClient?.tag || ''}
-                  onChangeText={(text) => setEditedClient({ ...editedClient, tag: text })}
-                  style={{ marginBottom: 16 }}
-                  mode="outlined"
-                />
-                
-                <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Notes</Text>
-                <TextInput
-                  value={editedClient?.notes || ''}
-                  onChangeText={(text) => setEditedClient({ ...editedClient, notes: text })}
-                  style={{ marginBottom: 16 }}
-                  mode="outlined"
-                  multiline
-                  numberOfLines={4}
-                />
+                  </FormField>
+                </FormRow>
+              </FormSection>
 
-                <CustomFieldInputs
-                  defs={customDefs}
-                  values={editedClient?.custom_fields ?? {}}
-                  errors={customErrors}
-                  onChange={(key, value) => {
-                    setEditedClient({ ...editedClient, custom_fields: { ...(editedClient?.custom_fields ?? {}), [key]: value } });
-                    if (customErrors[key]) setCustomErrors(current => ({ ...current, [key]: '' }));
-                  }}
-                />
+              <FormSection title="Details">
+                <FormField label="Tag">
+                  <TextInput
+                    value={editedClient?.tag || ''}
+                    onChangeText={(text) => setEditedClient({ ...editedClient, tag: text })}
+                    {...outlinedInputProps}
+                  />
+                </FormField>
+                <FormField label="Notes">
+                  <TextInput
+                    value={editedClient?.notes || ''}
+                    onChangeText={(text) => setEditedClient({ ...editedClient, notes: text })}
+                    {...outlinedInputProps}
+                    multiline
+                    numberOfLines={4}
+                  />
+                </FormField>
+              </FormSection>
 
-                <Button 
-                  mode="contained" 
-                  onPress={handleSaveClient}
-                  loading={saving}
-                  disabled={saving}
-                >
-                  Save Changes
-                </Button>
-              </View>
-            </View>
+              <CustomFieldInputs
+                defs={customDefs}
+                values={editedClient?.custom_fields ?? {}}
+                errors={customErrors}
+                onChange={(key, value) => {
+                  setEditedClient({ ...editedClient, custom_fields: { ...(editedClient?.custom_fields ?? {}), [key]: value } });
+                  if (customErrors[key]) setCustomErrors(current => ({ ...current, [key]: '' }));
+                }}
+              />
+
+              <FormActions onSubmit={handleSaveClient} submitLabel="Save Changes" submitting={saving} />
+            </FormPanel>
           )}
           
           {activeSection === 'jobs' && (

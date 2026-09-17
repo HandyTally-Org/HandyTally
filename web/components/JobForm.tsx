@@ -1,7 +1,6 @@
 import { forwardRef, useImperativeHandle, useState, useEffect, useRef } from 'react';
 import { View, ScrollView, Dimensions, StyleSheet, TouchableOpacity, Pressable, TextInput as RNTextInput, ScrollView as RNScrollView } from 'react-native';
-import { TextInput, Button, Card, Text, ActivityIndicator, HelperText, Menu, Portal, IconButton } from 'react-native-paper';
-import { styles } from '../styles';
+import { TextInput, Text, ActivityIndicator, Portal, IconButton } from 'react-native-paper';
 import { supabase } from '../lib/supabase';
 import { useLabels } from '../hooks/useLabels';
 // Replace the Client import with a local type definition
@@ -21,6 +20,8 @@ import { useOrganizationMembers } from '../hooks/useOrganizationMembers';
 import { memberDisplayName, assigneeLabel } from '../utils/inviteUser';
 import { useCustomFields } from '../hooks/useCustomFields';
 import { CustomFieldInputs } from './CustomFields';
+import { FormField, FormRow } from './FormDialog';
+import { FormActions, FormPanel, FormSection, formLayoutTheme, outlinedInputProps } from './FormLayout';
 import { normalizeCustomValues, validateCustomValues, type CustomFieldValues } from '../constants/customFields';
 
 type Job = {
@@ -466,134 +467,102 @@ export const JobForm = forwardRef<JobFormHandle, JobFormProps>(function JobForm(
 
   useImperativeHandle(ref, () => ({ submit: submitFormToDatabase }));
 
-  // Inside a dialog the FormDialog scrolls; on its own the form scrolls itself.
+  // Inside a dialog the FormDialog scrolls and its footer holds the buttons; on
+  // its own the form scrolls itself and sits in a bordered panel (HT-60).
   const Wrapper: any = embedded ? View : ScrollView;
   const wrapperProps = embedded
     ? {}
     : { style: { flex: 1, backgroundColor: '#ffffff', height: '100%' }, contentContainerStyle: { paddingBottom: 80 } };
+  const Body: any = embedded ? View : FormPanel;
+
+  const activeAssignees = members.filter(m => m.is_active);
 
   return (
     <Wrapper {...wrapperProps}>
-          <View style={styles.formField}>
-            <Text style={styles.label}>Client</Text>
-        <View style={{ position: 'relative' }}>
-          <TouchableOpacity 
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              borderWidth: 1,
-              borderColor: '#e0e0e0',
-              borderRadius: 4,
-              padding: 12,
-              backgroundColor: '#ffffff',
-            }}
+      <Body>
+        <FormSection title="Job">
+          <FormField label="Client" error={errors.client_id}>
+            <View style={{ position: 'relative' }}>
+              <TouchableOpacity
+                style={[fieldStyles.field, (submitting || loadingClients) && fieldStyles.fieldDisabled]}
                 onPress={() => {
-              // Get position of the button for positioning the dropdown
-              if (clientButtonRef.current) {
-                clientButtonRef.current.measure((fx: number, fy: number, width: number, height: number, px: number, py: number) => {
-                  setClientButtonLayout({ x: px, y: py, width, height });
-                  setShowClientMenu(true);
-                });
-              } else {
-                setShowClientMenu(true);
-              }
+                  // Get position of the button for positioning the dropdown
+                  if (clientButtonRef.current) {
+                    clientButtonRef.current.measure((fx: number, fy: number, width: number, height: number, px: number, py: number) => {
+                      setClientButtonLayout({ x: px, y: py, width, height });
+                      setShowClientMenu(true);
+                    });
+                  } else {
+                    setShowClientMenu(true);
+                  }
                 }}
-            ref={clientButtonRef}
+                ref={clientButtonRef}
                 disabled={submitting || loadingClients}
-          >
-            <Text>{selectedClient ? selectedClient.name : 'Select Client'}</Text>
-            <MaterialIcons name="arrow-drop-down" size={24} color="#000000" />
-          </TouchableOpacity>
-          
-          {showClientMenu && (
-            <Portal>
-              <View 
-                style={{
-                  position: 'absolute',
-                  top: clientButtonLayout.y + clientButtonLayout.height,
-                  left: clientButtonLayout.x,
-                  width: clientButtonLayout.width,
-                  backgroundColor: '#ffffff',
-                  borderWidth: 1,
-                  borderColor: '#e0e0e0',
-                  borderRadius: 4,
-                  zIndex: 9999,
-                  elevation: 9,
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.25,
-                  shadowRadius: 3.84,
-                  maxHeight: 300,
-                }}
+                accessibilityRole="button"
+                accessibilityLabel="Client"
               >
-                {loadingClients ? (
-                  <View style={{ padding: 12, alignItems: 'center' }}>
-                    <ActivityIndicator size="small" />
-                    <Text style={{ marginTop: 8 }}>Loading clients...</Text>
+                <Text style={selectedClient ? fieldStyles.fieldText : fieldStyles.fieldPlaceholder}>
+                  {selectedClient ? selectedClient.name : 'Select Client'}
+                </Text>
+                <MaterialIcons name="arrow-drop-down" size={24} color="#6B7280" />
+              </TouchableOpacity>
+
+              {showClientMenu && (
+                <Portal>
+                  <View
+                    style={[
+                      fieldStyles.menu,
+                      { top: clientButtonLayout.y + clientButtonLayout.height, left: clientButtonLayout.x, width: clientButtonLayout.width, maxHeight: 300 },
+                    ]}
+                  >
+                    {loadingClients ? (
+                      <View style={{ padding: 12, alignItems: 'center' }}>
+                        <ActivityIndicator size="small" />
+                        <Text style={{ marginTop: 8 }}>Loading clients...</Text>
+                      </View>
+                    ) : clients.length === 0 ? (
+                      <View style={{ padding: 12 }}>
+                        <Text>No clients found</Text>
+                      </View>
+                    ) : (
+                      <ScrollView style={{ maxHeight: 300 }}>
+                        {clients.map((client) => (
+                          <Pressable
+                            key={client.uid}
+                            style={({ hovered }) => [
+                              fieldStyles.menuItem,
+                              client.uid === clients[clients.length - 1].uid && fieldStyles.menuItemLast,
+                              hovered && fieldStyles.menuItemHover,
+                            ]}
+                            onPress={() => {
+                              handleSelectClient(client);
+                              setShowClientMenu(false);
+                            }}
+                          >
+                            <Text style={fieldStyles.menuItemText}>{client.name}</Text>
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                    )}
                   </View>
-                ) : clients.length === 0 ? (
-                  <View style={{ padding: 12 }}>
-                    <Text>No clients found</Text>
-                  </View>
-                ) : (
-                  <ScrollView style={{ maxHeight: 300 }}>
-                    {clients.map((client) => (
-                      <Pressable
-                      key={client.uid}
-                        style={({ hovered }) => ({
-                          padding: 12,
-                          borderBottomWidth: client.uid !== clients[clients.length-1].uid ? 1 : 0,
-                          borderBottomColor: '#f0f0f0',
-                          backgroundColor: hovered ? '#f5f5f5' : '#ffffff',
-                        })}
-                        onPress={() => {
-                          handleSelectClient(client);
-                          setShowClientMenu(false);
-                        }}
-                      >
-                        <Text>{client.name}</Text>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
-                )}
-              </View>
-              
-              {/* Add a transparent overlay to capture touches outside the dropdown */}
-              <Pressable
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundColor: 'transparent',
-                }}
-                onPress={() => setShowClientMenu(false)}
-              />
-            </Portal>
-          )}
+
+                  {/* Add a transparent overlay to capture touches outside the dropdown */}
+                  <Pressable style={fieldStyles.menuBackdrop} onPress={() => setShowClientMenu(false)} />
+                </Portal>
+              )}
             </View>
-            {errors.client_id && <HelperText type="error">{errors.client_id}</HelperText>}
-          </View>
-          
-          <View style={styles.formField}>
-            <Text style={styles.label}>Title</Text>
+          </FormField>
+
+          <FormField label="Title" error={errors.title}>
             <TextInput
               value={formData.title}
-          onChangeText={(text) => handleChange('title', text)}
-              style={styles.input}
-          mode="outlined"
-          outlineColor="#e0e0e0"
-          activeOutlineColor="#000000"
+              onChangeText={(text) => handleChange('title', text)}
+              {...outlinedInputProps}
             />
-            {errors.title && <HelperText type="error">{errors.title}</HelperText>}
-          </View>
-          
-          <View style={styles.formField}>
-            <Text style={styles.label}>Description</Text>
+          </FormField>
+
+          <FormField label="Description">
             <TextInput
-              label=""
               value={formData.description}
               onChangeText={(value) => {
                 handleChange('description', value);
@@ -602,292 +571,202 @@ export const JobForm = forwardRef<JobFormHandle, JobFormProps>(function JobForm(
               }}
               multiline
               numberOfLines={5}
-              style={[styles.input, { minHeight: 100, textAlignVertical: 'top' }]}
-          mode="outlined"
-          outlineColor="#e0e0e0"
-          activeOutlineColor="#000000"
+              {...outlinedInputProps}
+              style={[outlinedInputProps.style, { minHeight: 100, textAlignVertical: 'top' }]}
               disabled={submitting}
             />
-          </View>
-          
-          <View style={styles.formField}>
-            <Text style={styles.label}>Status</Text>
-        <View style={{ position: 'relative' }}>
-          <TouchableOpacity 
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              borderWidth: 1,
-              borderColor: '#e0e0e0',
-              borderRadius: 4,
-              padding: 12,
-              backgroundColor: '#ffffff',
-            }}
-            onPress={() => {
-              // Get position of the button for positioning the dropdown
-              if (statusButtonRef.current) {
-                statusButtonRef.current.measure((fx: number, fy: number, width: number, height: number, px: number, py: number) => {
-                  setStatusButtonLayout({ x: px, y: py, width, height });
-                  setShowStatusDropdown(true);
-                });
-              } else {
-                setShowStatusDropdown(true);
-              }
-            }}
-            ref={statusButtonRef}
-          >
-            <Text>{getStatusLabel(formData.status)}</Text>
-            <MaterialIcons name="arrow-drop-down" size={24} color="#000000" />
-          </TouchableOpacity>
-          
-          {showStatusDropdown && (
-            <Portal>
-              <View 
-                style={{
-                  position: 'absolute',
-                  top: statusButtonLayout.y + statusButtonLayout.height,
-                  left: statusButtonLayout.x,
-                  width: statusButtonLayout.width,
-                  backgroundColor: '#ffffff',
-                  borderWidth: 1,
-                  borderColor: '#e0e0e0',
-                  borderRadius: 4,
-                  zIndex: 9999,
-                  elevation: 9,
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.25,
-                  shadowRadius: 3.84,
-                }}
-              >
-                {statusOptions.map((option) => (
-                  <Pressable
-                    key={option.value}
-                    style={({ hovered }) => ({
-                      padding: 12,
-                      borderBottomWidth: option.value !== statusOptions[statusOptions.length-1].value ? 1 : 0,
-                      borderBottomColor: '#f0f0f0',
-                      backgroundColor: hovered ? '#f5f5f5' : '#ffffff',
-                    })}
-                    onPress={() => {
-                      handleChange('status', option.value);
-                      setShowStatusDropdown(false);
-                    }}
-                  >
-                    <Text>{option.label}</Text>
-                  </Pressable>
-                ))}
-              </View>
-              
-              {/* Add a transparent overlay to capture touches outside the dropdown */}
-              <Pressable
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundColor: 'transparent',
-                }}
-                onPress={() => setShowStatusDropdown(false)}
-              />
-            </Portal>
-          )}
-        </View>
-          </View>
+          </FormField>
+        </FormSection>
 
-          {/* HT-35: Assigned to. Same anchored-Portal pattern as Client and Status. */}
-          <View style={styles.formField}>
-            <Text style={styles.label}>Assigned to</Text>
-        <View style={{ position: 'relative' }}>
-          <TouchableOpacity
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              borderWidth: 1,
-              borderColor: '#e0e0e0',
-              borderRadius: 4,
-              padding: 12,
-              backgroundColor: '#ffffff',
-              opacity: !organization || submitting ? 0.6 : 1,
-            }}
-            onPress={() => {
-              if (assigneeButtonRef.current) {
-                assigneeButtonRef.current.measure((fx: number, fy: number, width: number, height: number, px: number, py: number) => {
-                  setAssigneeButtonLayout({ x: px, y: py, width, height });
-                  setShowAssigneeDropdown(true);
-                });
-              } else {
-                setShowAssigneeDropdown(true);
-              }
-            }}
-            ref={assigneeButtonRef}
-            disabled={!organization || submitting || loadingMembers}
-            accessibilityRole="button"
-            accessibilityLabel="Assigned to"
-          >
-            <Text>
-              {!organization
-                ? 'Join an organisation to assign jobs'
-                : loadingMembers
-                  ? 'Loading users...'
-                  : assigneeLabel(formData.assigned_to, members)}
-            </Text>
-            <MaterialIcons name="arrow-drop-down" size={24} color="#000000" />
-          </TouchableOpacity>
+        <FormSection title="Assignment">
+          <FormRow>
+            <FormField label="Status">
+              <View style={{ position: 'relative' }}>
+                <TouchableOpacity
+                  style={fieldStyles.field}
+                  onPress={() => {
+                    // Get position of the button for positioning the dropdown
+                    if (statusButtonRef.current) {
+                      statusButtonRef.current.measure((fx: number, fy: number, width: number, height: number, px: number, py: number) => {
+                        setStatusButtonLayout({ x: px, y: py, width, height });
+                        setShowStatusDropdown(true);
+                      });
+                    } else {
+                      setShowStatusDropdown(true);
+                    }
+                  }}
+                  ref={statusButtonRef}
+                  accessibilityRole="button"
+                  accessibilityLabel="Status"
+                >
+                  <Text style={fieldStyles.fieldText}>{getStatusLabel(formData.status)}</Text>
+                  <MaterialIcons name="arrow-drop-down" size={24} color="#6B7280" />
+                </TouchableOpacity>
 
-          {showAssigneeDropdown && (
-            <Portal>
-              <View
-                style={{
-                  position: 'absolute',
-                  top: assigneeButtonLayout.y + assigneeButtonLayout.height,
-                  left: assigneeButtonLayout.x,
-                  width: assigneeButtonLayout.width,
-                  backgroundColor: '#ffffff',
-                  borderWidth: 1,
-                  borderColor: '#e0e0e0',
-                  borderRadius: 4,
-                  zIndex: 9999,
-                  elevation: 9,
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.25,
-                  shadowRadius: 3.84,
-                  maxHeight: 300,
-                }}
-              >
-                <ScrollView style={{ maxHeight: 300 }}>
-                  {[{ user_id: null as string | null, label: 'Unassigned' }]
-                    .concat(
-                      members
-                        .filter(m => m.is_active)
-                        .map(m => ({ user_id: m.user_id as string | null, label: memberDisplayName(m) })),
-                    )
-                    .map((option, index, all) => (
-                      <Pressable
-                        key={option.user_id ?? 'unassigned'}
-                        style={({ hovered }) => ({
-                          padding: 12,
-                          borderBottomWidth: index < all.length - 1 ? 1 : 0,
-                          borderBottomColor: '#f0f0f0',
-                          backgroundColor: hovered
-                            ? '#f5f5f5'
-                            : option.user_id === formData.assigned_to ? '#f0f0f0' : '#ffffff',
-                        })}
-                        onPress={() => {
-                          handleChange('assigned_to', option.user_id);
-                          setShowAssigneeDropdown(false);
-                        }}
-                      >
-                        <Text style={option.user_id ? undefined : { color: '#6B7280' }}>{option.label}</Text>
-                      </Pressable>
-                    ))}
-                  {members.filter(m => m.is_active).length === 0 ? (
-                    <View style={{ padding: 12 }}>
-                      <Text style={{ color: '#6B7280' }}>No active users in your organisation</Text>
+                {showStatusDropdown && (
+                  <Portal>
+                    <View
+                      style={[
+                        fieldStyles.menu,
+                        { top: statusButtonLayout.y + statusButtonLayout.height, left: statusButtonLayout.x, width: statusButtonLayout.width },
+                      ]}
+                    >
+                      {statusOptions.map((option) => (
+                        <Pressable
+                          key={option.value}
+                          style={({ hovered }) => [
+                            fieldStyles.menuItem,
+                            option.value === statusOptions[statusOptions.length - 1].value && fieldStyles.menuItemLast,
+                            hovered && fieldStyles.menuItemHover,
+                          ]}
+                          onPress={() => {
+                            handleChange('status', option.value);
+                            setShowStatusDropdown(false);
+                          }}
+                        >
+                          <Text style={fieldStyles.menuItemText}>{option.label}</Text>
+                        </Pressable>
+                      ))}
                     </View>
-                  ) : null}
-                </ScrollView>
+
+                    {/* Add a transparent overlay to capture touches outside the dropdown */}
+                    <Pressable style={fieldStyles.menuBackdrop} onPress={() => setShowStatusDropdown(false)} />
+                  </Portal>
+                )}
               </View>
+            </FormField>
 
-              {/* Transparent overlay to close the dropdown on an outside press */}
-              <Pressable
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundColor: 'transparent',
-                }}
-                onPress={() => setShowAssigneeDropdown(false)}
-              />
-            </Portal>
-          )}
-        </View>
-          </View>
+            {/* HT-35: Assigned to. Same anchored-Portal pattern as Client and Status. */}
+            <FormField label="Assigned to">
+              <View style={{ position: 'relative' }}>
+                <TouchableOpacity
+                  style={[fieldStyles.field, (!organization || submitting) && fieldStyles.fieldDisabled]}
+                  onPress={() => {
+                    if (assigneeButtonRef.current) {
+                      assigneeButtonRef.current.measure((fx: number, fy: number, width: number, height: number, px: number, py: number) => {
+                        setAssigneeButtonLayout({ x: px, y: py, width, height });
+                        setShowAssigneeDropdown(true);
+                      });
+                    } else {
+                      setShowAssigneeDropdown(true);
+                    }
+                  }}
+                  ref={assigneeButtonRef}
+                  disabled={!organization || submitting || loadingMembers}
+                  accessibilityRole="button"
+                  accessibilityLabel="Assigned to"
+                >
+                  <Text style={fieldStyles.fieldText}>
+                    {!organization
+                      ? 'Join an organisation to assign jobs'
+                      : loadingMembers
+                        ? 'Loading users...'
+                        : assigneeLabel(formData.assigned_to, members)}
+                  </Text>
+                  <MaterialIcons name="arrow-drop-down" size={24} color="#6B7280" />
+                </TouchableOpacity>
 
-          <View style={styles.formField}>
-            <Text style={styles.label}>Start Date & Time</Text>
-            {renderDateTimeField('start', formData.start_date, () => setShowStartDatePicker(true))}
-          </View>
+                {showAssigneeDropdown && (
+                  <Portal>
+                    <View
+                      style={[
+                        fieldStyles.menu,
+                        { top: assigneeButtonLayout.y + assigneeButtonLayout.height, left: assigneeButtonLayout.x, width: assigneeButtonLayout.width, maxHeight: 300 },
+                      ]}
+                    >
+                      <ScrollView style={{ maxHeight: 300 }}>
+                        {[{ user_id: null as string | null, label: 'Unassigned' }]
+                          .concat(activeAssignees.map(m => ({ user_id: m.user_id as string | null, label: memberDisplayName(m) })))
+                          .map((option, index, all) => (
+                            <Pressable
+                              key={option.user_id ?? 'unassigned'}
+                              style={({ hovered }) => [
+                                fieldStyles.menuItem,
+                                index === all.length - 1 && fieldStyles.menuItemLast,
+                                option.user_id === formData.assigned_to && fieldStyles.menuItemSelected,
+                                hovered && fieldStyles.menuItemHover,
+                              ]}
+                              onPress={() => {
+                                handleChange('assigned_to', option.user_id);
+                                setShowAssigneeDropdown(false);
+                              }}
+                            >
+                              <Text style={option.user_id ? fieldStyles.menuItemText : fieldStyles.menuItemMuted}>{option.label}</Text>
+                            </Pressable>
+                          ))}
+                        {activeAssignees.length === 0 ? (
+                          <View style={{ padding: 12 }}>
+                            <Text style={fieldStyles.menuItemMuted}>No active users in your organisation</Text>
+                          </View>
+                        ) : null}
+                      </ScrollView>
+                    </View>
 
-          <View style={styles.formField}>
-            <Text style={styles.label}>End Date & Time</Text>
-            {renderDateTimeField('end', formData.end_date, () => setShowEndDatePicker(true))}
-            {endBeforeStart ? (
-              <HelperText type="error" visible>
-                The end is before the start.
-              </HelperText>
-            ) : null}
-          </View>
+                    {/* Transparent overlay to close the dropdown on an outside press */}
+                    <Pressable style={fieldStyles.menuBackdrop} onPress={() => setShowAssigneeDropdown(false)} />
+                  </Portal>
+                )}
+              </View>
+            </FormField>
+          </FormRow>
+        </FormSection>
 
-          <DateTimePickerDialog
-            visible={showStartDatePicker}
-            title="Start date & time"
-            value={formData.start_date}
-            onDismiss={() => setShowStartDatePicker(false)}
-            onConfirm={(iso) => handleDateTimeConfirm(iso, 'start')}
-          />
-          <DateTimePickerDialog
-            visible={showEndDatePicker}
-            title="End date & time"
-            value={formData.end_date}
-            fallback={endPickerFallback}
-            onDismiss={() => setShowEndDatePicker(false)}
-            onConfirm={(iso) => handleDateTimeConfirm(iso, 'end')}
-          />
+        <FormSection title="Schedule">
+          <FormRow>
+            <FormField label="Start Date & Time">
+              {renderDateTimeField('start', formData.start_date, () => setShowStartDatePicker(true))}
+            </FormField>
+            <FormField label="End Date & Time" error={endBeforeStart ? 'The end is before the start.' : undefined}>
+              {renderDateTimeField('end', formData.end_date, () => setShowEndDatePicker(true))}
+            </FormField>
+          </FormRow>
+        </FormSection>
 
-          <CustomFieldInputs
-            defs={customDefs}
-            values={formData.custom_fields || {}}
-            errors={customErrors}
-            onChange={handleCustomFieldChange}
-          />
+        <DateTimePickerDialog
+          visible={showStartDatePicker}
+          title="Start date & time"
+          value={formData.start_date}
+          onDismiss={() => setShowStartDatePicker(false)}
+          onConfirm={(iso) => handleDateTimeConfirm(iso, 'start')}
+        />
+        <DateTimePickerDialog
+          visible={showEndDatePicker}
+          title="End date & time"
+          value={formData.end_date}
+          fallback={endPickerFallback}
+          onDismiss={() => setShowEndDatePicker(false)}
+          onConfirm={(iso) => handleDateTimeConfirm(iso, 'end')}
+        />
 
-          {!embedded && (
-          <>
-          <View style={[styles.row, { justifyContent: 'flex-end', gap: 8, marginTop: 24, marginBottom: 24 }]}>
-            <Button mode="outlined" onPress={onCancel} disabled={submitting}>
-              Cancel
-            </Button>
-            <Button 
-              mode="contained" 
-              onPress={submitFormToDatabase}
-              disabled={submitting}
-              loading={submitting}
-            >
-              Save
-            </Button>
-          </View>
-          
-          {submitting && (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" />
-              <Text style={styles.loadingText}>Saving...</Text>
-            </View>
-          )}
-          </>
-          )}
+        <CustomFieldInputs
+          defs={customDefs}
+          values={formData.custom_fields || {}}
+          errors={customErrors}
+          onChange={handleCustomFieldChange}
+        />
+
+        {!embedded && (
+          <FormActions onCancel={onCancel} onSubmit={submitFormToDatabase} submitLabel="Save" submitting={submitting} />
+        )}
+      </Body>
     </Wrapper>
   );
 });
 
 
 
-// Styles for the date & time trigger fields; the popup itself lives in DateTimePickerDialog.
+// Styles for the dropdown and date & time trigger fields and the anchored
+// dropdown menus; the date popup itself lives in DateTimePickerDialog.
 const fieldStyles = StyleSheet.create({
   field: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     minHeight: 48,
     paddingLeft: 12,
     paddingRight: 4,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: formLayoutTheme.inputBorder,
     borderRadius: 8,
     backgroundColor: '#ffffff',
   },
@@ -900,14 +779,59 @@ const fieldStyles = StyleSheet.create({
   fieldText: {
     flex: 1,
     fontSize: 15,
-    color: '#111827',
+    color: formLayoutTheme.text,
   },
   fieldPlaceholder: {
     flex: 1,
     fontSize: 15,
-    color: '#9CA3AF',
+    color: formLayoutTheme.placeholder,
   },
   clearButton: {
     margin: 0,
+  },
+  menu: {
+    position: 'absolute',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: formLayoutTheme.inputBorder,
+    borderRadius: 8,
+    overflow: 'hidden',
+    zIndex: 9999,
+    elevation: 9,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+  },
+  menuItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    backgroundColor: '#ffffff',
+  },
+  menuItemLast: {
+    borderBottomWidth: 0,
+  },
+  menuItemSelected: {
+    backgroundColor: '#F3F4F6',
+  },
+  menuItemHover: {
+    backgroundColor: '#F9FAFB',
+  },
+  menuItemText: {
+    fontSize: 15,
+    color: formLayoutTheme.text,
+  },
+  menuItemMuted: {
+    fontSize: 15,
+    color: formLayoutTheme.mutedText,
+  },
+  menuBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'transparent',
   },
 });
