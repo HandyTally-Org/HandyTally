@@ -184,7 +184,7 @@ serve(async (req) => {
 
   const { data: organization } = await supabase
     .from("organizations")
-    .select("id, name")
+    .select("id, name, subdomain")
     .eq("id", organizationId)
     .maybeSingle();
   if (!organization) {
@@ -198,11 +198,16 @@ serve(async (req) => {
   // into an email.
   const ALLOWED_ORIGIN = /^https:\/\/([a-z0-9-]+\.)?handytally\.com$|^http:\/\/localhost(:\d+)?$/;
   const requestOrigin = (req.headers.get("Origin") || "").replace(/\/+$/, "");
+  // HT-65 (F): one bundle serves every subdomain, so an APP_URL pinned to one
+  // host would send demo's invites to wgelectric's site. The validated request
+  // Origin wins, then the organisation's own subdomain, and APP_URL only as a
+  // last resort (a caller with no Origin and an organisation with no subdomain).
   const appOrigin =
-    (APP_URL || "").replace(/\/+$/, "") ||
-    (ALLOWED_ORIGIN.test(requestOrigin) ? requestOrigin : "");
+    (ALLOWED_ORIGIN.test(requestOrigin) ? requestOrigin : "") ||
+    (organization.subdomain ? `https://${organization.subdomain}.handytally.com` : "") ||
+    (APP_URL || "").replace(/\/+$/, "");
   if (!appOrigin) {
-    return json({ error: "Cannot build the invite link: the request origin is not a HandyTally host and APP_URL is not set" }, 500);
+    return json({ error: "Cannot build the invite link: the request origin is not a HandyTally host, the organization has no subdomain and APP_URL is not set" }, 500);
   }
 
   // --- Create the account, or find the existing one ------------------------

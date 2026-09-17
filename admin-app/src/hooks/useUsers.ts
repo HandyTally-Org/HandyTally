@@ -48,7 +48,6 @@ export const useUsers = () => {
                     .from('user_profiles')
                     .update({
                         role: userData.role,
-                        organization_id: userData.organization_id,
                     })
                     .eq('id', authData.user.id);
 
