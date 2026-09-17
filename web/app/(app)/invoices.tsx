@@ -13,6 +13,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { ImportExportButtons } from '../../components/ImportExportButtons';
 import { exportWorkbook, pickWorkbook, sheetRows, confirmAction, toIsoDate } from '../../utils/excel';
 import { InvoiceStatus, NEW_INVOICE_STATUS, invoiceStatusLabel, invoiceStatusColor } from '../../constants/invoiceStatus';
+import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 
 export type Invoice = {
   uid: string;
@@ -121,10 +122,13 @@ export default function InvoicesScreen() {
   const [companyLogo, setCompanyLogo] = useState<string | null>(null);
   const router = useRouter();
 
-  useEffect(() => {
+  useRefreshOnFocus(() => {
     fetchInvoices();
     fetchJobs();
     fetchClients();
+  });
+
+  useEffect(() => {
     checkJobsTable();
     checkInvoicesTables();
     checkDatabaseSchema();

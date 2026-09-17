@@ -3,6 +3,7 @@ import { View, StyleSheet, ScrollView, Dimensions, TouchableOpacity } from 'reac
 import { Text, Card, Title, Paragraph, Button, List, ActivityIndicator, Menu, Divider, Portal, Modal, IconButton, Snackbar } from 'react-native-paper';
 import { supabase } from '../../lib/supabase';
 import { styles as globalStyles } from '../../styles';
+import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 
 type DashboardStats = {
   clientCount: number;
@@ -79,13 +80,7 @@ export default function DashboardScreen() {
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<string>('all');
 
-  useEffect(() => {
-    console.log("Dashboard component mounted");
-    // Set a timeout to ensure loading state is properly shown
-    setTimeout(() => {
-      fetchAllData();
-    }, 100);
-  }, []);
+  useRefreshOnFocus(() => fetchAllData());
 
   useEffect(() => {
     // When either time range or status filter changes, update the chart
