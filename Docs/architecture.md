@@ -145,6 +145,7 @@ Authoritative source: `supabase/migrations/`. The 2025 files are dumps of the ho
 | Table | Key columns |
 | --- | --- |
 | `organizations` | `id`, `name`, `subdomain` (unique), timestamps |
+| `organization_settings` | One row per organisation (HT-50): `nav` (sidebar order + hidden keys), `labels` (renamed / recoloured / added status and tag values, HT-51), `custom_fields` (definitions, HT-52/53), all `jsonb`. Read by any active member, written by admins; loaded in `AuthContext` next to the organisation and re-read when it changes |
 | `organization_memberships` | `user_id`, `organization_id`, `role user_role`, `is_active` |
 | `user_profiles` | `id` (= `auth.users.id`), `role user_role`, `is_active` |
 | `profiles` | Legacy per-user profile |

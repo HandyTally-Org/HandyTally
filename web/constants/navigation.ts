@@ -51,6 +51,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
     children: [
       { key: 'admin-users', label: 'Users', icon: 'people', route: '/admin/users', screen: 'admin/users' },
       { key: 'admin-company', label: 'Company', icon: 'business', route: '/admin/company', screen: 'admin/company' },
+      // HT-50: the same gear as Admin itself, by decision.
+      { key: 'admin-settings', label: 'Settings', icon: 'settings-outline', route: '/admin/settings', screen: 'admin/settings' },
     ],
   },
 ];
