@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
-import { Button, Checkbox, Dialog, IconButton, Menu, Portal, Snackbar, Text, TextInput } from 'react-native-paper';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Button, Dialog, Portal, Snackbar } from 'react-native-paper';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -12,19 +12,39 @@ import {
   type CustomFieldSection,
   type CustomFieldType,
 } from '../../constants/customFields';
+import {
+  AddPanel,
+  ArrowButton,
+  FieldCaption,
+  LinkButton,
+  OutlineButton,
+  Pill,
+  PrimaryButton,
+  SectionLabel,
+  SelectMenu,
+  SettingsInput,
+  st,
+  tbl,
+} from './ui';
 
-// HT-52: the Fields tab of a section in Admin > Settings. A table of the
-// section's custom field definitions — Label, Key, Type, Required, Order,
-// Actions — plus an add row. Keys are generated from the label and read-only
-// once saved: records already carry values under them. Saving writes the
-// whole section back into organization_settings.custom_fields; deleting a
-// definition hides the field and keeps stored values unless the admin
-// explicitly deletes the data too.
+// HT-52: the Fields tab of a section in Admin > Settings, to the approved
+// HT-45 mock-up: the section's built-in fields as quiet pills, the custom
+// definitions as a table (label with its generated key, type with inline
+// dropdown options, required, order, remove), a dashed add-panel, and a live
+// preview of the section's form. Keys are generated from the label and
+// frozen once saved — records carry values under them. Deleting a definition
+// hides the field and keeps stored values unless the admin explicitly
+// deletes the data too.
 
-type Props = {
-  section: CustomFieldSection;
-  sectionLabel: string;
+const BASE_FORM_FIELDS: Record<string, string[]> = {
+  clients: ['Name', 'Email', 'Phone', 'Address', 'Notes'],
+  materials: ['SKU', 'Name', 'Description', 'Quantity', 'Cost', 'Supplier', 'Category'],
+  services: ['Name', 'Description', 'Rate', 'Category'],
+  jobs: ['Title', 'Description', 'Client', 'Status', 'Dates', 'Assigned to'],
+  invoices: ['Invoice #', 'Client', 'Job', 'Status', 'Dates', 'Line items'],
 };
+
+const TYPE_OPTIONS = CUSTOM_FIELD_TYPES.map(type => ({ value: type, label: CUSTOM_FIELD_TYPE_LABELS[type] }));
 
 type Draft = CustomFieldDef & {
   /** Text of the options editor, kept as typed until save. */
@@ -42,7 +62,21 @@ const toDef = (draft: Draft): CustomFieldDef => ({
   ...(draft.type === 'dropdown' ? { options: parseOptions(draft.optionsText) } : {}),
 });
 
-export function CustomFieldsEditor({ section, sectionLabel }: Props) {
+function CheckBox({ checked, onToggle, accessibilityLabel }: { checked: boolean; onToggle: () => void; accessibilityLabel: string }) {
+  return (
+    <Pressable
+      onPress={onToggle}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+      accessibilityLabel={accessibilityLabel}
+      style={[styles.check, checked && styles.checkOn]}
+    >
+      {checked ? <Text style={styles.checkMark}>✓</Text> : null}
+    </Pressable>
+  );
+}
+
+export function CustomFieldsEditor({ section, sectionLabel }: { section: CustomFieldSection; sectionLabel: string }) {
   const { organization, settings, settingsLoaded, refreshSettings } = useAuth();
   const saved = settings.customFields[section] ?? [];
 
@@ -51,7 +85,7 @@ export function CustomFieldsEditor({ section, sectionLabel }: Props) {
   const [snackbar, setSnackbar] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Draft | null>(null);
 
-  // Add row.
+  // Add panel.
   const [newLabel, setNewLabel] = useState('');
   const [newType, setNewType] = useState<CustomFieldType>('text');
   const [newRequired, setNewRequired] = useState(false);
@@ -95,7 +129,7 @@ export function CustomFieldsEditor({ section, sectionLabel }: Props) {
   };
 
   const persist = async (defs: CustomFieldDef[]) => {
-    if (!organization) return false;
+    if (!organization) return;
     const { error } = await supabase
       .from('organization_settings')
       .upsert(
@@ -110,7 +144,6 @@ export function CustomFieldsEditor({ section, sectionLabel }: Props) {
       .select('organization_id');
     if (error) throw error;
     await refreshSettings();
-    return true;
   };
 
   const save = async () => {
@@ -132,8 +165,13 @@ export function CustomFieldsEditor({ section, sectionLabel }: Props) {
     setPendingDelete(null);
     try {
       setSaving(true);
-      const remaining = rows.filter(r => r.key !== row.key).map(toDef);
-      await persist(remaining);
+      const remaining = rows.filter(r => r.key !== row.key);
+      await persist(remaining.map(toDef));
+      // The sync effect only re-reads saved defs while the draft is clean, and
+      // a delete alone would otherwise leave the stale row in local state
+      // (blocking that sync, and letting a re-add generate a _2 key). Drop it
+      // from the draft immediately instead of waiting on refreshSettings.
+      setRows(remaining);
       if (purgeData && organization) {
         const { data, error } = await supabase.rpc('purge_custom_field_values', {
           p_organization_id: organization.id,
@@ -153,106 +191,147 @@ export function CustomFieldsEditor({ section, sectionLabel }: Props) {
     }
   };
 
+  const baseFields = BASE_FORM_FIELDS[section] ?? [];
+
   return (
     <View style={styles.root}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.hint}>
-          Fields defined here appear on every {sectionLabel} add/edit form and detail page in the organisation.
-          The key is generated from the label and cannot change once saved.
-        </Text>
-
-        <View style={styles.headerRow}>
-          <Text style={[styles.cell, styles.cellLabel, styles.headerText]}>Label</Text>
-          <Text style={[styles.cell, styles.cellKey, styles.headerText]}>Key</Text>
-          <Text style={[styles.cell, styles.cellType, styles.headerText]}>Type</Text>
-          <Text style={[styles.cell, styles.cellRequired, styles.headerText]}>Required</Text>
-          <Text style={[styles.cell, styles.cellActions, styles.headerText]}>Order / actions</Text>
+        <SectionLabel>Existing fields</SectionLabel>
+        <View style={styles.basePills}>
+          {baseFields.map(name => (
+            <View key={name} style={styles.basePill}>
+              <Text style={styles.basePillText}>{name}</Text>
+            </View>
+          ))}
         </View>
 
-        {rows.length === 0 ? <Text style={styles.empty}>No custom fields yet. Add one below.</Text> : null}
+        <SectionLabel>Custom fields</SectionLabel>
 
-        {rows.map((row, index) => (
-          <View key={row.key} style={styles.rowBlock}>
-            <View style={styles.row}>
-              <View style={[styles.cell, styles.cellLabel]}>
-                <TextInput
-                  mode="outlined"
-                  dense
-                  value={row.label}
-                  onChangeText={label =>
-                    update(row.key, {
-                      label,
-                      // A row not yet saved follows its label; a saved key is frozen.
-                      ...(row.isNew ? { key: generateFieldKey(label, rows.filter(r => r.key !== row.key).map(r => r.key)) } : {}),
-                    })
-                  }
-                  accessibilityLabel={`Label of ${row.label}`}
-                />
-              </View>
-              <Text style={[styles.cell, styles.cellKey, styles.keyText]} numberOfLines={1}>{row.key}</Text>
-              <View style={[styles.cell, styles.cellType]}>
-                <TypeMenu value={row.type} onChange={type => update(row.key, { type })} label={`Type of ${row.label}`} />
-              </View>
-              <View style={[styles.cell, styles.cellRequired]}>
-                <Checkbox
-                  status={row.required ? 'checked' : 'unchecked'}
-                  onPress={() => update(row.key, { required: !row.required })}
-                />
-              </View>
-              <View style={[styles.cell, styles.cellActions, styles.actions]}>
-                <IconButton icon="chevron-up" size={18} disabled={index === 0} onPress={() => move(row.key, -1)} accessibilityLabel={`Move ${row.label} up`} />
-                <IconButton icon="chevron-down" size={18} disabled={index === rows.length - 1} onPress={() => move(row.key, 1)} accessibilityLabel={`Move ${row.label} down`} />
-                <IconButton icon="delete-outline" size={18} onPress={() => (row.isNew ? setRows(current => current.filter(r => r.key !== row.key)) : setPendingDelete(row))} accessibilityLabel={`Delete ${row.label}`} />
-              </View>
+        {rows.length === 0 ? (
+          <Text style={styles.empty}>No custom fields yet — add one below.</Text>
+        ) : (
+          <View style={styles.table}>
+            <View style={tbl.headRow}>
+              <Text style={[tbl.th, styles.colLabel]}>Label</Text>
+              <Text style={[tbl.th, styles.colType]}>Type</Text>
+              <Text style={[tbl.th, styles.colRequired]}>Required</Text>
+              <Text style={[tbl.th, styles.colOrder]}>Order</Text>
+              <View style={styles.colRemove} />
             </View>
-            {row.type === 'dropdown' ? (
-              <View style={styles.optionsRow}>
-                <TextInput
-                  mode="outlined"
-                  dense
-                  label="Options (comma-separated)"
-                  value={row.optionsText}
-                  onChangeText={optionsText => update(row.key, { optionsText })}
-                  accessibilityLabel={`Options of ${row.label}`}
+            {rows.map((row, index) => (
+              <View key={row.key} style={[tbl.row, styles.rowTop]}>
+                <View style={[tbl.cell, styles.colLabel]}>
+                  <SettingsInput
+                    value={row.label}
+                    onChangeText={label =>
+                      update(row.key, {
+                        label,
+                        // A row not yet saved follows its label; a saved key is frozen.
+                        ...(row.isNew ? { key: generateFieldKey(label, rows.filter(r => r.key !== row.key).map(r => r.key)) } : {}),
+                      })
+                    }
+                    accessibilityLabel={`Label of ${row.label}`}
+                  />
+                  <Text style={styles.keyText} numberOfLines={1}>{row.key}</Text>
+                </View>
+                <View style={[tbl.cell, styles.colType]}>
+                  <SelectMenu
+                    value={row.type}
+                    options={TYPE_OPTIONS}
+                    onChange={type => update(row.key, { type: type as CustomFieldType })}
+                    accessibilityLabel={`Type of ${row.label}`}
+                  />
+                  {row.type === 'dropdown' ? (
+                    <View style={styles.optionsWrap}>
+                      <FieldCaption>Options, comma-separated</FieldCaption>
+                      <SettingsInput
+                        value={row.optionsText}
+                        onChangeText={optionsText => update(row.key, { optionsText })}
+                        placeholder="e.g. Residential, Commercial"
+                        accessibilityLabel={`Options for ${row.label}`}
+                      />
+                    </View>
+                  ) : null}
+                </View>
+                <View style={[tbl.cell, styles.colRequired]}>
+                  <CheckBox
+                    checked={row.required}
+                    onToggle={() => update(row.key, { required: !row.required })}
+                    accessibilityLabel={`${row.label} required`}
+                  />
+                </View>
+                <View style={[tbl.cell, styles.colOrder, styles.orderCell]}>
+                  <ArrowButton dir="up" onPress={() => move(row.key, -1)} disabled={index === 0} accessibilityLabel={`Move ${row.label} up`} />
+                  <ArrowButton dir="down" onPress={() => move(row.key, 1)} disabled={index === rows.length - 1} accessibilityLabel={`Move ${row.label} down`} />
+                </View>
+                <View style={[tbl.cell, styles.colRemove, styles.right]}>
+                  <LinkButton
+                    label="Remove"
+                    onPress={() => (row.isNew ? setRows(current => current.filter(r => r.key !== row.key)) : setPendingDelete(row))}
+                    accessibilityLabel={`Delete ${row.label}`}
+                  />
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <View style={styles.addWrap}>
+          <AddPanel>
+            <View style={styles.addLabel}>
+              <FieldCaption>Field label</FieldCaption>
+              <SettingsInput value={newLabel} onChangeText={setNewLabel} placeholder="e.g. Gate code" accessibilityLabel="New field label" />
+            </View>
+            <View style={styles.addType}>
+              <FieldCaption>Type</FieldCaption>
+              <SelectMenu value={newType} options={TYPE_OPTIONS} onChange={type => setNewType(type as CustomFieldType)} accessibilityLabel="New field type" />
+            </View>
+            <Pressable onPress={() => setNewRequired(v => !v)} accessibilityRole="checkbox" accessibilityState={{ checked: newRequired }} style={styles.addRequired}>
+              <CheckBox checked={newRequired} onToggle={() => setNewRequired(v => !v)} accessibilityLabel="New field required" />
+              <Text style={styles.addRequiredText}>Required</Text>
+            </Pressable>
+            <PrimaryButton label="+ Add field" onPress={add} disabled={!newLabel.trim()} />
+            {newType === 'dropdown' ? (
+              <View style={styles.addOptions}>
+                <FieldCaption>Dropdown options, comma-separated</FieldCaption>
+                <SettingsInput
+                  value={newOptions}
+                  onChangeText={setNewOptions}
+                  placeholder="e.g. Residential, Commercial, Service call"
+                  accessibilityLabel="New field options"
                 />
               </View>
             ) : null}
-          </View>
-        ))}
-
-        <Text style={styles.addTitle}>Add a field</Text>
-        <View style={styles.row}>
-          <View style={[styles.cell, styles.cellLabel]}>
-            <TextInput mode="outlined" dense label="Label" value={newLabel} onChangeText={setNewLabel} accessibilityLabel="New field label" />
-          </View>
-          <Text style={[styles.cell, styles.cellKey, styles.keyText]} numberOfLines={1}>
-            {newLabel.trim() ? generateFieldKey(newLabel, rows.map(r => r.key)) : ''}
-          </Text>
-          <View style={[styles.cell, styles.cellType]}>
-            <TypeMenu value={newType} onChange={setNewType} label="New field type" />
-          </View>
-          <View style={[styles.cell, styles.cellRequired]}>
-            <Checkbox status={newRequired ? 'checked' : 'unchecked'} onPress={() => setNewRequired(v => !v)} />
-          </View>
-          <View style={[styles.cell, styles.cellActions, styles.actions]}>
-            <Button mode="contained-tonal" compact onPress={add} disabled={!newLabel.trim()}>
-              Add
-            </Button>
-          </View>
+          </AddPanel>
         </View>
-        {newType === 'dropdown' ? (
-          <View style={styles.optionsRow}>
-            <TextInput mode="outlined" dense label="Options (comma-separated)" value={newOptions} onChangeText={setNewOptions} accessibilityLabel="New field options" />
-          </View>
-        ) : null}
+
+        <SectionLabel>Live preview — {sectionLabel} form</SectionLabel>
+        <View style={styles.preview}>
+          {baseFields.map(name => (
+            <View key={name} style={styles.previewRow}>
+              <Text style={styles.previewBaseLabel}>{name}</Text>
+              <View style={styles.previewBaseInput} />
+            </View>
+          ))}
+          {draftDefs.map(def => (
+            <View key={def.key} style={styles.previewRow}>
+              <Text style={styles.previewCustomLabel}>{def.label}</Text>
+              {def.type === 'dropdown' ? (
+                <View style={[styles.previewCustomInput, styles.previewDropdown]}>
+                  <Text style={styles.previewDropdownText} numberOfLines={1}>{(def.options ?? []).join(' / ') || 'Options…'}</Text>
+                  <Text style={styles.previewChevron}>▾</Text>
+                </View>
+              ) : (
+                <View style={styles.previewCustomInput} />
+              )}
+              <Pill text="Custom" />
+            </View>
+          ))}
+        </View>
 
         <View style={styles.footer}>
-          <Button mode="contained" onPress={save} loading={saving} disabled={saving || !dirty}>
-            Save fields
-          </Button>
-          <Button mode="outlined" onPress={() => setRows(saved.map(toDraft))} disabled={saving || !dirty}>
-            Discard changes
-          </Button>
+          <PrimaryButton label={saving ? 'Saving…' : 'Save fields'} onPress={save} disabled={saving || !dirty} />
+          <OutlineButton label="Discard changes" onPress={() => setRows(saved.map(toDraft))} disabled={saving || !dirty} />
           {dirty ? <Text style={styles.unsaved}>Unsaved changes</Text> : null}
         </View>
       </ScrollView>
@@ -261,7 +340,7 @@ export function CustomFieldsEditor({ section, sectionLabel }: Props) {
         <Dialog visible={pendingDelete !== null} onDismiss={() => setPendingDelete(null)}>
           <Dialog.Title>Delete "{pendingDelete?.label}"?</Dialog.Title>
           <Dialog.Content>
-            <Text>
+            <Text style={tbl.body}>
               The field disappears from the {sectionLabel} forms. Values already entered stay on the records and come back
               if a field with the key "{pendingDelete?.key}" is added again — unless you delete the data too.
             </Text>
@@ -269,7 +348,7 @@ export function CustomFieldsEditor({ section, sectionLabel }: Props) {
           <Dialog.Actions>
             <Button onPress={() => setPendingDelete(null)}>Cancel</Button>
             <Button onPress={() => pendingDelete && remove(pendingDelete, false)}>Delete field</Button>
-            <Button textColor="#B3261E" onPress={() => pendingDelete && remove(pendingDelete, true)}>
+            <Button textColor={st.danger} onPress={() => pendingDelete && remove(pendingDelete, true)}>
               Delete field and its data
             </Button>
           </Dialog.Actions>
@@ -283,44 +362,65 @@ export function CustomFieldsEditor({ section, sectionLabel }: Props) {
   );
 }
 
-function TypeMenu({ value, onChange, label }: { value: CustomFieldType; onChange: (type: CustomFieldType) => void; label: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <Menu
-      visible={open}
-      onDismiss={() => setOpen(false)}
-      anchor={
-        <Button mode="outlined" compact onPress={() => setOpen(true)} icon="menu-down" contentStyle={{ flexDirection: 'row-reverse' }} accessibilityLabel={label}>
-          {CUSTOM_FIELD_TYPE_LABELS[value]}
-        </Button>
-      }
-    >
-      {CUSTOM_FIELD_TYPES.map(type => (
-        <Menu.Item key={type} title={CUSTOM_FIELD_TYPE_LABELS[type]} onPress={() => { onChange(type); setOpen(false); }} />
-      ))}
-    </Menu>
-  );
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  content: { padding: 16 },
-  hint: { color: '#666', marginBottom: 12 },
-  headerRow: { flexDirection: 'row', paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#e0e0e0', marginBottom: 4 },
-  headerText: { fontSize: 12, fontWeight: '600', color: '#666', textTransform: 'uppercase' },
-  rowBlock: { borderBottomWidth: 1, borderBottomColor: '#f0f0f0', paddingVertical: 4 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
-  cell: { justifyContent: 'center' },
-  cellLabel: { flex: 3, minWidth: 140 },
-  cellKey: { flex: 2, minWidth: 100 },
-  cellType: { flex: 2, minWidth: 130 },
-  cellRequired: { width: 72, alignItems: 'center' },
-  cellActions: { width: 150 },
-  actions: { flexDirection: 'row', alignItems: 'center' },
-  keyText: { fontFamily: 'monospace', color: '#555', fontSize: 13 },
-  optionsRow: { paddingLeft: 8, paddingBottom: 8 },
-  empty: { color: '#999', paddingVertical: 12 },
-  addTitle: { marginTop: 20, marginBottom: 4, fontWeight: '600', color: '#333' },
+  content: { padding: 22 },
+  basePills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
+  basePill: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: st.rowBorder,
+    borderWidth: 1,
+    borderColor: st.border,
+  },
+  basePillText: { fontSize: 12.5, color: '#4b5563' },
+  empty: { fontSize: 13.5, color: st.faint, marginBottom: 14 },
+  table: { marginBottom: 4 },
+  rowTop: { alignItems: 'flex-start' },
+  colLabel: { flex: 3, minWidth: 160 },
+  colType: { flex: 2.6, minWidth: 150 },
+  colRequired: { width: 80, alignItems: 'center' },
+  colOrder: { width: 84 },
+  colRemove: { width: 84 },
+  right: { alignItems: 'flex-end' },
+  orderCell: { flexDirection: 'row', gap: 4 },
+  keyText: { fontSize: 11, color: st.faint, fontFamily: 'monospace', marginTop: 3 },
+  optionsWrap: { marginTop: 8 },
+  addWrap: { marginTop: 14, marginBottom: 26 },
+  addLabel: { flexGrow: 1, minWidth: 180 },
+  addType: { minWidth: 150 },
+  addRequired: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingBottom: 9 },
+  addRequiredText: { fontSize: 13, color: '#374151' },
+  addOptions: { flexBasis: '100%', minWidth: 0 },
+  check: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: st.inputBorder,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkOn: { backgroundColor: st.primary, borderColor: st.primary },
+  checkMark: { color: '#ffffff', fontSize: 12, lineHeight: 14, fontWeight: '700' },
+  preview: { borderWidth: 1, borderColor: st.border, borderRadius: 10, padding: 16, backgroundColor: '#fafafa' },
+  previewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  previewBaseLabel: { width: 150, fontSize: 13, color: st.muted },
+  previewBaseInput: { flex: 1, height: 30, borderRadius: 6, backgroundColor: st.rowBorder },
+  previewCustomLabel: { width: 150, fontSize: 13, color: st.text, fontWeight: '600' },
+  previewCustomInput: { flex: 1, height: 30, borderRadius: 6, backgroundColor: '#ffffff', borderWidth: 1, borderColor: st.primary },
+  previewDropdown: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10 },
+  previewDropdownText: { fontSize: 13, color: '#374151', flexShrink: 1 },
+  previewChevron: { fontSize: 10, color: st.faint },
   footer: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 20, flexWrap: 'wrap' },
-  unsaved: { color: '#b45309' },
+  unsaved: { color: '#b45309', fontSize: 13 },
 });

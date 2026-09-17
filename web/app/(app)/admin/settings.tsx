@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
-import { Button, IconButton, SegmentedButtons, Snackbar, Switch, Text } from 'react-native-paper';
+import { IconButton, Snackbar, Switch, Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -11,6 +11,9 @@ import { NAV_ITEMS, type NavItem } from '../../../constants/navigation';
 import { DEFAULT_NAV_SETTINGS, editableNavOrder, toNavSettings, type NavSettings } from '../../../constants/organizationSettings';
 import { NAV_KEY_TO_SECTION } from '../../../constants/customFields';
 import { CustomFieldsEditor } from '../../../components/settings/CustomFieldsEditor';
+import { LabelsEditor } from '../../../components/settings/LabelsEditor';
+import { ArrowButton, OutlineButton, PrimaryButton, UnderlineTabs, st } from '../../../components/settings/ui';
+import type { LabelSection } from '../../../constants/labels';
 
 // HT-50: Admin > Settings. Left: the sidebar entries in the organisation's
 // order, each with a drag handle (web), up/down buttons, a visibility switch
@@ -24,8 +27,12 @@ import { CustomFieldsEditor } from '../../../components/settings/CustomFieldsEdi
 const SECTIONS_WITH_FIELDS = new Set(Object.keys(NAV_KEY_TO_SECTION));
 /** Sections whose records carry a custom_fields column today (HT-52); jobs and invoices follow with HT-53. */
 const SECTIONS_WITH_FIELD_STORAGE = new Set(['clients', 'inventory', 'labor']);
-/** Sections with status or tag values a Labels tab can rename (HT-49 sections). */
-const SECTIONS_WITH_LABELS = new Set(['clients', 'jobs', 'invoices']);
+/** The label section each sidebar entry's Labels tab edits (HT-51 / HT-49). */
+const NAV_KEY_TO_LABEL_SECTION: Record<string, LabelSection> = {
+  clients: 'client_tag',
+  jobs: 'job_status',
+  invoices: 'invoice_status',
+};
 
 type PaneTab = 'fields' | 'labels';
 
@@ -180,8 +187,8 @@ export default function SettingsScreen() {
               <Text style={styles.pinnedNote}>Always shown</Text>
             ) : (
               <>
-                <IconButton icon="chevron-up" size={18} disabled={!canMoveUp} onPress={() => move(item.key, -1)} accessibilityLabel={`Move ${item.label} up`} />
-                <IconButton icon="chevron-down" size={18} disabled={!canMoveDown} onPress={() => move(item.key, 1)} accessibilityLabel={`Move ${item.label} down`} />
+                <ArrowButton dir="up" disabled={!canMoveUp} onPress={() => move(item.key, -1)} accessibilityLabel={`Move ${item.label} up`} />
+                <ArrowButton dir="down" disabled={!canMoveDown} onPress={() => move(item.key, 1)} accessibilityLabel={`Move ${item.label} down`} />
                 <Switch value={visible} onValueChange={value => toggleHidden(item.key, value)} accessibilityLabel={`Show ${item.label} in the sidebar`} />
               </>
             )}
@@ -191,7 +198,10 @@ export default function SettingsScreen() {
               disabled={!SECTIONS_WITH_FIELDS.has(item.key)}
               onPress={() => {
                 setSelected(item);
-                setTab(SECTIONS_WITH_FIELDS.has(item.key) ? 'fields' : 'labels');
+                // Land on the tab that already does something: Fields where the
+                // section stores values, otherwise Labels (jobs and invoices
+                // until HT-53 restructures their forms).
+                setTab(SECTIONS_WITH_FIELD_STORAGE.has(item.key) ? 'fields' : NAV_KEY_TO_LABEL_SECTION[item.key] ? 'labels' : 'fields');
               }}
               accessibilityLabel={`${item.label} settings`}
             />
@@ -210,40 +220,34 @@ export default function SettingsScreen() {
         );
       })}
       <View style={styles.actions}>
-        <Button mode="contained" onPress={save} loading={saving} disabled={saving || !dirty}>
-          Save
-        </Button>
-        <Button mode="outlined" onPress={resetToDefaults} disabled={saving}>
-          Reset to defaults
-        </Button>
+        <PrimaryButton label={saving ? 'Saving…' : 'Save'} onPress={save} disabled={saving || !dirty} />
+        <OutlineButton label="Reset to defaults" onPress={resetToDefaults} disabled={saving} />
         {dirty && <Text style={styles.unsaved}>Unsaved changes</Text>}
       </View>
     </ScrollView>
   );
 
+  const labelSection = selected ? NAV_KEY_TO_LABEL_SECTION[selected.key] : undefined;
   const detail = selected ? (
-    <View style={styles.detail}>
-      <SegmentedButtons
-        value={tab}
-        onValueChange={value => setTab(value as PaneTab)}
-        buttons={[
-          { value: 'fields', label: 'Fields', disabled: !SECTIONS_WITH_FIELDS.has(selected.key) },
-          { value: 'labels', label: 'Labels', disabled: !SECTIONS_WITH_LABELS.has(selected.key) },
+    <View style={styles.detailRoot}>
+      <UnderlineTabs
+        tabs={[
+          { key: 'fields', label: 'Fields' },
+          { key: 'labels', label: 'Labels', disabled: !labelSection },
         ]}
-        style={styles.tabs}
+        active={labelSection || tab !== 'labels' ? tab : 'fields'}
+        onSelect={key => setTab(key as PaneTab)}
       />
-      {tab === 'fields' ? (
+      {tab === 'fields' || !labelSection ? (
         SECTIONS_WITH_FIELD_STORAGE.has(selected.key) ? (
           <CustomFieldsEditor section={NAV_KEY_TO_SECTION[selected.key]} sectionLabel={selected.label} />
         ) : (
-          <Text style={styles.hint}>
+          <Text style={styles.placeholderHint}>
             Custom fields for {selected.label} are on their way: they will show on the add/edit form and the detail page.
           </Text>
         )
       ) : (
-        <Text style={styles.hint}>
-          Renaming and recolouring {selected.label} statuses and tags is on its way.
-        </Text>
+        <LabelsEditor section={labelSection} sectionLabel={selected.label} />
       )}
     </View>
   ) : null;
@@ -256,6 +260,7 @@ export default function SettingsScreen() {
           list={list}
           detail={detail}
           detailTitle={selected?.label}
+          detailSubtitle={selected ? `Fields and labels for every ${selected.label} record in your organization` : undefined}
           onCloseDetail={() => setSelected(null)}
           placeholder="Press a section's gear to see its fields and labels."
         />
@@ -304,14 +309,14 @@ function DraggableRow({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5', padding: 16 },
+  container: { flex: 1, backgroundColor: st.pageBg, padding: 16 },
   title: { marginBottom: 12 },
   panes: {
     flex: 1,
     minHeight: 480,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
+    borderColor: st.border,
+    borderRadius: 10,
     overflow: 'hidden',
     backgroundColor: '#ffffff',
   },
@@ -336,6 +341,6 @@ const styles = StyleSheet.create({
   pinnedNote: { color: '#999', fontSize: 12, marginRight: 8 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16, flexWrap: 'wrap' },
   unsaved: { color: '#b45309' },
-  detail: { padding: 16, flex: 1 },
-  tabs: { marginBottom: 16, maxWidth: 320 },
+  detailRoot: { flex: 1, minHeight: 0 },
+  placeholderHint: { color: '#666', padding: 22 },
 });

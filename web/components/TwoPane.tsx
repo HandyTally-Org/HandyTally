@@ -18,6 +18,8 @@ type TwoPaneProps = {
   detail: ReactNode | null;
   /** Heading of the detail pane, rendered by this component in both modes. */
   detailTitle?: string;
+  /** One quieter line under the heading. */
+  detailSubtitle?: string;
   /** Called by the sheet's close button on narrow screens. */
   onCloseDetail?: () => void;
   /** Shown in the right pane while nothing is selected. */
@@ -29,6 +31,7 @@ export function TwoPane({
   list,
   detail,
   detailTitle,
+  detailSubtitle,
   onCloseDetail,
   placeholder = 'Select an item to see its settings.',
   listWidth = 380,
@@ -43,8 +46,11 @@ export function TwoPane({
         {detail !== null && (
           <View style={styles.sheet}>
             <View style={styles.sheetHeader}>
-              <Text variant="titleMedium" style={styles.sheetTitle}>{detailTitle ?? ''}</Text>
-              <IconButton icon="close" accessibilityLabel="Close" onPress={onCloseDetail} />
+              <View style={styles.sheetTitle}>
+                <Text style={styles.headerTitle}>{detailTitle ?? ''}</Text>
+                {detailSubtitle ? <Text style={styles.headerSubtitle}>{detailSubtitle}</Text> : null}
+              </View>
+              <IconButton icon="close" size={18} accessibilityLabel="Close" onPress={onCloseDetail} />
             </View>
             <View style={styles.sheetBody}>{detail}</View>
           </View>
@@ -61,7 +67,11 @@ export function TwoPane({
           <>
             {detailTitle ? (
               <View style={styles.detailHeader}>
-                <Text variant="titleMedium">{detailTitle}</Text>
+                <View style={styles.detailHeaderText}>
+                  <Text style={styles.headerTitle}>{detailTitle}</Text>
+                  {detailSubtitle ? <Text style={styles.headerSubtitle}>{detailSubtitle}</Text> : null}
+                </View>
+                {onCloseDetail ? <IconButton icon="close" size={18} accessibilityLabel="Close" onPress={onCloseDetail} /> : null}
               </View>
             ) : null}
             <View style={styles.detailBody}>{detail}</View>
@@ -84,11 +94,17 @@ const styles = StyleSheet.create({
   },
   detail: { flex: 1, backgroundColor: '#ffffff', minWidth: 0 },
   detailHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 22,
+    paddingRight: 8,
+    paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: '#e5e7eb',
   },
+  detailHeaderText: { flex: 1 },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: '#111827' },
+  headerSubtitle: { fontSize: 12.5, color: '#6b7280', marginTop: 1 },
   detailBody: { flex: 1, minHeight: 0 },
   placeholder: { color: '#666', padding: 24 },
   narrowList: { flex: 1, backgroundColor: '#ffffff' },
