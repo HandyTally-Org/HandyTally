@@ -1003,13 +1003,15 @@ export default function JobsScreen() {
             >
               Status
             </DataTable.Title>
-            <DataTable.Title 
+            <DataTable.Title
+              style={{ flex: 1.5 }}
               onPress={() => handleSort('start_date')}
               sortDirection={sortColumn === 'start_date' ? sortDirection : undefined}
             >
               Start Date
             </DataTable.Title>
-            <DataTable.Title 
+            <DataTable.Title
+              style={{ flex: 1.5 }}
               onPress={() => handleSort('end_date')}
               sortDirection={sortColumn === 'end_date' ? sortDirection : undefined}
             >
@@ -1055,8 +1057,8 @@ export default function JobsScreen() {
                     ))}
                   </select>
                 </DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDateTime(job.start_date)}</DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDateTime(job.end_date)}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff', flex: 1.5 }}>{formatDateTime(job.start_date)}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff', flex: 1.5 }}>{formatDateTime(job.end_date)}</DataTable.Cell>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
                   <View style={styles.actionButtons}>
                     <IconButton
