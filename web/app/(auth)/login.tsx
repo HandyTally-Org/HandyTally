@@ -108,6 +108,13 @@ export default function LoginScreen() {
           Sign In
         </Button>
         
+        {/* HT-30: password reset. */}
+        <View style={styles.footer}>
+          <Link href="/(auth)/forgot-password">
+            <Text style={styles.link}>Forgot password?</Text>
+          </Link>
+        </View>
+
         {/* HT-38: members of a customer organisation are invited by its admin, not self-registered. */}
         {tenant.status !== 'found' && (
         <View style={styles.footer}>
