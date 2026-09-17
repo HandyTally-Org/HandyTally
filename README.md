@@ -219,7 +219,7 @@ Core tables (see `supabase/migrations/` for the authoritative definitions):
 
 - **Web** — every push to `master` runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml): `npm ci` → `npx expo export --platform web` → `wrangler deploy`, which publishes `dist/` as the `handytally-web` Cloudflare Worker described in [`web/wrangler.jsonc`](web/wrangler.jsonc). Pull requests run the build only.
 - **Database & functions** — `supabase db push` and `supabase functions deploy` against the linked project. Function secrets are managed with `supabase secrets set`.
-- **Tenant subdomains** — `create-organization` only inserts the row. A wildcard route on the Worker plus a proxied `*.handytally.com` DNS record serve every subdomain from the same bundle (HT-37); nothing is provisioned per tenant.
+- **Tenant subdomains** — `create-organization` only inserts the row. A wildcard route on the Worker plus a proxied `*.handytally.com` DNS record serve every subdomain from the same bundle (HT-37); nothing is provisioned per tenant. Onboarding a customer is [`Docs/deploy-customer.md`](Docs/deploy-customer.md).
 
 ## Development workflow
 
