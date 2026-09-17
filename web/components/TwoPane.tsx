@@ -16,7 +16,7 @@ type TwoPaneProps = {
   list: ReactNode;
   /** The right pane. Null renders the placeholder (or nothing on a narrow screen). */
   detail: ReactNode | null;
-  /** Heading of the detail pane; shown in the sheet header on narrow screens. */
+  /** Heading of the detail pane, rendered by this component in both modes. */
   detailTitle?: string;
   /** Called by the sheet's close button on narrow screens. */
   onCloseDetail?: () => void;
@@ -57,7 +57,18 @@ export function TwoPane({
     <View style={[styles.root, styles.wide]}>
       <View style={[styles.list, { width: listWidth }]}>{list}</View>
       <View style={styles.detail}>
-        {detail !== null ? detail : <Text style={styles.placeholder}>{placeholder}</Text>}
+        {detail !== null ? (
+          <>
+            {detailTitle ? (
+              <View style={styles.detailHeader}>
+                <Text variant="titleMedium">{detailTitle}</Text>
+              </View>
+            ) : null}
+            <View style={styles.detailBody}>{detail}</View>
+          </>
+        ) : (
+          <Text style={styles.placeholder}>{placeholder}</Text>
+        )}
       </View>
     </View>
   );
@@ -72,6 +83,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
   },
   detail: { flex: 1, backgroundColor: '#ffffff', minWidth: 0 },
+  detailHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  detailBody: { flex: 1, minHeight: 0 },
   placeholder: { color: '#666', padding: 24 },
   narrowList: { flex: 1, backgroundColor: '#ffffff' },
   sheet: {

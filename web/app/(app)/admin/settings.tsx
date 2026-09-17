@@ -41,7 +41,13 @@ export default function SettingsScreen() {
 
   // Take the saved settings whenever they (re)load, unless the admin is mid-edit.
   const draft = useMemo(() => toNavSettings(ordered, hidden), [ordered, hidden]);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(savedNav);
+  // Compare against what the saved settings resolve to, so an empty saved
+  // order (the defaults) does not count as a change.
+  const savedDraft = useMemo(
+    () => toNavSettings(editableNavOrder(NAV_ITEMS, savedNav), new Set(savedNav.hidden)),
+    [savedNav],
+  );
+  const dirty = JSON.stringify(draft) !== JSON.stringify(savedDraft);
   useEffect(() => {
     if (!settingsLoaded || dirty) return;
     setOrdered(editableNavOrder(NAV_ITEMS, settings.nav));
@@ -114,14 +120,18 @@ export default function SettingsScreen() {
             updated_by: (await supabase.auth.getUser()).data.user?.id ?? null,
           },
           { onConflict: 'organization_id' },
-        );
+        )
+        // Ask for the row back: PostgREST answers a failed minimal-return
+        // upsert with an empty body, which would hide the reason.
+        .select('organization_id');
       if (error) throw error;
       setSavedNav(draft);
       await refreshSettings();
       setSnackbar('Settings saved');
     } catch (error: any) {
       console.error('Error saving settings:', error);
-      setSnackbar(`Could not save: ${error.message}`);
+      const reason = error?.message || error?.details || error?.hint || (typeof error === 'string' ? error : JSON.stringify(error));
+      setSnackbar(`Could not save: ${reason}`);
     } finally {
       setSaving(false);
     }
@@ -209,7 +219,6 @@ export default function SettingsScreen() {
 
   const detail = selected ? (
     <View style={styles.detail}>
-      <Text variant="titleMedium" style={styles.paneTitle}>{selected.label}</Text>
       <SegmentedButtons
         value={tab}
         onValueChange={value => setTab(value as PaneTab)}
