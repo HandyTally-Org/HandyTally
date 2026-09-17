@@ -238,16 +238,27 @@ export default function SettingsScreen() {
         active={labelSection || tab !== 'labels' ? tab : 'fields'}
         onSelect={key => setTab(key as PaneTab)}
       />
+      {/*
+        key={selected.key} forces a fresh CustomFieldsEditor / LabelsEditor
+        instance per section. Both editors hold their own draft in local
+        state and only resync it from settings when the draft is clean, so
+        that an in-progress edit survives a background settings refresh --
+        but that same guard would otherwise block the reset when the
+        *section itself* changes (Jobs' saved defaults will almost always
+        look dirty against Clients' leftover rows), leaking one section's
+        label/field rows into another's editor. Remounting on selected.key
+        sidesteps that: each section always starts from its own saved state.
+      */}
       {tab === 'fields' || !labelSection ? (
         SECTIONS_WITH_FIELD_STORAGE.has(selected.key) ? (
-          <CustomFieldsEditor section={NAV_KEY_TO_SECTION[selected.key]} sectionLabel={selected.label} />
+          <CustomFieldsEditor key={selected.key} section={NAV_KEY_TO_SECTION[selected.key]} sectionLabel={selected.label} />
         ) : (
           <Text style={styles.placeholderHint}>
             Custom fields for {selected.label} are on their way: they will show on the add/edit form and the detail page.
           </Text>
         )
       ) : (
-        <LabelsEditor section={labelSection} sectionLabel={selected.label} />
+        <LabelsEditor key={selected.key} section={labelSection} sectionLabel={selected.label} />
       )}
     </View>
   ) : null;
