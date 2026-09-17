@@ -38,6 +38,18 @@ export function parseTenantSubdomain(
   return label;
 }
 
+/**
+ * True for the bare product domain (handytally.com, www.handytally.com). The
+ * app is not served there: customers use their own subdomain and the apex is
+ * the sales page (HT-43). localhost and workers.dev are not the apex.
+ */
+export function isApexHost(hostname: string | null | undefined, baseDomain: string = BASE_DOMAIN): boolean {
+  if (!hostname) return false;
+  const host = hostname.trim().toLowerCase().replace(/\.$/, '');
+  const base = baseDomain.trim().toLowerCase();
+  return host === base || host === `www.${base}`;
+}
+
 /** window.location.hostname in a browser; null during static rendering and on native. */
 export function currentHostname(): string | null {
   if (typeof window === 'undefined' || !window.location) return null;
@@ -50,3 +62,6 @@ export function currentHostname(): string | null {
  * needs it synchronously to attach the x-tenant-subdomain request header.
  */
 export const tenantSubdomain: string | null = parseTenantSubdomain(currentHostname());
+
+/** True when this page is the product apex rather than a customer host. */
+export const apexHost: boolean = isApexHost(currentHostname());
