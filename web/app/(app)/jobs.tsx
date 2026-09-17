@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { Text, Button, Searchbar, Card, DataTable, Chip, IconButton, Dialog, Portal, Snackbar, TextInput, RadioButton, ActivityIndicator, Tooltip } from 'react-native-paper';
+import { Text, Button, Searchbar, Card, DataTable, IconButton, Dialog, Portal, Snackbar, TextInput, RadioButton, ActivityIndicator, Tooltip } from 'react-native-paper';
+import { LabelPill, LabelPillRow } from '../../components/LabelPill';
 import { supabase } from '../../lib/api';
 import { styles as globalStyles } from '../../styles';
 import { JobDialog } from '../../components/JobDialog';
@@ -936,32 +937,19 @@ export default function JobsScreen() {
       </View>
       
       
-      <View style={styles.filtersContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll}>
-                    <Chip 
-            selected={selectedStatuses.length === 0}
-            onPress={() => setSelectedStatuses([])}
-            style={[styles.filterChip, { borderRadius: 4 }]}
-                      mode="outlined"
-                      showSelectedCheck={false}
-                    >
-            All
-                    </Chip>
-          
-          {statusOptions.map(option => (
-            <Chip
-              key={option.value}
-              selected={selectedStatuses.includes(option.value)}
-              onPress={() => toggleStatusFilter(option.value)}
-              style={[styles.filterChip, { backgroundColor: selectedStatuses.includes(option.value) ? option.color : undefined, borderRadius: 4 }]}
-              mode="outlined"
-              showSelectedCheck={false}
-            >
-              {option.label}
-            </Chip>
-          ))}
-        </ScrollView>
-                  </View>
+      <LabelPillRow>
+        <LabelPill label="All" selected={selectedStatuses.length === 0} onPress={() => setSelectedStatuses([])} />
+        {statusOptions.map(option => (
+          <LabelPill
+            key={option.value}
+            label={option.label}
+            color={option.color}
+            textColor={option.textColor}
+            selected={selectedStatuses.includes(option.value)}
+            onPress={() => toggleStatusFilter(option.value)}
+          />
+        ))}
+      </LabelPillRow>
       
       <Card style={styles.tableCard}>
         <DataTable style={{ backgroundColor: '#ffffff' }}>
@@ -1411,16 +1399,6 @@ const styles = StyleSheet.create({
   },
   addButton: {
     marginLeft: 8,
-  },
-  filtersContainer: {
-    marginBottom: 16,
-    flexDirection: 'row',
-  },
-  filtersScroll: {
-    flexGrow: 0,
-  },
-  filterChip: {
-    marginRight: 8,
   },
   tableCard: {
     flex: 1,

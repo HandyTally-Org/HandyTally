@@ -11,6 +11,7 @@ import {
   type LabelSection,
 } from '../../constants/labels';
 import { generateFieldKey } from '../../constants/customFields';
+import { LabelPill } from '../LabelPill';
 import {
   AddPanel,
   FieldCaption,
@@ -39,15 +40,6 @@ const SECTION_RECORDS: Record<LabelSection, { table: string; column: string; thi
   invoice_status: { table: 'invoices', column: 'status', thing: 'status' },
   client_tag: { table: 'clients', column: 'tag', thing: 'tag' },
 };
-
-/** Preview text colour: the label's own on a pale fill, white on a saturated one. */
-function chipTextOn(bg: string, preferred: string): string {
-  const hex = /^#([0-9a-f]{6})$/i.exec(bg.trim());
-  if (!hex) return preferred;
-  const n = parseInt(hex[1], 16);
-  const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
-  return lum > 0.62 ? preferred : '#ffffff';
-}
 
 function toOverrides(section: LabelSection, rows: readonly LabelDef[]): LabelOverride[] {
   const overrides: LabelOverride[] = [];
@@ -209,9 +201,7 @@ export function LabelsEditor({ section, sectionLabel }: { section: LabelSection;
         <SectionLabel>Live preview — {sectionLabel} {records.thing} chips</SectionLabel>
         <View style={styles.preview}>
           {rows.map(row => (
-            <View key={row.value} style={[styles.chip, { backgroundColor: row.color }]}>
-              <Text style={[styles.chipText, { color: chipTextOn(row.color, row.textColor) }]}>{row.label}</Text>
-            </View>
+            <LabelPill key={row.value} label={row.label} color={row.color} textColor={row.textColor} />
           ))}
         </View>
 
@@ -253,8 +243,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: '#fafafa',
   },
-  chip: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999 },
-  chipText: { fontSize: 12.5, fontWeight: '600' },
   footer: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 20, flexWrap: 'wrap' },
   unsaved: { color: '#b45309', fontSize: 13 },
 });

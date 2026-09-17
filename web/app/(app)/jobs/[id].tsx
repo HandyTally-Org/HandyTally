@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, ScrollView, Platform, Pressable, TouchableOpacity, Dimensions, Modal } from 'react-native';
-import { Text, Button, Card, SegmentedButtons, FAB, TextInput, Dialog, Portal, Divider, Chip, DataTable, ActivityIndicator, RadioButton, List, IconButton, Menu, Snackbar, Surface } from 'react-native-paper';
+import { Text, Button, Card, SegmentedButtons, FAB, TextInput, Dialog, Portal, Divider, DataTable, ActivityIndicator, RadioButton, List, IconButton, Menu, Snackbar, Surface } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { sendJobInvite } from '../../../utils/sendJobInvite';
 import { supabase } from '../../../lib/supabase';
@@ -18,6 +18,7 @@ import { InvoiceForm } from '../../../components/InvoiceForm';
 import { NotesSection } from '../../../components/NotesSection';
 import { useLabels } from '../../../hooks/useLabels';
 import { labelColor, labelText, labelTextColor } from '../../../constants/labels';
+import { LabelPill } from '../../../components/LabelPill';
 import { useRefreshOnFocus } from '../../../hooks/useRefreshOnFocus';
 import { useCustomFields } from '../../../hooks/useCustomFields';
 import { CustomFieldsView } from '../../../components/CustomFields';
@@ -1658,12 +1659,12 @@ export default function JobDetailsScreen() {
               {membersLoading && job?.assigned_to ? '…' : assigneeLabel(job?.assigned_to, members)}
             </DataTable.Cell>
             <DataTable.Cell>
-              <Chip
-                style={{ backgroundColor: labelColor(jobStatuses, job?.status) }}
-                textStyle={{ color: labelTextColor(jobStatuses, job?.status) }}
-              >
-                {labelText(jobStatuses, job?.status) || 'Unknown'}
-              </Chip>
+              <LabelPill
+                size="sm"
+                label={labelText(jobStatuses, job?.status) || 'Unknown'}
+                color={labelColor(jobStatuses, job?.status)}
+                textColor={labelTextColor(jobStatuses, job?.status)}
+              />
             </DataTable.Cell>
             <DataTable.Cell>{job?.start_date ? formatDate(job.start_date) : 'Not set'}</DataTable.Cell>
             <DataTable.Cell>{job?.end_date ? formatDate(job.end_date) : 'Not set'}</DataTable.Cell>

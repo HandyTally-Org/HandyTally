@@ -13,8 +13,9 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { ImportExportButtons } from '../../components/ImportExportButtons';
 import { exportWorkbook, pickWorkbook, sheetRows, confirmAction, toIsoDate } from '../../utils/excel';
 import { InvoiceStatus, NEW_INVOICE_STATUS } from '../../constants/invoiceStatus';
-import { labelText, labelTextColor } from '../../constants/labels';
+import { labelColor, labelText, labelTextColor } from '../../constants/labels';
 import { useLabels } from '../../hooks/useLabels';
+import { LabelPill, LabelPillRow } from '../../components/LabelPill';
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 
 export type Invoice = {
@@ -1687,41 +1688,19 @@ export default function InvoicesScreen() {
           </View>
           
           <View style={styles.filtersContainer}>
-            <View style={{ flexDirection: 'row', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-              <Button
-                mode={selectedStatuses.length === 0 ? 'contained' : 'outlined'}
-                onPress={() => toggleStatusFilter('all')}
-                style={{ 
-                  marginRight: 8,
-                  backgroundColor: selectedStatuses.length === 0 ? '#2196F3' : undefined,
-                  borderRadius: 4,
-                }}
-                labelStyle={{
-                  color: selectedStatuses.length === 0 ? 'white' : '#000000',
-                  fontWeight: '500',
-                }}
-              >
-                All
-              </Button>
+            <LabelPillRow>
+              <LabelPill label="All" selected={selectedStatuses.length === 0} onPress={() => toggleStatusFilter('all')} />
               {invoiceStatuses.map(option => (
-                <Button
+                <LabelPill
                   key={option.value}
-                  mode={selectedStatuses.includes(option.value) ? 'contained' : 'outlined'}
+                  label={option.label}
+                  color={option.color}
+                  textColor={option.textColor}
+                  selected={selectedStatuses.includes(option.value)}
                   onPress={() => toggleStatusFilter(option.value)}
-                  style={{
-                    marginRight: 8,
-                    backgroundColor: selectedStatuses.includes(option.value) ? option.color : undefined,
-                    borderRadius: 4,
-                  }}
-                  labelStyle={{
-                    color: selectedStatuses.includes(option.value) ? 'white' : '#000000',
-                    fontWeight: '500',
-                  }}
-                >
-                  {option.label}
-                </Button>
+                />
               ))}
-            </View>
+            </LabelPillRow>
           </View>
 
           <Card style={{
@@ -1805,9 +1784,12 @@ export default function InvoicesScreen() {
                       {/* HT-10: read-only. An estimate becomes a work order
                           when the client approves it from the email; other
                           changes are made from the details view. */}
-                      <Text style={{ fontWeight: 'bold', color: labelTextColor(invoiceStatuses, invoice.status) }}>
-                        {labelText(invoiceStatuses, invoice.status)}
-                      </Text>
+                      <LabelPill
+                        size="sm"
+                        label={labelText(invoiceStatuses, invoice.status)}
+                        color={labelColor(invoiceStatuses, invoice.status)}
+                        textColor={labelTextColor(invoiceStatuses, invoice.status)}
+                      />
                     </DataTable.Cell>
                     <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
                       <View style={{ flexDirection: 'row' }}>
