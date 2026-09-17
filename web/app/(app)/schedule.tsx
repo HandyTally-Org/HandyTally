@@ -152,6 +152,7 @@ export default function ScheduleScreen() {
           start_date: jobData.start_date,
           end_date: jobData.end_date,
           assigned_to: jobData.assigned_to ?? null,
+          custom_fields: jobData.custom_fields ?? {},
         });
         if (error) throw new Error(error.message);
         setNewJobDefaults(null);

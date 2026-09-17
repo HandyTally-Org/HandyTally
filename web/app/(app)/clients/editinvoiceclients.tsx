@@ -168,6 +168,7 @@ export default function EditInvoiceClientScreen() {
           subtotal: updatedInvoice.subtotal,
           tax: updatedInvoice.tax,
           tax_rate: updatedInvoice.tax_rate,
+          custom_fields: updatedInvoice.custom_fields ?? {},
           updated_at: new Date().toISOString()
         })
         .eq('uid', invoiceId);

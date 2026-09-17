@@ -19,6 +19,8 @@ import { NotesSection } from '../../../components/NotesSection';
 import { useLabels } from '../../../hooks/useLabels';
 import { labelColor, labelText, labelTextColor } from '../../../constants/labels';
 import { useRefreshOnFocus } from '../../../hooks/useRefreshOnFocus';
+import { useCustomFields } from '../../../hooks/useCustomFields';
+import { CustomFieldsView } from '../../../components/CustomFields';
 
 // Let's create a simple calendar component using the existing libraries
 interface SimpleCalendarProps {
@@ -194,6 +196,8 @@ export default function JobDetailsScreen() {
   const { id } = useLocalSearchParams();
   // HT-49: statuses, names and colours for every picker and chip on this page.
   const jobStatuses = useLabels('job_status');
+  // HT-53: this organisation's custom fields for Jobs.
+  const jobCustomFields = useCustomFields('jobs');
   const router = useRouter();
   // HT-35: turns jobs.assigned_to into a name on the Info tab.
   const { members, loading: membersLoading } = useOrganizationMembers();
@@ -974,6 +978,7 @@ export default function JobDetailsScreen() {
         start_date: updatedJobData.start_date,
         end_date: updatedJobData.end_date,
         assigned_to: updatedJobData.assigned_to ?? null,
+        custom_fields: updatedJobData.custom_fields ?? {},
       };
       
       // Remove any undefined values
@@ -1273,6 +1278,7 @@ export default function JobDetailsScreen() {
           total: updatedInvoice.total,
           notes: updatedInvoice.notes,
           status: updatedInvoice.status,
+          custom_fields: updatedInvoice.custom_fields ?? {},
           updated_at: new Date().toISOString()
         })
         .eq('uid', updatedInvoice.uid);
@@ -1652,6 +1658,8 @@ export default function JobDetailsScreen() {
             <DataTable.Cell>{job?.end_date ? formatDate(job.end_date) : 'Not set'}</DataTable.Cell>
           </DataTable.Row>
         </DataTable>
+
+        <CustomFieldsView defs={jobCustomFields} values={job?.custom_fields} />
       </View>
     );
   };

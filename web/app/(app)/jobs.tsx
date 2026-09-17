@@ -23,6 +23,8 @@ type Job = {
   end_date: string;
   status: string;
   created_at: string;
+  /** HT-53: values of the organisation's custom fields, keyed by field key. */
+  custom_fields?: Record<string, unknown>;
   // HT-35: user id of the organisation member the job is assigned to.
   assigned_to: string | null;
 };
@@ -296,6 +298,7 @@ export default function JobsScreen() {
         start_date: jobData.start_date,
         end_date: jobData.end_date,
         assigned_to: jobData.assigned_to ?? null,
+        custom_fields: jobData.custom_fields ?? {},
       };
       
       // Remove any undefined values

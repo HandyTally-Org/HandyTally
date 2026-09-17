@@ -11,6 +11,8 @@ import { doc, GREEN, NAVY, BORDER, LABEL, INK } from './invoiceDocStyles';
 import { invoiceDocumentLabel } from '../constants/invoiceStatus';
 import { labelText } from '../constants/labels';
 import { useLabels } from '../hooks/useLabels';
+import { useCustomFields } from '../hooks/useCustomFields';
+import { CustomFieldsView } from './CustomFields';
 
 // Documents that can be emailed to a client: the ones that have not yet turned
 // into money owed. The payment states are excluded because there is no reason
@@ -61,6 +63,7 @@ export function InvoiceDetails({
   companyLogo
 }: InvoiceDetailsProps) {
   const invoiceStatuses = useLabels('invoice_status');
+  const invoiceCustomFields = useCustomFields('invoices');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [companyInfo, setCompanyInfo] = useState(null);
   const [printLoading, setPrintLoading] = useState(false);
@@ -446,6 +449,8 @@ export function InvoiceDetails({
               </View>
             </View>
           </View>
+
+          <CustomFieldsView defs={invoiceCustomFields} values={(safeInvoice as any).custom_fields} />
 
           {/* ── Line items ── */}
           <View style={doc.columnHeader}>

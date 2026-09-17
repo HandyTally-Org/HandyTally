@@ -52,6 +52,8 @@ export type Invoice = {
   client?: Client;
   // Filled in by fetchInvoices from the joined client row.
   client_name?: string;
+  /** HT-53: values of the organisation's custom fields, keyed by field key. */
+  custom_fields?: Record<string, unknown>;
 };
 
 export type InvoiceItemPhoto = {
@@ -1870,6 +1872,7 @@ export default function InvoicesScreen() {
                         total: updatedInvoice.total,
                         notes: updatedInvoice.notes,
                         status: updatedInvoice.status,
+                        custom_fields: updatedInvoice.custom_fields ?? {},
                       })
                       .eq('uid', invoiceToEdit.uid);
                       
@@ -1934,6 +1937,7 @@ export default function InvoicesScreen() {
                           total: updatedInvoice.total,
                           notes: updatedInvoice.notes,
                           status: updatedInvoice.status || NEW_INVOICE_STATUS,
+                          custom_fields: updatedInvoice.custom_fields ?? {},
                         })
                         .select()
                         .single();
