@@ -26,7 +26,8 @@ import type { LabelSection } from '../../../constants/labels';
 /** Sections that have records of their own, and so a gear. */
 const SECTIONS_WITH_FIELDS = new Set(Object.keys(NAV_KEY_TO_SECTION));
 /** Sections whose records carry a custom_fields column today (HT-52); jobs and invoices follow with HT-53. */
-const SECTIONS_WITH_FIELD_STORAGE = new Set(['clients', 'inventory', 'labor']);
+// HT-53: jobs and invoices now carry custom_fields too.
+const SECTIONS_WITH_FIELD_STORAGE = new Set(['clients', 'inventory', 'labor', 'jobs', 'invoices']);
 /** The label section each sidebar entry's Labels tab edits (HT-51 / HT-49). */
 const NAV_KEY_TO_LABEL_SECTION: Record<string, LabelSection> = {
   clients: 'client_tag',

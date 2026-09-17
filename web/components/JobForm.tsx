@@ -19,6 +19,9 @@ import { DateTimePickerDialog, formatDateTimeLabel } from './DateTimePickerDialo
 import { useAuth } from '../contexts/AuthContext';
 import { useOrganizationMembers } from '../hooks/useOrganizationMembers';
 import { memberDisplayName, assigneeLabel } from '../utils/inviteUser';
+import { useCustomFields } from '../hooks/useCustomFields';
+import { CustomFieldInputs } from './CustomFields';
+import { normalizeCustomValues, validateCustomValues, type CustomFieldValues } from '../constants/customFields';
 
 type Job = {
   uid: number;  // Changed from string to number to match bigint8 in database
@@ -32,6 +35,8 @@ type Job = {
   end_time: string | null;
   // HT-35: user id of the organisation member the job is assigned to.
   assigned_to: string | null;
+  /** HT-53: values of the organisation's custom fields, keyed by field key. */
+  custom_fields?: CustomFieldValues;
 };
 
 export type JobFormDefaults = Partial<Pick<Job, 'start_date' | 'end_date'>>;
@@ -66,8 +71,12 @@ export const JobForm = forwardRef<JobFormHandle, JobFormProps>(function JobForm(
     start_time: job?.start_time || null,
     end_time: job?.end_time || null,
     assigned_to: job?.assigned_to || null,
+    custom_fields: job?.custom_fields || {},
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // HT-53: the organisation's custom fields for jobs, and their own error map.
+  const customDefs = useCustomFields('jobs');
+  const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
   // HT-35: the Assigned to dropdown lists the active members of the caller's
   // organisation. A user with no organisation sees it disabled.
   const { organization } = useAuth();
@@ -128,6 +137,7 @@ export const JobForm = forwardRef<JobFormHandle, JobFormProps>(function JobForm(
         start_time: job.start_time || null,
         end_time: job.end_time || null,
         assigned_to: job.assigned_to || null,
+        custom_fields: job.custom_fields || {},
       });
     } else {
       // Reset form for new job
@@ -141,8 +151,10 @@ export const JobForm = forwardRef<JobFormHandle, JobFormProps>(function JobForm(
         start_time: null,
         end_time: null,
         assigned_to: null,
+        custom_fields: {},
       });
     }
+    setCustomErrors({});
   }, [job]);
 
   useEffect(() => {
@@ -213,6 +225,13 @@ export const JobForm = forwardRef<JobFormHandle, JobFormProps>(function JobForm(
         alert('Please select a client');
         return;
       }
+
+      const nextCustomErrors = validateCustomValues(customDefs, formData.custom_fields || {});
+      if (Object.keys(nextCustomErrors).length > 0) {
+        setCustomErrors(nextCustomErrors);
+        return;
+      }
+      setCustomErrors({});
       
       console.log('Form data for submission:', formData);
       
@@ -234,6 +253,7 @@ export const JobForm = forwardRef<JobFormHandle, JobFormProps>(function JobForm(
         start_date: formData.start_date,
         end_date: formData.end_date,
         assigned_to: formData.assigned_to || null,
+        custom_fields: normalizeCustomValues(customDefs, formData.custom_fields || {}),
       };
 
       // If this is an edit operation and we have a uid, include it
@@ -259,6 +279,12 @@ export const JobForm = forwardRef<JobFormHandle, JobFormProps>(function JobForm(
       console.error('Error preparing form data:', error);
       alert(`Error: ${error.message}`);
     }
+  };
+
+  const handleCustomFieldChange = (key: string, value: unknown) => {
+    setFormData(prev => ({ ...prev, custom_fields: { ...(prev.custom_fields || {}), [key]: value } }));
+    if (customErrors[key]) setCustomErrors(prev => ({ ...prev, [key]: '' }));
+    if (onChange) onChange();
   };
 
   const handleSelectClient = (client: Client) => {
@@ -814,7 +840,14 @@ export const JobForm = forwardRef<JobFormHandle, JobFormProps>(function JobForm(
             onDismiss={() => setShowEndDatePicker(false)}
             onConfirm={(iso) => handleDateTimeConfirm(iso, 'end')}
           />
-          
+
+          <CustomFieldInputs
+            defs={customDefs}
+            values={formData.custom_fields || {}}
+            errors={customErrors}
+            onChange={handleCustomFieldChange}
+          />
+
           {!embedded && (
           <>
           <View style={[styles.row, { justifyContent: 'flex-end', gap: 8, marginTop: 24, marginBottom: 24 }]}>

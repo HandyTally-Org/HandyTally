@@ -11,6 +11,9 @@ import { Material } from '../app/(app)/materials';
 import { doc, GREEN, NAVY, BORDER, LABEL, INK, MAX_ITEM_PHOTOS } from './invoiceDocStyles';
 import { NEW_INVOICE_STATUS, invoiceDocumentLabel } from '../constants/invoiceStatus';
 import { useLabels } from '../hooks/useLabels';
+import { useCustomFields } from '../hooks/useCustomFields';
+import { CustomFieldInputs } from './CustomFields';
+import { normalizeCustomValues, validateCustomValues, type CustomFieldValues } from '../constants/customFields';
 
 type InvoiceFormProps = {
   jobs: Job[];
@@ -63,6 +66,11 @@ function safeParseNumber(value: any): number {
 
 export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCancel, initialInvoice, initialItems = [], isEditing = false, hideTitle = false, forceInvoiceNumber = null, companyLogo }: InvoiceFormProps) {
   const invoiceStatuses = useLabels('invoice_status');
+  // HT-53: this organisation's custom fields for Invoices. One set of values
+  // for the row, shared by every stage it passes through (estimate, work
+  // order, sent, ...) -- see the migration header for why.
+  const customDefs = useCustomFields('invoices');
+  const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
   const generateNextInvoiceNumber = () => {
     if (!lastInvoiceNumber) {
       return '1001';
@@ -97,7 +105,8 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
     total: initialInvoice?.total || 0,
     notes: initialInvoice?.notes || '',
     status: initialInvoice?.status || NEW_INVOICE_STATUS,
-    invoice_items: initialInvoice?.invoice_items || []
+    invoice_items: initialInvoice?.invoice_items || [],
+    custom_fields: (initialInvoice?.custom_fields as CustomFieldValues) || {},
   });
   const [invoiceItems, setInvoiceItems] = useState<Omit<InvoiceItem, 'id' | 'invoice_id'>[]>(
     Array.isArray(initialItems) && initialItems.length > 0
@@ -280,6 +289,14 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
     setFormData(prevData => ({ ...prevData, status: newStatus }));
   };
 
+  const handleCustomFieldChange = (key: string, value: unknown) => {
+    setFormData(prevData => ({
+      ...prevData,
+      custom_fields: { ...(prevData.custom_fields as CustomFieldValues), [key]: value },
+    }));
+    if (customErrors[key]) setCustomErrors(prev => ({ ...prev, [key]: '' }));
+  };
+
   // Applies a catalog service to an existing line item row.
   const applyServiceToItem = (index: number, service: any) => {
     const updatedItems = [...invoiceItems];
@@ -457,10 +474,14 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
       validationErrors.items = 'At least one item is required';
     }
 
-    if (Object.keys(validationErrors).length > 0) {
+    const nextCustomErrors = validateCustomValues(customDefs, (formData.custom_fields as CustomFieldValues) || {});
+
+    if (Object.keys(validationErrors).length > 0 || Object.keys(nextCustomErrors).length > 0) {
       setErrors(validationErrors);
+      setCustomErrors(nextCustomErrors);
       return;
     }
+    setCustomErrors({});
 
     setSubmitting(true);
 
@@ -480,7 +501,8 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
         tax_rate: safeParseNumber(formData.tax_rate),
         tax_amount: safeParseNumber(formData.tax_amount),
         total: safeParseNumber(formData.total),
-        status: formData.status || NEW_INVOICE_STATUS
+        status: formData.status || NEW_INVOICE_STATUS,
+        custom_fields: normalizeCustomValues(customDefs, (formData.custom_fields as CustomFieldValues) || {}),
       };
 
       const normalizedItems = invoiceItems.map(item => ({
@@ -991,6 +1013,14 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
               />
             </View>
           </View>
+
+          {/* ── Custom fields ── */}
+          <CustomFieldInputs
+            defs={customDefs}
+            values={(formData.custom_fields as CustomFieldValues) || {}}
+            errors={customErrors}
+            onChange={handleCustomFieldChange}
+          />
         </View>
       </View>
 
