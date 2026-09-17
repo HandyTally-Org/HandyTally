@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, Button, TextInput, Card, DataTable, IconButton, Dialog, Portal, Snackbar, Chip, Menu } from 'react-native-paper';
+import { Text, Button, TextInput, Card, DataTable, IconButton, Snackbar, Chip, Menu, SegmentedButtons } from 'react-native-paper';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useRequireAdmin } from '../../../hooks/useRequireAdmin';
 import {
@@ -14,6 +14,7 @@ import {
   type OrganizationMember,
 } from '../../../utils/inviteUser';
 import { useRefreshOnFocus } from '../../../hooks/useRefreshOnFocus';
+import { FormDialog, FormDialogFooter, FormField, FormRow, formTheme, inputStyle } from '../../../components/FormDialog';
 
 // HT-12: the organisation's members. Admins invite people by email with a
 // role, change roles and deactivate. The account is created server-side and
@@ -83,6 +84,12 @@ export default function UsersScreen() {
     setInviteEmail('');
     setInviteRole('user');
     setInviteError('');
+  };
+
+  // The X, the scrim and Cancel all go through here so nothing closes the
+  // popup while the invitation is being sent.
+  const dismissInvite = () => {
+    if (!inviting) setShowInvite(false);
   };
 
   const handleInvite = async () => {
@@ -299,70 +306,63 @@ export default function UsersScreen() {
         </View>
       </ScrollView>
 
-      {/* Invite dialog */}
-      <Portal>
-        <Dialog
-          visible={showInvite}
-          onDismiss={() => { if (!inviting) setShowInvite(false); }}
-          style={white}
-        >
-          <Dialog.Title style={white}>Invite user</Dialog.Title>
-          <Dialog.Content style={white}>
-            <Text style={{ marginBottom: 16, color: '#666' }}>
-              They will get an email from HandyTally with a link to choose their password.
-            </Text>
-
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', ...white }}>
-              <TextInput
-                label="First name"
-                value={inviteFirstName}
-                onChangeText={setInviteFirstName}
-                style={[styles.input, { flex: 1, marginRight: 8, ...white }]}
-              />
-              <TextInput
-                label="Last name"
-                value={inviteLastName}
-                onChangeText={setInviteLastName}
-                style={[styles.input, { flex: 1, ...white }]}
-              />
-            </View>
-
+      {/* Invite dialog: HT-63, the same shell as the material, labor and client popups */}
+      <FormDialog
+        visible={showInvite}
+        title="Invite user"
+        subtitle="They will get an email from HandyTally with a link to choose their password."
+        onDismiss={dismissInvite}
+        footer={
+          <FormDialogFooter onCancel={dismissInvite} onSubmit={handleInvite} submitLabel="Send invitation" submitting={inviting} />
+        }
+      >
+        <FormRow>
+          <FormField>
             <TextInput
-              label="Email"
-              value={inviteEmail}
-              onChangeText={setInviteEmail}
-              style={[styles.input, white]}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="off"
+              mode="outlined"
+              label="First name"
+              value={inviteFirstName}
+              onChangeText={setInviteFirstName}
+              style={inputStyle}
             />
+          </FormField>
+          <FormField>
+            <TextInput
+              mode="outlined"
+              label="Last name"
+              value={inviteLastName}
+              onChangeText={setInviteLastName}
+              style={inputStyle}
+            />
+          </FormField>
+        </FormRow>
 
-            <Text style={{ marginBottom: 8 }}>Role</Text>
-            <View style={styles.roleSelector}>
-              {INVITABLE_ROLES.map(r => (
-                <Button
-                  key={r.value}
-                  mode={inviteRole === r.value ? 'contained' : 'outlined'}
-                  onPress={() => setInviteRole(r.value)}
-                  style={styles.roleButton}
-                  compact
-                >
-                  {r.label}
-                </Button>
-              ))}
-            </View>
-            <Text style={styles.roleHint}>
-              {INVITABLE_ROLES.find(r => r.value === inviteRole)?.hint}
-            </Text>
+        <FormField error={inviteError}>
+          <TextInput
+            mode="outlined"
+            label="Email"
+            value={inviteEmail}
+            onChangeText={setInviteEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoComplete="off"
+            error={!!inviteError}
+            style={inputStyle}
+          />
+        </FormField>
 
-            {inviteError ? <Text style={styles.error}>{inviteError}</Text> : null}
-          </Dialog.Content>
-          <Dialog.Actions style={white}>
-            <Button onPress={() => setShowInvite(false)} disabled={inviting}>Cancel</Button>
-            <Button onPress={handleInvite} loading={inviting} disabled={inviting}>Send invitation</Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
+        <FormField>
+          <Text style={styles.roleLabel}>Role</Text>
+          <SegmentedButtons
+            value={inviteRole}
+            onValueChange={(value) => setInviteRole(value as InvitableRole)}
+            buttons={INVITABLE_ROLES.map(r => ({ value: r.value, label: r.label }))}
+          />
+          <Text style={styles.roleHint}>
+            {INVITABLE_ROLES.find(r => r.value === inviteRole)?.hint}
+          </Text>
+        </FormField>
+      </FormDialog>
 
       <Snackbar
         visible={snackbarVisible}
@@ -404,24 +404,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.8,
     shadowRadius: 1,
   },
-  input: {
-    marginBottom: 16,
-  },
-  roleSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  roleLabel: {
+    fontSize: 12,
+    color: formTheme.mutedText,
     marginBottom: 8,
-  },
-  roleButton: {
-    marginRight: 8,
   },
   roleHint: {
     fontSize: 12,
-    color: '#666',
-    marginBottom: 16,
-  },
-  error: {
-    color: 'red',
-    marginBottom: 8,
+    color: formTheme.mutedText,
+    marginTop: 8,
   },
 });
