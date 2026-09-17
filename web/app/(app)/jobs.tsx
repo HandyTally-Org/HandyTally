@@ -986,6 +986,7 @@ export default function JobsScreen() {
               Address
             </DataTable.Title>
             <DataTable.Title
+              style={{ flex: 1.2 }}
               onPress={() => handleSort('client_phone')}
               sortDirection={sortColumn === 'client_phone' ? sortDirection : undefined}
             >
@@ -1017,7 +1018,7 @@ export default function JobsScreen() {
             >
               End Date
             </DataTable.Title>
-            <DataTable.Title>Actions</DataTable.Title>
+            <DataTable.Title style={{ flex: 1.3 }}>Actions</DataTable.Title>
           </DataTable.Header>
           
           {loading ? (
@@ -1037,7 +1038,7 @@ export default function JobsScreen() {
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{job.title}</DataTable.Cell>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{job.client_name}</DataTable.Cell>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff', flex: 2 }}>{job.client_address}</DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{job.client_phone}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff', flex: 1.2 }}>{job.client_phone}</DataTable.Cell>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{assigneeName(job)}</DataTable.Cell>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
                   <select
@@ -1059,7 +1060,7 @@ export default function JobsScreen() {
                 </DataTable.Cell>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff', flex: 1.5 }}>{formatDateTime(job.start_date)}</DataTable.Cell>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff', flex: 1.5 }}>{formatDateTime(job.end_date)}</DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff', flex: 1.3 }}>
                   <View style={styles.actionButtons}>
                     <IconButton
                       icon="pencil"
