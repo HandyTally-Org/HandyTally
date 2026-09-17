@@ -78,9 +78,10 @@ export function FormDialogFooter({ onCancel, onSubmit, submitLabel, submitting =
 }
 
 /** One input plus its error line, spaced like every other field. */
-export function FormField({ error, children }: { error?: string; children: ReactNode }) {
+export function FormField({ label, error, children }: { label?: string; error?: string; children: ReactNode }) {
   return (
     <View style={styles.field}>
+      {label ? <Text style={styles.fieldLabel}>{label}</Text> : null}
       {children}
       {error ? (
         <HelperText type="error" visible padding="none">
@@ -92,12 +93,14 @@ export function FormField({ error, children }: { error?: string; children: React
 }
 
 /** Fields side by side on a wide screen, stacked on a narrow one. */
-export function FormRow({ children }: { children: ReactNode }) {
+export function FormRow({ children, weights }: { children: ReactNode; weights?: number[] }) {
   const { width } = useWindowDimensions();
   const stacked = width < 480;
   return (
     <View style={stacked ? styles.rowStacked : styles.row}>
-      {Children.map(children, (child) => (child ? <View style={stacked ? undefined : styles.rowItem}>{child}</View> : null))}
+      {Children.map(children, (child, index) =>
+        child ? <View style={stacked ? undefined : [styles.rowItem, weights?.[index] != null && { flex: weights[index] }]}>{child}</View> : null,
+      )}
     </View>
   );
 }
@@ -153,6 +156,12 @@ const styles = StyleSheet.create({
   },
   field: {
     marginBottom: 12,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#374151',
+    marginBottom: 6,
   },
   row: {
     flexDirection: 'row',
