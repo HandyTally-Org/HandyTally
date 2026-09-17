@@ -162,10 +162,11 @@ export const JobForm = forwardRef<JobFormHandle, JobFormProps>(function JobForm(
     if (clients.length > 0 && formData.client_id) {
       console.log('Looking for client with ID:', formData.client_id);
       
-      // Convert client_id to string for comparison with client.uid
-      const clientIdStr = formData.client_id.toString();
+      // HT-67: clients.uid arrives from Supabase as a number while client_id
+      // may be either, so compare both as strings.
+      const clientIdStr = String(formData.client_id);
       
-      const client = clients.find(c => c.uid === clientIdStr);
+      const client = clients.find(c => String(c.uid) === clientIdStr);
         if (client) {
         console.log('Found matching client:', client);
           setSelectedClient(client);
