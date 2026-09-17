@@ -10,11 +10,22 @@ import {
   setMemberActive,
   removeOrganizationMember,
   deleteUserAccount,
+  applyUserImport,
   memberDisplayName,
   ROLE_LABELS,
   type InvitableRole,
   type OrganizationMember,
 } from '../../../utils/inviteUser';
+import {
+  USER_SHEET_NAME,
+  USER_SHEET_COLUMN_WIDTHS,
+  membersToSheetRows,
+  planUserImport,
+  describeUpdate,
+  type UserImportPlan,
+} from '../../../utils/userImport';
+import { exportWorkbook, pickWorkbook, sheetRows, hasColumn } from '../../../utils/excel';
+import { ImportExportButtons } from '../../../components/ImportExportButtons';
 import { useRefreshOnFocus } from '../../../hooks/useRefreshOnFocus';
 import { FormDialog, FormDialogFooter, FormField, FormRow, formTheme, inputStyle } from '../../../components/FormDialog';
 import { LabelPill } from '../../../components/LabelPill';
@@ -28,6 +39,12 @@ import { LabelPill } from '../../../components/LabelPill';
 // from this organisation or Delete their account outright. Both confirm in
 // a FormDialog and are refused server-side for the caller's own account and
 // for superusers.
+//
+// HT-46: Excel export and import, like Inventory. The exported sheet is
+// directly re-importable; import validates every row (utils/userImport.ts),
+// shows a preview, and on confirm applies the membership changes in one
+// database transaction (apply_user_import), then invites new addresses and
+// deletes the accounts that are left with no organisation at all.
 
 const INVITABLE_ROLES: { value: InvitableRole; label: string; hint: string }[] = [
   { value: 'user', label: 'Member', hint: 'Everything except Admin' },
@@ -77,6 +94,12 @@ export default function UsersScreen() {
   const [confirmation, setConfirmation] = useState<Confirmation>(null);
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState('');
+
+  // HT-46: the parsed sheet waiting for confirmation, its in-flight flag and
+  // whatever went wrong while applying it.
+  const [importPlan, setImportPlan] = useState<UserImportPlan | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
 
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
@@ -223,6 +246,117 @@ export default function UsersScreen() {
     }
   };
 
+  // --- HT-46: Excel export / import -----------------------------------------
+  const handleExport = async () => {
+    if (!organization) return;
+    try {
+      await exportWorkbook('users.xlsx', [
+        { name: USER_SHEET_NAME, rows: membersToSheetRows(members), columnWidths: USER_SHEET_COLUMN_WIDTHS },
+      ]);
+      showSnackbar('Users exported. Edit the sheet and import it to apply changes; delete = y removes someone from this organization.');
+    } catch (error: any) {
+      console.error('Error exporting users:', error);
+      showSnackbar(error.message || 'Could not export the users');
+    }
+  };
+
+  const handleImport = async () => {
+    if (!organization) return;
+    try {
+      const workbook = await pickWorkbook();
+      if (!workbook) return;
+      const rows = sheetRows(workbook, USER_SHEET_NAME);
+      if (!rows || rows.length === 0) {
+        showSnackbar('No rows found in the spreadsheet');
+        return;
+      }
+      if (!hasColumn(rows, 'email')) {
+        showSnackbar('The spreadsheet must have an "email" column');
+        return;
+      }
+      setImportErrors([]);
+      setImportPlan(planUserImport(rows, members, session?.user?.id));
+    } catch (error: any) {
+      console.error('Error reading the spreadsheet:', error);
+      showSnackbar(error.message || 'Could not read the spreadsheet');
+    }
+  };
+
+  const dismissImport = () => {
+    if (!importing) {
+      setImportPlan(null);
+      setImportErrors([]);
+    }
+  };
+
+  const handleApplyImport = async () => {
+    if (!organization || !importPlan || importPlan.errors.length > 0) return;
+    const problems: string[] = [];
+    try {
+      setImporting(true);
+      setImportErrors([]);
+
+      // 1. Membership changes and removals, all or nothing.
+      const removed = await applyUserImport(
+        organization.id,
+        importPlan.updates.map(({ email: _email, ...update }) => update),
+        importPlan.removals.map(m => m.user_id),
+      );
+
+      // 2. New addresses, one invitation each.
+      let invited = 0;
+      for (const invite of importPlan.invites) {
+        try {
+          await inviteUser({
+            organizationId: organization.id,
+            email: invite.email,
+            firstName: invite.first_name,
+            lastName: invite.last_name,
+            role: invite.role,
+          });
+          invited += 1;
+        } catch (error: any) {
+          problems.push(`${invite.email}: ${error.message || 'could not be invited'}`);
+        }
+      }
+
+      // 3. Accounts that now belong to no organisation are deleted outright.
+      let deleted = 0;
+      for (const r of removed) {
+        if (r.memberships_left > 0) continue;
+        const who = importPlan.removals.find(m => m.user_id === r.user_id);
+        try {
+          await deleteUserAccount({ userId: r.user_id, organizationId: organization.id });
+          deleted += 1;
+        } catch (error: any) {
+          problems.push(`${who?.email ?? r.user_id}: removed from ${organization.name} but the account could not be deleted (${error.message})`);
+        }
+      }
+
+      const summary = [
+        importPlan.updates.length ? `${importPlan.updates.length} updated` : null,
+        invited ? `${invited} invited` : null,
+        importPlan.removals.length ? `${importPlan.removals.length} removed` : null,
+        deleted ? `${deleted} account${deleted === 1 ? '' : 's'} deleted` : null,
+      ].filter(Boolean);
+      showSnackbar(summary.length ? `Import applied: ${summary.join(', ')}` : 'Import applied: nothing to change');
+      await fetchMembers();
+
+      if (problems.length) {
+        // The transactional part is done; show what did not follow.
+        setImportPlan({ ...importPlan, updates: [], removals: [], invites: [], unchanged: 0 });
+        setImportErrors(problems);
+      } else {
+        setImportPlan(null);
+      }
+    } catch (error: any) {
+      console.error('Error applying the import:', error);
+      setImportErrors([error.message || 'The import could not be applied. Nothing was changed.']);
+    } finally {
+      setImporting(false);
+    }
+  };
+
   // No "send password reset" here: that would go through GoTrue's mailer,
   // which has no SMTP on the self-hosted instance (HT-30) and drops the mail
   // while reporting success. Invitations go through Resend instead.
@@ -256,14 +390,17 @@ export default function UsersScreen() {
               )}
             </View>
 
-            <Button
-              mode="contained"
-              onPress={() => setShowInvite(true)}
-              icon="account-plus"
-              disabled={!organization}
-            >
-              Invite user
-            </Button>
+            <View style={{ flexDirection: 'row', alignItems: 'center', ...white }}>
+              <Button
+                mode="contained"
+                onPress={() => setShowInvite(true)}
+                icon="account-plus"
+                disabled={!organization}
+              >
+                Invite user
+              </Button>
+              <ImportExportButtons onExport={handleExport} onImport={handleImport} disabled={!organization || loading} />
+            </View>
           </View>
 
           {!organization ? (
@@ -492,10 +629,68 @@ export default function UsersScreen() {
         {confirmError ? <Text style={styles.confirmError}>{confirmError}</Text> : null}
       </FormDialog>
 
+      {/* Import preview (HT-46): what the sheet will do, confirmed before anything runs */}
+      <FormDialog
+        visible={importPlan !== null}
+        title="Import users"
+        subtitle={organization?.name}
+        onDismiss={dismissImport}
+        footer={
+          importPlan && importPlan.errors.length === 0 && importErrors.length === 0 ? (
+            <FormDialogFooter
+              onCancel={dismissImport}
+              onSubmit={handleApplyImport}
+              submitLabel={importPlan.removals.length ? 'Apply and remove' : 'Apply'}
+              submitting={importing}
+            />
+          ) : (
+            <Button mode="contained" onPress={dismissImport} disabled={importing}>Close</Button>
+          )
+        }
+      >
+        {importPlan && importPlan.errors.length > 0 ? (
+          <>
+            <Text style={styles.confirmText}>Nothing was changed. Fix these rows and import again:</Text>
+            {importPlan.errors.map((e, i) => (
+              <Text key={i} style={styles.confirmError}>• {e}</Text>
+            ))}
+          </>
+        ) : importErrors.length > 0 ? (
+          <>
+            <Text style={styles.confirmText}>The membership changes were applied, but these steps did not go through:</Text>
+            {importErrors.map((e, i) => (
+              <Text key={i} style={styles.confirmError}>• {e}</Text>
+            ))}
+          </>
+        ) : importPlan ? (
+          <>
+            <Text style={styles.confirmText}>
+              {importPlan.updates.length} to update, {importPlan.invites.length} to invite, {importPlan.removals.length} to remove
+              from {organization?.name}, {importPlan.unchanged} unchanged.
+            </Text>
+            {importPlan.updates.map(u => (
+              <Text key={u.user_id} style={styles.previewLine}>• {describeUpdate(u)}</Text>
+            ))}
+            {importPlan.invites.map(i => (
+              <Text key={i.email} style={styles.previewLine}>• invite {i.email} as {ROLE_LABELS[i.role].toLowerCase()}</Text>
+            ))}
+            {importPlan.removals.map(m => (
+              <Text key={m.user_id} style={[styles.previewLine, { color: '#c62828' }]}>• remove {displayName(m)} ({m.email})</Text>
+            ))}
+            {importPlan.removals.length > 0 ? (
+              <Text style={styles.roleHint}>
+                Removed people keep their account if they belong to another organization; otherwise the account is deleted.
+                Jobs and notes they created are kept with a blank author.
+              </Text>
+            ) : null}
+          </>
+        ) : null}
+      </FormDialog>
+
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
-        duration={5000}
+        duration={6000}
       >
         {snackbarMessage}
       </Snackbar>
@@ -556,5 +751,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#c62828',
     marginBottom: 8,
+  },
+  previewLine: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: formTheme.text,
   },
 });
