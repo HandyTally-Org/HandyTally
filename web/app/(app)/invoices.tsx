@@ -12,7 +12,9 @@ import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ImportExportButtons } from '../../components/ImportExportButtons';
 import { exportWorkbook, pickWorkbook, sheetRows, confirmAction, toIsoDate } from '../../utils/excel';
-import { InvoiceStatus, NEW_INVOICE_STATUS, invoiceStatusLabel, invoiceStatusColor } from '../../constants/invoiceStatus';
+import { InvoiceStatus, NEW_INVOICE_STATUS } from '../../constants/invoiceStatus';
+import { labelText, labelTextColor } from '../../constants/labels';
+import { useLabels } from '../../hooks/useLabels';
 
 export type Invoice = {
   uid: string;
@@ -97,6 +99,8 @@ Object.prototype.toString = function() {
 };
 
 export default function InvoicesScreen() {
+  // HT-49: statuses, names and colours for the filters and the list rows.
+  const invoiceStatuses = useLabels('invoice_status');
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -1533,35 +1537,6 @@ export default function InvoicesScreen() {
   };
   
   // Get the background color for a status button
-  const getStatusButtonColor = (status: string): string => {
-    if (status === 'all' && selectedStatuses.length === 0) {
-      return '#2196F3'; // Blue for "All" when active
-    }
-    
-    if (selectedStatuses.includes(status)) {
-      switch (status) {
-        case 'estimate':
-          return '#9E9E9E'; // Gray
-        case 'work_order':
-          return '#9C27B0'; // Purple
-        case 'sent':
-          return '#2196F3'; // Blue
-        case 'partial_paid':
-          return '#FF9800'; // Orange
-        case 'paid':
-          return '#4CAF50'; // Green
-        case 'overdue':
-          return '#F44336'; // Red
-        case 'cancelled':
-          return '#607D8B'; // Blue gray
-        default:
-          return '#2196F3'; // Default blue
-      }
-    }
-    
-    return 'transparent'; // Transparent background when not selected
-  };
-
   // Add a function to handle viewing invoice details
   const handleViewInvoiceDetails = async (invoice) => {
     // The list row only carries job_id; the details view shows the job by
@@ -1722,110 +1697,24 @@ export default function InvoicesScreen() {
               >
                 All
               </Button>
-              <Button 
-                mode={selectedStatuses.includes('estimate') ? 'contained' : 'outlined'}
-                onPress={() => toggleStatusFilter('estimate')}
-                style={{ 
-                  marginRight: 8,
-                  backgroundColor: selectedStatuses.includes('estimate') ? '#9E9E9E' : undefined,
-                  borderRadius: 4,
-                }}
-                labelStyle={{
-                  color: selectedStatuses.includes('estimate') ? 'white' : '#000000',
-                  fontWeight: '500',
-                }}
-              >
-                Estimate
-              </Button>
-              <Button 
-                mode={selectedStatuses.includes('work_order') ? 'contained' : 'outlined'}
-                onPress={() => toggleStatusFilter('work_order')}
-                style={{ 
-                  marginRight: 8,
-                  backgroundColor: selectedStatuses.includes('work_order') ? '#9C27B0' : undefined,
-                  borderRadius: 4,
-                }}
-                labelStyle={{
-                  color: selectedStatuses.includes('work_order') ? 'white' : '#000000',
-                  fontWeight: '500',
-                }}
-              >
-                Work Order
-              </Button>
-              <Button
-                mode={selectedStatuses.includes('sent') ? 'contained' : 'outlined'}
-                onPress={() => toggleStatusFilter('sent')}
-                style={{ 
-                  marginRight: 8,
-                  backgroundColor: selectedStatuses.includes('sent') ? '#2196F3' : undefined,
-                  borderRadius: 4,
-                }}
-                labelStyle={{
-                  color: selectedStatuses.includes('sent') ? 'white' : '#000000',
-                  fontWeight: '500',
-                }}
-              >
-                Sent
-              </Button>
-              <Button
-                mode={selectedStatuses.includes('partial_paid') ? 'contained' : 'outlined'}
-                onPress={() => toggleStatusFilter('partial_paid')}
-                style={{ 
-                  marginRight: 8,
-                  backgroundColor: selectedStatuses.includes('partial_paid') ? '#FF9800' : undefined,
-                  borderRadius: 4,
-                }}
-                labelStyle={{
-                  color: selectedStatuses.includes('partial_paid') ? 'white' : '#000000',
-                  fontWeight: '500',
-                }}
-              >
-                Partial Paid
-              </Button>
-              <Button
-                mode={selectedStatuses.includes('paid') ? 'contained' : 'outlined'}
-                onPress={() => toggleStatusFilter('paid')}
-                style={{ 
-                  marginRight: 8,
-                  backgroundColor: selectedStatuses.includes('paid') ? '#4CAF50' : undefined,
-                  borderRadius: 4,
-                }}
-                labelStyle={{
-                  color: selectedStatuses.includes('paid') ? 'white' : '#000000',
-                  fontWeight: '500',
-                }}
-              >
-                Paid
-              </Button>
-              <Button
-                mode={selectedStatuses.includes('overdue') ? 'contained' : 'outlined'}
-                onPress={() => toggleStatusFilter('overdue')}
-                style={{ 
-                  marginRight: 8,
-                  backgroundColor: selectedStatuses.includes('overdue') ? '#F44336' : undefined,
-                  borderRadius: 4,
-                }}
-                labelStyle={{
-                  color: selectedStatuses.includes('overdue') ? 'white' : '#000000',
-                  fontWeight: '500',
-                }}
-              >
-                Overdue
-              </Button>
-              <Button
-                mode={selectedStatuses.includes('cancelled') ? 'contained' : 'outlined'}
-                onPress={() => toggleStatusFilter('cancelled')}
-                style={{ 
-                  backgroundColor: selectedStatuses.includes('cancelled') ? '#607D8B' : undefined,
-                  borderRadius: 4,
-                }}
-                labelStyle={{
-                  color: selectedStatuses.includes('cancelled') ? 'white' : '#000000',
-                  fontWeight: '500',
-                }}
-              >
-                Cancelled
-              </Button>
+              {invoiceStatuses.map(option => (
+                <Button
+                  key={option.value}
+                  mode={selectedStatuses.includes(option.value) ? 'contained' : 'outlined'}
+                  onPress={() => toggleStatusFilter(option.value)}
+                  style={{
+                    marginRight: 8,
+                    backgroundColor: selectedStatuses.includes(option.value) ? option.color : undefined,
+                    borderRadius: 4,
+                  }}
+                  labelStyle={{
+                    color: selectedStatuses.includes(option.value) ? 'white' : '#000000',
+                    fontWeight: '500',
+                  }}
+                >
+                  {option.label}
+                </Button>
+              ))}
             </View>
           </View>
 
@@ -1910,8 +1799,8 @@ export default function InvoicesScreen() {
                       {/* HT-10: read-only. An estimate becomes a work order
                           when the client approves it from the email; other
                           changes are made from the details view. */}
-                      <Text style={{ fontWeight: 'bold', color: invoiceStatusColor(invoice.status) }}>
-                        {invoiceStatusLabel(invoice.status)}
+                      <Text style={{ fontWeight: 'bold', color: labelTextColor(invoiceStatuses, invoice.status) }}>
+                        {labelText(invoiceStatuses, invoice.status)}
                       </Text>
                     </DataTable.Cell>
                     <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>

@@ -1,3 +1,5 @@
+import { findLabel, labelText, type LabelDef } from '../../constants/labels';
+
 // Visual tokens for the calendar, kept in one place so the month grid, the
 // time grid and the dialogs stay consistent.
 
@@ -27,7 +29,12 @@ export const TIME_GUTTER_WIDTH = 56;
 export const HOUR_HEIGHT = 48;
 export const ALL_DAY_LANE_HEIGHT = 22;
 
-/** Chip colours by job status: a pale background with a readable dark text. */
+/**
+ * Chip colours by job status: the calendar's own pale palette for the
+ * built-in values, so the grid keeps its look, and the label module's colour
+ * for any value an organisation added or recoloured (HT-49) — an unknown
+ * status is never rendered in the "no status" colour.
+ */
 export const statusColors: Record<string, { color: string; textColor: string }> = {
   pending: { color: '#FEF3C7', textColor: '#92400E' },
   in_progress: { color: '#DBEAFE', textColor: '#1E3A8A' },
@@ -37,12 +44,16 @@ export const statusColors: Record<string, { color: string; textColor: string }> 
 
 export const defaultEventColors = { color: '#EDE9FE', textColor: '#4C1D95' };
 
-export function colorsForStatus(status?: string | null) {
+export function colorsForStatus(status?: string | null, labels?: readonly LabelDef[]) {
   if (!status) return defaultEventColors;
-  return statusColors[status.toLowerCase()] ?? defaultEventColors;
+  const value = status.toLowerCase();
+  const def = labels && findLabel(labels, value);
+  if (def && (!def.builtIn || !statusColors[value])) return { color: def.color, textColor: def.textColor };
+  return statusColors[value] ?? defaultEventColors;
 }
 
-export function statusLabel(status?: string | null): string {
+export function statusLabel(status?: string | null, labels?: readonly LabelDef[]): string {
   if (!status) return 'Unknown';
-  return status.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+  if (labels) return labelText(labels, status);
+  return status.replace(/_/g, ' ').replace(/^\w/, (ch) => ch.toUpperCase());
 }

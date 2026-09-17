@@ -3,6 +3,9 @@ import { View, StyleSheet, ScrollView, Dimensions, TouchableOpacity } from 'reac
 import { Text, Card, Title, Paragraph, Button, List, ActivityIndicator, Menu, Divider, Portal, Modal, IconButton, Snackbar } from 'react-native-paper';
 import { supabase } from '../../lib/supabase';
 import { styles as globalStyles } from '../../styles';
+import { OPEN_INVOICE_STATUSES } from '../../constants/invoiceStatus';
+import { labelColor, labelText } from '../../constants/labels';
+import { useLabels } from '../../hooks/useLabels';
 
 type DashboardStats = {
   clientCount: number;
@@ -30,7 +33,6 @@ type ChartData = {
 };
 
 type TimeRange = 'year_to_date' | 'last_6_months' | 'last_12_months' | 'all_time';
-type InvoiceStatus = 'all' | 'paid' | 'draft' | 'sent' | 'overdue';
 
 type InvoicesByMonth = {
   [month: string]: {
@@ -42,6 +44,8 @@ type InvoicesByMonth = {
 };
 
 export default function DashboardScreen() {
+  // HT-49: every invoice status, for the chart filter, its legend and its colours.
+  const invoiceStatuses = useLabels('invoice_status');
   const [stats, setStats] = useState<DashboardStats>({
     clientCount: 0,
     activeJobsCount: 0,
@@ -92,7 +96,7 @@ export default function DashboardScreen() {
     if (allInvoices.length > 0) {
       processChartData(allInvoices, timeRange, selectedInvoiceStatuses);
     }
-  }, [timeRange, selectedInvoiceStatuses]);
+  }, [timeRange, selectedInvoiceStatuses, invoiceStatuses]);
 
   const fetchAllData = async () => {
     try {
@@ -129,7 +133,8 @@ export default function DashboardScreen() {
       const clientCount = clientsResponse.count || 0;
       console.log("Client count:", clientCount);
       
-      // Fetch active jobs count
+      // Fetch active jobs count. Behaviour, not display: the tile counts the
+      // built-in in_progress value on purpose (HT-49).
       const jobsResponse = await supabase
         .from('jobs')
         .select('*', { count: 'exact', head: true })
@@ -143,11 +148,13 @@ export default function DashboardScreen() {
       const activeJobsCount = jobsResponse.count || 0;
       console.log("Active jobs count:", activeJobsCount);
       
-      // Fetch pending invoices count (draft + sent + overdue)
+      // Open invoices: anything not yet paid or cancelled. The list used to
+      // be ['draft', 'sent', 'overdue'] and missed every estimate, work order
+      // and partial payment once HT-10 renamed draft (HT-49).
       const invoicesResponse = await supabase
         .from('invoices')
         .select('*', { count: 'exact', head: true })
-        .in('status', ['draft', 'sent', 'overdue']);
+        .in('status', OPEN_INVOICE_STATUSES);
       
       if (invoicesResponse.error) {
         console.error("Error fetching pending invoices count:", invoicesResponse.error);
@@ -434,22 +441,6 @@ export default function DashboardScreen() {
     }
   };
 
-  const getStatusFilterLabel = (status: InvoiceStatus): string => {
-    switch (status) {
-      case 'all':
-        return 'All Statuses';
-      case 'paid':
-        return 'Paid Only';
-      case 'draft':
-        return 'Draft Only';
-      case 'sent':
-        return 'Sent Only';
-      case 'overdue':
-        return 'Overdue Only';
-      default:
-        return 'All Statuses';
-    }
-  };
 
   const processChartData = (
     invoices: any[],
@@ -580,7 +571,7 @@ export default function DashboardScreen() {
     }
     
     // Get all possible statuses across all months
-    const allStatuses = new Set();
+    const allStatuses = new Set<string>();
     months.forEach(month => {
       Object.keys(invoicesByMonth[month].byStatus).forEach(status => {
         allStatuses.add(status);
@@ -593,7 +584,7 @@ export default function DashboardScreen() {
       const color = getStatusColor(status);
       
       return {
-        label: status.charAt(0).toUpperCase() + status.slice(1),
+        label: labelText(invoiceStatuses, status),
         data: months.map(month => {
           return invoicesByMonth[month].byStatus[status] 
             ? invoicesByMonth[month].byStatus[status].total 
@@ -613,18 +604,8 @@ export default function DashboardScreen() {
     return invoices.reduce((sum, invoice) => sum + (invoice.total || 0), 0);
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'paid': return '#4CAF50';
-      case 'partial_paid': return '#8BC34A';
-      case 'sent': return '#2196F3';
-      case 'overdue': return '#F44336';
-      case 'estimate': return '#9C27B0';
-      case 'work_order': return '#FF9800';
-      case 'cancelled': return '#9E9E9E';
-      default: return '#607D8B';
-    }
-  };
+  // Chart segment colour: the label module's colour for the status.
+  const getStatusColor = (status: string) => labelColor(invoiceStatuses, status);
 
   // Function to retry loading if there was an error
   const handleRetry = () => {
@@ -1326,7 +1307,7 @@ export default function DashboardScreen() {
                 
                 <View style={styles.filterContainer}>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 }}>
-                    {['all', 'estimate', 'work_order', 'sent', 'partial_paid', 'paid', 'overdue', 'cancelled'].map((status) => (
+                    {['all', ...invoiceStatuses.map(def => def.value)].map((status) => (
                       <TouchableOpacity
                         key={status}
                         style={[
@@ -1341,10 +1322,7 @@ export default function DashboardScreen() {
                             selectedInvoiceStatuses.includes(status) && styles.selectedFilterButtonText
                           ]}
                         >
-                          {status === 'all' ? 'All' : 
-                           status === 'work_order' ? 'Work Order' :
-                           status === 'partial_paid' ? 'Partial Paid' :
-                           status.charAt(0).toUpperCase() + status.slice(1)}
+                          {status === 'all' ? 'All' : labelText(invoiceStatuses, status)}
                         </Text>
                       </TouchableOpacity>
                     ))}

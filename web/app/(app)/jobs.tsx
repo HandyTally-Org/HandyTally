@@ -10,6 +10,7 @@ import { exportWorkbook, pickWorkbook, sheetRows, confirmAction } from '../../ut
 import { ImportExportButtons } from '../../components/ImportExportButtons';
 import { useOrganizationMembers } from '../../hooks/useOrganizationMembers';
 import { assigneeLabel } from '../../utils/inviteUser';
+import { useLabels } from '../../hooks/useLabels';
 
 type Job = {
   uid: number;
@@ -19,7 +20,7 @@ type Job = {
   client_name: string;
   start_date: string;
   end_date: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  status: string;
   created_at: string;
   // HT-35: user id of the organisation member the job is assigned to.
   assigned_to: string | null;
@@ -434,12 +435,8 @@ export default function JobsScreen() {
     return filtered;
   };
 
-  const statusOptions = [
-    { value: 'pending', label: 'Pending' },
-    { value: 'in_progress', label: 'In Progress' },
-    { value: 'completed', label: 'Completed' },
-    { value: 'cancelled', label: 'Cancelled' }
-  ];
+  // HT-49: statuses, names and chip colours come from the label module.
+  const statusOptions = useLabels('job_status');
 
   const toggleStatusFilter = (status: string) => {
     if (selectedStatuses.includes(status)) {
@@ -960,45 +957,18 @@ export default function JobsScreen() {
             All
                     </Chip>
           
-          <Chip
-            selected={selectedStatuses.includes('pending')}
-            onPress={() => toggleStatusFilter('pending')}
-            style={[styles.filterChip, { backgroundColor: selectedStatuses.includes('pending') ? '#FFF9C4' : undefined, borderRadius: 4 }]}
-            mode="outlined"
-            showSelectedCheck={false}
-          >
-            Pending
-          </Chip>
-          
-          <Chip
-            selected={selectedStatuses.includes('in_progress')}
-            onPress={() => toggleStatusFilter('in_progress')}
-            style={[styles.filterChip, { backgroundColor: selectedStatuses.includes('in_progress') ? '#BBDEFB' : undefined, borderRadius: 4 }]}
-            mode="outlined"
-            showSelectedCheck={false}
-          >
-            In Progress
-          </Chip>
-          
-          <Chip
-            selected={selectedStatuses.includes('completed')}
-            onPress={() => toggleStatusFilter('completed')}
-            style={[styles.filterChip, { backgroundColor: selectedStatuses.includes('completed') ? '#C8E6C9' : undefined, borderRadius: 4 }]}
-            mode="outlined"
-            showSelectedCheck={false}
-          >
-            Completed
-          </Chip>
-          
-          <Chip
-            selected={selectedStatuses.includes('cancelled')}
-            onPress={() => toggleStatusFilter('cancelled')}
-            style={[styles.filterChip, { backgroundColor: selectedStatuses.includes('cancelled') ? '#FFCDD2' : undefined, borderRadius: 4 }]}
-            mode="outlined"
-            showSelectedCheck={false}
-          >
-            Cancelled
-          </Chip>
+          {statusOptions.map(option => (
+            <Chip
+              key={option.value}
+              selected={selectedStatuses.includes(option.value)}
+              onPress={() => toggleStatusFilter(option.value)}
+              style={[styles.filterChip, { backgroundColor: selectedStatuses.includes(option.value) ? option.color : undefined, borderRadius: 4 }]}
+              mode="outlined"
+              showSelectedCheck={false}
+            >
+              {option.label}
+            </Chip>
+          ))}
         </ScrollView>
                   </View>
       
@@ -1536,20 +1506,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     marginLeft: 8,
-  },
-  getStatusColor: (status: string) => {
-    switch (status) {
-      case 'pending':
-        return '#FFF9C4';
-      case 'in_progress':
-        return '#BBDEFB';
-      case 'completed':
-        return '#C8E6C9';
-      case 'cancelled':
-        return '#FFCDD2';
-      default:
-        return '#FFFFFF';
-    }
   },
   jobName: {
     color: 'black',

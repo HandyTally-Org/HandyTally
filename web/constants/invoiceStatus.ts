@@ -11,6 +11,8 @@
 // not touch it. Approval (estimate -> work_order) does, because it changes
 // the document type.
 
+import { BUILT_IN_LABELS, findLabel } from './labels';
+
 export type InvoiceStatus =
   | 'estimate'
   | 'work_order'
@@ -24,41 +26,31 @@ export type InvoiceStatus =
 // becomes a work order.
 export const NEW_INVOICE_STATUS: InvoiceStatus = 'estimate';
 
-export const INVOICE_STATUS_OPTIONS: { value: InvoiceStatus; label: string }[] = [
-  { value: 'estimate', label: 'Estimate' },
-  { value: 'work_order', label: 'Work Order' },
-  { value: 'sent', label: 'Sent' },
-  { value: 'partial_paid', label: 'Partial Paid' },
-  { value: 'paid', label: 'Paid' },
-  { value: 'overdue', label: 'Overdue' },
-  { value: 'cancelled', label: 'Cancelled' },
-];
+// HT-49: the values, names and colours live in constants/labels.ts with the
+// job statuses and client tags. Screens that render a picker or a filter use
+// useLabels('invoice_status') so organisation-added values appear; these
+// built-in-only helpers remain for code outside React (invoiceHtml.ts, email
+// subjects) and for the behaviour gates below.
+const BUILT_IN = BUILT_IN_LABELS.invoice_status;
+
+export const INVOICE_STATUS_OPTIONS: { value: InvoiceStatus; label: string }[] = BUILT_IN.map(def => ({
+  value: def.value as InvoiceStatus,
+  label: def.label,
+}));
 
 export function invoiceStatusLabel(status: string | null | undefined): string {
-  return INVOICE_STATUS_OPTIONS.find(option => option.value === status)?.label ?? (status || '');
+  return findLabel(BUILT_IN, status)?.label ?? (status || '');
 }
 
 // Text colour for a status shown on its own (list rows, dashboard).
 export function invoiceStatusColor(status: string | null | undefined): string {
-  switch (status) {
-    case 'estimate':
-      return '#666666';
-    case 'work_order':
-      return '#9c27b0';
-    case 'sent':
-      return '#0066cc';
-    case 'partial_paid':
-      return '#ff9800';
-    case 'paid':
-      return '#008800';
-    case 'overdue':
-      return '#cc0000';
-    case 'cancelled':
-      return '#888888';
-    default:
-      return '#000000';
-  }
+  return findLabel(BUILT_IN, status)?.textColor ?? '#000000';
 }
+
+// Behaviour, not display: an invoice counts as open on the dashboard until
+// it is paid or cancelled. Built-in values only, on purpose — an
+// organisation-added status has no payment meaning the app can act on.
+export const OPEN_INVOICE_STATUSES: InvoiceStatus[] = ['estimate', 'work_order', 'sent', 'partial_paid', 'overdue'];
 
 // What the document calls itself in its header and in email subjects.
 export function invoiceDocumentLabel(status: string | null | undefined): 'Estimate' | 'Work Order' | 'Invoice' {

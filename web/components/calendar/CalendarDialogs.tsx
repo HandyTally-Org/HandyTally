@@ -6,6 +6,7 @@ import type { CalendarEvent } from './types';
 import { timeLabel } from './layout';
 import { EventChip } from './EventChip';
 import { calendarTheme as t, statusLabel } from './theme';
+import { useLabels } from '../../hooks/useLabels';
 
 export interface EventAction {
   label: string;
@@ -38,6 +39,7 @@ function formatWhen(event: CalendarEvent): string {
 
 /** Details for one event, with the actions the screen wants to offer (open, send invite...). */
 export function EventDialog({ event, onDismiss, actions = [] }: EventDialogProps) {
+  const jobStatuses = useLabels('job_status');
   return (
     <Portal>
       <Dialog visible={event !== null} onDismiss={onDismiss} style={styles.dialog}>
@@ -47,7 +49,7 @@ export function EventDialog({ event, onDismiss, actions = [] }: EventDialogProps
             <Dialog.Content>
               {event.status && (
                 <View style={[styles.statusChip, { backgroundColor: event.color }]}>
-                  <Text style={[styles.statusText, { color: event.textColor ?? t.text }]}>{statusLabel(event.status)}</Text>
+                  <Text style={[styles.statusText, { color: event.textColor ?? t.text }]}>{statusLabel(event.status, jobStatuses)}</Text>
                 </View>
               )}
               <DetailRow icon="schedule" text={formatWhen(event)} />

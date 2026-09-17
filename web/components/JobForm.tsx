@@ -3,6 +3,7 @@ import { View, ScrollView, Dimensions, StyleSheet, TouchableOpacity, Pressable, 
 import { TextInput, Button, Card, Text, ActivityIndicator, HelperText, Menu, Portal, IconButton } from 'react-native-paper';
 import { styles } from '../styles';
 import { supabase } from '../lib/supabase';
+import { useLabels } from '../hooks/useLabels';
 // Replace the Client import with a local type definition
 // import { Client } from '../app/(app)/clients';
 // Define Client type locally
@@ -24,7 +25,7 @@ type Job = {
   client_id: number;  // Already correct as number
   title: string;
   description: string;
-  status: 'pending' | 'completed' | 'in_progress';
+  status: string;
   start_date: string | null;
   end_date: string | null;
   start_time: string | null;
@@ -82,11 +83,8 @@ export const JobForm = forwardRef<JobFormHandle, JobFormProps>(function JobForm(
   const clientButtonRef = useRef<TouchableOpacity>(null);
   const scrollViewRef = useRef<RNScrollView>(null);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
-  const [statusOptions, setStatusOptions] = useState([
-    { value: 'pending', label: 'Pending' },
-    { value: 'completed', label: 'Completed' },
-    { value: 'in_progress', label: 'In Progress' },
-  ]);
+  // HT-49: every job status, including cancelled, which this form used to omit.
+  const statusOptions = useLabels('job_status');
   const statusButtonRef = useRef<TouchableOpacity>(null);
   const [statusButtonLayout, setStatusButtonLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
 

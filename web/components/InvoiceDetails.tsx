@@ -8,7 +8,9 @@ import * as Sharing from 'expo-sharing';
 import { formatCurrency, formatDate } from '../utils/formatting';
 import { generateInvoiceHTML, renderInvoiceDocument } from '../utils/invoiceHtml';
 import { doc, GREEN, NAVY, BORDER, LABEL, INK } from './invoiceDocStyles';
-import { invoiceStatusLabel, invoiceDocumentLabel } from '../constants/invoiceStatus';
+import { invoiceDocumentLabel } from '../constants/invoiceStatus';
+import { labelText } from '../constants/labels';
+import { useLabels } from '../hooks/useLabels';
 
 // Documents that can be emailed to a client: the ones that have not yet turned
 // into money owed. The payment states are excluded because there is no reason
@@ -17,6 +19,9 @@ import { invoiceStatusLabel, invoiceDocumentLabel } from '../constants/invoiceSt
 // An estimate is sent differently (HT-10): "Send for Approval" lets the user
 // write a subject and a message, copies the user who created the estimate,
 // and puts an Approve button in the email that turns it into a work order.
+//
+// Behaviour, not display: these literals gate what the buttons do and stay
+// hard-coded on purpose (HT-49). Names and colours come from useLabels.
 const SENDABLE_STATUSES: Invoice['status'][] = ['estimate', 'work_order'];
 
 // Read the estimate's job as "Job #12, Kitchen rewire" for the email body.
@@ -55,6 +60,7 @@ export function InvoiceDetails({
   isEditing = false,
   companyLogo
 }: InvoiceDetailsProps) {
+  const invoiceStatuses = useLabels('invoice_status');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [companyInfo, setCompanyInfo] = useState(null);
   const [printLoading, setPrintLoading] = useState(false);
@@ -109,7 +115,7 @@ export function InvoiceDetails({
   const approvedAt = safeInvoice.approved_at ?? null;
 
   const sendDisabledReason = !isSendableStatus
-    ? `A "${invoiceStatusLabel(safeInvoice.status)}" document cannot be emailed from here.`
+    ? `A "${labelText(invoiceStatuses, safeInvoice.status)}" document cannot be emailed from here.`
     : !recipientEmail
       ? 'This client has no email address on file.'
       : null;
@@ -436,7 +442,7 @@ export function InvoiceDetails({
 
               <View style={doc.field}>
                 <Text style={doc.fieldLabel}>Status</Text>
-                <Text style={styles.fieldValue}>{invoiceStatusLabel(safeInvoice.status)}</Text>
+                <Text style={styles.fieldValue}>{labelText(invoiceStatuses, safeInvoice.status)}</Text>
               </View>
             </View>
           </View>

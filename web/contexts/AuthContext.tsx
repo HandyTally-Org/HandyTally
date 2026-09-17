@@ -1,4 +1,5 @@
 import { createContext, useState, useEffect, useContext, useCallback, ReactNode } from 'react';
+import type { OrganizationLabels } from '../constants/labels';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { tenantSubdomain } from '../lib/tenant';
@@ -53,6 +54,12 @@ type AuthContextType = {
   tenantSource: 'hostname' | 'membership' | null;
   /** Set when the last sign-in was refused because the user is not a member of the hostname tenant. */
   accessDenied: string | null;
+  /**
+   * The organisation's renamed, recoloured and added status/tag values
+   * (HT-49). Null until HT-50 loads organization_settings.labels; readers go
+   * through hooks/useLabels.ts, which merges it with the built-ins.
+   */
+  organizationLabels: OrganizationLabels | null;
   refreshMembership: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
@@ -229,6 +236,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         tenant,
         tenantSource: tenant.status === 'found' ? 'hostname' : membership ? 'membership' : null,
         accessDenied,
+        organizationLabels: null,
         refreshMembership,
         signIn,
         signUp,
