@@ -91,4 +91,4 @@ jobs:
           command: deploy
 
       - name: Verify prod serves this release
-        run: .github/scripts/verify-release.sh "https://prod.${{ vars.EXPO_PUBLIC_BASE_DOMAIN || 'handytally.com' }}" "${{ github.ref_name }}"
+        run: bash .github/scripts/verify-release.sh "https://prod.${{ vars.EXPO_PUBLIC_BASE_DOMAIN || 'handytally.com' }}" "${{ github.ref_name }}"

@@ -47,4 +47,4 @@ jobs:
           command: deploy --env demo
 
       - name: Verify demo serves this build
-        run: .github/scripts/verify-release.sh "https://demo.${{ vars.EXPO_PUBLIC_BASE_DOMAIN || 'handytally.com' }}" "${{ needs.web-build.outputs.app_version }}"
+        run: bash .github/scripts/verify-release.sh "https://demo.${{ vars.EXPO_PUBLIC_BASE_DOMAIN || 'handytally.com' }}" "${{ needs.web-build.outputs.app_version }}"
