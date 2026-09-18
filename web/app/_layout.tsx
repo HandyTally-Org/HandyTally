@@ -15,6 +15,7 @@ import { ActivityIndicator } from 'react-native-paper';
 import { AuthProvider } from '../contexts/AuthContext';
 import { ThemeProvider, useAppTheme } from '../contexts/ThemeContext';
 import { TenantGate } from '../components/TenantGate';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { themed } from '../constants/Colors';
 import { navigationThemeFor, paperThemeFor } from '../constants/paperTheme';
 import '../styles/theme.css';
@@ -238,11 +239,13 @@ export default function RootLayout() {
   const isServer = typeof window === 'undefined';
 
   return (
-    <AuthProvider>
-      <ThemeProvider>
-        <ThemedApp isServer={isServer} />
-      </ThemeProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <ThemeProvider>
+          <ThemedApp isServer={isServer} />
+        </ThemeProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 
