@@ -57,3 +57,38 @@ describe('isApexHost', () => {
     expect(isApexHost(null, base)).toBe(false);
   });
 });
+
+import { releaseChannel, releaseChannelLabel } from './tenant';
+
+describe('releaseChannel', () => {
+  it('names the demo and prod hosts', () => {
+    expect(releaseChannel('demo.handytally.com', base)).toBe('demo');
+    expect(releaseChannel('PROD.handytally.com.', base)).toBe('prod');
+  });
+
+  it('treats every other tenant subdomain as a customer host', () => {
+    expect(releaseChannel('wgelectricus.handytally.com', base)).toBe('customer');
+    expect(releaseChannel('acme.handytally.com', base)).toBe('customer');
+  });
+
+  it('has no channel on the apex, www, localhost and workers.dev', () => {
+    expect(releaseChannel('handytally.com', base)).toBe('none');
+    expect(releaseChannel('www.handytally.com', base)).toBe('none');
+    expect(releaseChannel('localhost', base)).toBe('none');
+    expect(releaseChannel('handytally-web.lucas-r-fittipaldi.workers.dev', base)).toBe('none');
+    expect(releaseChannel(null, base)).toBe('none');
+  });
+});
+
+describe('releaseChannelLabel', () => {
+  it('is the channel for demo and prod and the subdomain for a customer', () => {
+    expect(releaseChannelLabel('demo.handytally.com', base)).toBe('demo');
+    expect(releaseChannelLabel('prod.handytally.com', base)).toBe('prod');
+    expect(releaseChannelLabel('wgelectricus.handytally.com', base)).toBe('wgelectricus');
+  });
+
+  it('is null where there is no channel', () => {
+    expect(releaseChannelLabel('handytally.com', base)).toBeNull();
+    expect(releaseChannelLabel('localhost', base)).toBeNull();
+  });
+});

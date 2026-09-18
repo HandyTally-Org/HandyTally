@@ -30,7 +30,8 @@ export function TenantGate({ children }: { children: ReactNode }) {
 
   let layer: ReactNode = null;
 
-  if (onApex && !pathname.startsWith('/approve')) {
+  // /approve (HT-10) and /whats-new (HT-41) are public pages that work on any host.
+  if (onApex && !pathname.startsWith('/approve') && !pathname.startsWith('/whats-new')) {
     layer = (
       <View style={styles.layer}>
         <View style={styles.card}>

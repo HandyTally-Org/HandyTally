@@ -4,6 +4,9 @@ All notable changes to HandyTally are recorded here. Ticket numbers refer to `HT
 
 ## Unreleased
 
+### Added
+- **HT-41** — Every host says what it runs. The sidebar footer shows the version and channel (`v1.5.0 · prod`, `v1.5.0 · wgelectricus`, `master-3f2a1c9 · demo`) instead of a hard-coded `v1.0`, and links to a public `/whats-new` page that renders the notes for that version. `demo.handytally.com` carries a persistent "SANDBOX · demo" tag. After a customer host is promoted, members see a one-time "Updated to vX.Y.Z" toast on their next load. New customer-facing `RELEASE_NOTES.md`; `npm run release-notes` (in `web/`) generates `constants/releaseNotes.generated.ts` from it and CI fails when the two differ. New `web/constants/release.ts` (`APP_VERSION`, `BUILD_SHA`) and `releaseChannel()` in `web/lib/tenant.ts`.
+
 ### Changed
 - **HT-41** — Release channels. A push to `master` now deploys only `demo.handytally.com` (new Worker `handytally-web-demo`, the `env.demo` block of `web/wrangler.jsonc`). `prod.handytally.com`, the apex and the `*.handytally.com` catch-all are updated by the new `release.yml` workflow when a `vX.Y.Z` tag is pushed, which also publishes a GitHub Release carrying the bundle as `web-dist-vX.Y.Z.tar.gz`. A customer host (`wgelectricus.handytally.com`, `env.wgelectricus`) is updated only by the manual **Promote release to customer** workflow, which deploys that Release asset to the customer's own Worker and refuses a tag newer than prod's. The build is shared (`build-web.yml`) and every bundle carries its version (`EXPO_PUBLIC_APP_VERSION`, `EXPO_PUBLIC_BUILD_SHA`, `dist/release.json`); each deploy verifies the host's `/release.json` before it passes.
 

@@ -16,6 +16,8 @@ import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { fetchCompanyProfile, subscribeCompanyProfile } from '../utils/companyProfile';
 import { ThemeProvider, useAppTheme } from '../contexts/ThemeContext';
 import { TenantGate } from '../components/TenantGate';
+import { SandboxRibbon } from '../components/SandboxRibbon';
+import { VersionBadge } from '../components/VersionBadge';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { FeedbackProvider } from '../contexts/FeedbackContext';
 import { themed } from '../constants/Colors';
@@ -109,7 +111,8 @@ function CustomDrawerContent(props: any) {
             </TouchableOpacity>
           </View>
           <Text style={styles.copyrightText}>© HandyTally</Text>
-          <Text style={styles.versionText}>v1.0</Text>
+          {/* HT-41: version and channel of this host, links to /whats-new */}
+          <VersionBadge />
         </View>
       </View>
 
@@ -134,6 +137,8 @@ function ThemedApp({ isServer }: { isServer: boolean }) {
       <PaperProvider theme={paperTheme}>
         <SafeAreaProvider>
           <View style={{ flex: 1, backgroundColor: themed.bg }}>
+            {/* HT-41: "SANDBOX · demo" tag, only on demo.handytally.com */}
+            <SandboxRibbon />
             {/* HT-38: unknown customer subdomains stop here. */}
             <TenantGate>
         {/* HT-68: the navigation theme must wrap the Stack, not sit inside
@@ -202,6 +207,16 @@ function ThemedApp({ isServer }: { isServer: boolean }) {
                       options={{
                         drawerLabel: () => null,
                         title: 'Approve estimate',
+                        drawerItemStyle: { height: 0 },
+                      }}
+                    />
+                    {/* HT-41: public release notes for the version this host
+                        runs. Not a drawer destination. */}
+                    <Drawer.Screen
+                      name="whats-new"
+                      options={{
+                        drawerLabel: () => null,
+                        title: "What's new",
                         drawerItemStyle: { height: 0 },
                       }}
                     />
