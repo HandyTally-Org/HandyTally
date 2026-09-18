@@ -12,7 +12,7 @@ import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ImportExportButtons } from '../../components/ImportExportButtons';
 import { exportWorkbook, pickWorkbook, sheetRows, confirmAction, toIsoDate } from '../../utils/excel';
-import { InvoiceStatus, NEW_INVOICE_STATUS, invoiceStatusLabel, invoiceStatusColor } from '../../constants/invoiceStatus';
+import { InvoiceStatus, NEW_INVOICE_STATUS, invoiceStatusLabel, invoiceStatusColor, invoiceStatusBackground } from '../../constants/invoiceStatus';
 
 export type Invoice = {
   uid: string;
@@ -1877,8 +1877,8 @@ export default function InvoicesScreen() {
                 >
                   Total
                 </DataTable.Title>
-                <DataTable.Title 
-                  style={{ backgroundColor: '#ffffff' }}
+                <DataTable.Title
+                  style={{ backgroundColor: '#ffffff', justifyContent: 'center' }}
                   sortDirection={sortColumn === 'status' ? sortDirection : undefined}
                   onPress={() => handleSort('status')}
                 >
@@ -1906,13 +1906,23 @@ export default function InvoicesScreen() {
                     <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(invoice.issue_date)}</DataTable.Cell>
                     <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(invoice.due_date)}</DataTable.Cell>
                     <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>${invoice.total.toFixed(2)}</DataTable.Cell>
-                    <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
+                    <DataTable.Cell style={{ backgroundColor: '#ffffff', justifyContent: 'center' }}>
                       {/* HT-10: read-only. An estimate becomes a work order
                           when the client approves it from the email; other
                           changes are made from the details view. */}
-                      <Text style={{ fontWeight: 'bold', color: invoiceStatusColor(invoice.status) }}>
-                        {invoiceStatusLabel(invoice.status)}
-                      </Text>
+                      <View
+                        style={{
+                          backgroundColor: invoiceStatusBackground(invoice.status),
+                          borderRadius: 12,
+                          paddingHorizontal: 12,
+                          paddingVertical: 4,
+                          alignSelf: 'center',
+                        }}
+                      >
+                        <Text style={{ fontWeight: '600', fontSize: 12, color: invoiceStatusColor(invoice.status) }}>
+                          {invoiceStatusLabel(invoice.status)}
+                        </Text>
+                      </View>
                     </DataTable.Cell>
                     <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
                       <View style={{ flexDirection: 'row' }}>

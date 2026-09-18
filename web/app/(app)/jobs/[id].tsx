@@ -1628,7 +1628,7 @@ export default function JobDetailsScreen() {
             <DataTable.Title>Description</DataTable.Title>
             <DataTable.Title>Client</DataTable.Title>
             <DataTable.Title>Assigned to</DataTable.Title>
-            <DataTable.Title>Status</DataTable.Title>
+            <DataTable.Title style={{ justifyContent: 'center' }}>Status</DataTable.Title>
             <DataTable.Title>Start</DataTable.Title>
             <DataTable.Title>Finish</DataTable.Title>
           </DataTable.Header>
@@ -1640,10 +1640,11 @@ export default function JobDetailsScreen() {
             <DataTable.Cell>
               {membersLoading && job?.assigned_to ? '…' : assigneeLabel(job?.assigned_to, members)}
             </DataTable.Cell>
-            <DataTable.Cell>
-              <Chip 
-                style={{backgroundColor: getStatusColor(job?.status)}}
-                textStyle={{color: job?.status === 'Completed' ? '#000' : '#fff'}}
+            <DataTable.Cell style={{ justifyContent: 'center' }}>
+              <Chip
+                style={{ backgroundColor: getStatusColor(job?.status), alignSelf: 'center' }}
+                textStyle={{ color: getStatusTextColor(job?.status), fontWeight: '600', fontSize: 12 }}
+                compact
               >
                 {job?.status || 'Unknown'}
               </Chip>
@@ -1663,6 +1664,16 @@ export default function JobDetailsScreen() {
       case 'completed': return '#C8E6C9';
       case 'cancelled': return '#FFCDD2';
       default: return '#F5F5F5';
+    }
+  };
+
+  const getStatusTextColor = (status) => {
+    switch (status) {
+      case 'pending': return '#8a6d00';
+      case 'in_progress': return '#0d47a1';
+      case 'completed': return '#1b5e20';
+      case 'cancelled': return '#b71c1c';
+      default: return '#666666';
     }
   };
 

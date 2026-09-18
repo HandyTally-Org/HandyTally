@@ -60,6 +60,29 @@ export function invoiceStatusColor(status: string | null | undefined): string {
   }
 }
 
+// Light tint background for the status pill (list rows, dashboard), paired
+// with invoiceStatusColor for the text.
+export function invoiceStatusBackground(status: string | null | undefined): string {
+  switch (status) {
+    case 'estimate':
+      return '#eeeeee';
+    case 'work_order':
+      return '#f3e5f5';
+    case 'sent':
+      return '#e3f2fd';
+    case 'partial_paid':
+      return '#fff3e0';
+    case 'paid':
+      return '#e8f5e9';
+    case 'overdue':
+      return '#fdecea';
+    case 'cancelled':
+      return '#eeeeee';
+    default:
+      return '#eeeeee';
+  }
+}
+
 // What the document calls itself in its header and in email subjects.
 export function invoiceDocumentLabel(status: string | null | undefined): 'Estimate' | 'Work Order' | 'Invoice' {
   if (status === 'estimate') return 'Estimate';
