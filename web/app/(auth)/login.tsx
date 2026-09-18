@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, StyleSheet, Image } from 'react-native';
 import { Button, Text, TextInput } from 'react-native-paper';
 import { Link, useRouter } from 'expo-router';
@@ -31,8 +31,20 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { signIn } = useAuth();
+  const { signIn, tenant, accessDenied, session, isLoading, membershipLoaded } = useAuth();
   const router = useRouter();
+
+  // Someone who already has a session does not belong on the login page: a
+  // reload, the back button, or a lost navigation race (the pre-#54 bundle)
+  // could all leave a signed-in user staring at the login form. Wait for the
+  // membership check on customer hosts so a non-member is signed out (with
+  // the accessDenied message) instead of bounced into the app.
+  useEffect(() => {
+    if (isLoading || !session) return;
+    if (tenant.status === 'loading') return;
+    if (tenant.status === 'found' && !membershipLoaded) return;
+    router.replace('/');
+  }, [isLoading, session, tenant.status, membershipLoaded, router]);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -73,10 +85,13 @@ export default function LoginScreen() {
             style={styles.logoImage}
             resizeMode="contain"
           />
-          <Text style={styles.subtitle}>Sign in to your account</Text>
+          <Text style={styles.subtitle}>
+            {/* HT-38: on a customer subdomain the hostname names the organisation. */}
+            {tenant.status === 'found' ? `Sign in to ${tenant.organization.name}` : 'Sign in to your account'}
+          </Text>
         </View>
         
-        {error && <Text style={styles.error}>{error}</Text>}
+        {(error ?? accessDenied) && <Text style={styles.error}>{error ?? accessDenied}</Text>}
         
         <TextInput
           label="Email"
@@ -105,12 +120,22 @@ export default function LoginScreen() {
           Sign In
         </Button>
         
+        {/* HT-30: password reset. */}
+        <View style={styles.footer}>
+          <Link href="/(auth)/forgot-password">
+            <Text style={styles.link}>Forgot password?</Text>
+          </Link>
+        </View>
+
+        {/* HT-38: members of a customer organisation are invited by its admin, not self-registered. */}
+        {tenant.status !== 'found' && (
         <View style={styles.footer}>
           <Text>Don't have an account? </Text>
           <Link href="/(auth)/signup">
             <Text style={styles.link}>Sign up</Text>
           </Link>
         </View>
+        )}
       </View>
     </View>
   );

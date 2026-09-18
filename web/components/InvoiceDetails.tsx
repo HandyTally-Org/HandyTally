@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, StyleSheet, Platform, Image, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Platform, Image } from 'react-native';
 import { Text, Button, Dialog, Portal, TextInput } from 'react-native-paper';
 import { Invoice, InvoiceItem } from '../app/(app)/invoices';
 import { supabase } from '../lib/supabase';
@@ -8,7 +8,11 @@ import * as Sharing from 'expo-sharing';
 import { formatCurrency, formatDate } from '../utils/formatting';
 import { generateInvoiceHTML, renderInvoiceDocument } from '../utils/invoiceHtml';
 import { doc, GREEN, NAVY, BORDER, LABEL, INK } from './invoiceDocStyles';
-import { INVOICE_STATUS_OPTIONS, invoiceStatusLabel, invoiceDocumentLabel } from '../constants/invoiceStatus';
+import { invoiceDocumentLabel } from '../constants/invoiceStatus';
+import { labelText } from '../constants/labels';
+import { useLabels } from '../hooks/useLabels';
+import { useCustomFields } from '../hooks/useCustomFields';
+import { CustomFieldsView } from './CustomFields';
 
 // Documents that can be emailed to a client: the ones that have not yet turned
 // into money owed. The payment states are excluded because there is no reason
@@ -17,6 +21,9 @@ import { INVOICE_STATUS_OPTIONS, invoiceStatusLabel, invoiceDocumentLabel } from
 // An estimate is sent differently (HT-10): "Send for Approval" lets the user
 // write a subject and a message, copies the user who created the estimate,
 // and puts an Approve button in the email that turns it into a work order.
+//
+// Behaviour, not display: these literals gate what the buttons do and stay
+// hard-coded on purpose (HT-49). Names and colours come from useLabels.
 const SENDABLE_STATUSES: Invoice['status'][] = ['estimate', 'work_order'];
 
 // Read the estimate's job as "Job #12, Kitchen rewire" for the email body.
@@ -37,7 +44,6 @@ export interface InvoiceDetailsProps {
   onClose: () => void;
   onEdit?: (invoice: Invoice) => void;
   onDelete?: (invoiceId: string) => void;
-  onStatusChange?: (status: Invoice['status']) => void;
   // Called after the invoice has been emailed, so the caller can refresh.
   onSent?: () => void;
   isEditable?: boolean;
@@ -49,14 +55,15 @@ export function InvoiceDetails({
   invoice, 
   items, 
   onClose, 
-  onEdit, 
-  onDelete, 
-  onStatusChange,
+  onEdit,
+  onDelete,
   onSent,
   isEditable = true,
   isEditing = false,
   companyLogo
 }: InvoiceDetailsProps) {
+  const invoiceStatuses = useLabels('invoice_status');
+  const invoiceCustomFields = useCustomFields('invoices');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [companyInfo, setCompanyInfo] = useState(null);
   const [printLoading, setPrintLoading] = useState(false);
@@ -94,11 +101,6 @@ export function InvoiceDetails({
     }
   }
 
-  const handleStatusChange = (status: Invoice['status']) => {
-    // Optional prop: guard it, or the status buttons crash when it is omitted.
-    onStatusChange?.(status);
-  };
-
   const handleDelete = () => {
     if (onDelete) {
       console.log('Deleting invoice with ID:', safeInvoice.uid);
@@ -116,7 +118,7 @@ export function InvoiceDetails({
   const approvedAt = safeInvoice.approved_at ?? null;
 
   const sendDisabledReason = !isSendableStatus
-    ? `A "${invoiceStatusLabel(safeInvoice.status)}" document cannot be emailed from here.`
+    ? `A "${labelText(invoiceStatuses, safeInvoice.status)}" document cannot be emailed from here.`
     : !recipientEmail
       ? 'This client has no email address on file.'
       : null;
@@ -289,27 +291,8 @@ export function InvoiceDetails({
 
   return (
     <View style={doc.screen}>
-      {/* Action bar, mirroring the Cancel / Save pair on the editor. Status
-          changes live on the left so the sheet itself stays read-only. */}
-      <View style={[doc.actionBar, { justifyContent: 'space-between', flexWrap: 'wrap' }]}>
-        <View style={styles.statusRow}>
-          <Text style={styles.statusRowLabel}>Status</Text>
-          {INVOICE_STATUS_OPTIONS.map(({ value, label }) => {
-            const active = safeInvoice.status === value;
-            return (
-              <TouchableOpacity
-                key={value}
-                style={[styles.statusPill, active ? styles.statusPillActive : null]}
-                onPress={() => handleStatusChange(value)}
-              >
-                <Text style={[styles.statusPillText, active ? styles.statusPillTextActive : null]}>
-                  {label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
+      {/* Action bar, mirroring the Cancel / Save pair on the editor. */}
+      <View style={[doc.actionBar, { justifyContent: 'flex-end', flexWrap: 'wrap' }]}>
         <View style={styles.actionGroup}>
           {onDelete && isEditable && !isEditing && (
             <Button
@@ -462,10 +445,12 @@ export function InvoiceDetails({
 
               <View style={doc.field}>
                 <Text style={doc.fieldLabel}>Status</Text>
-                <Text style={styles.fieldValue}>{invoiceStatusLabel(safeInvoice.status)}</Text>
+                <Text style={styles.fieldValue}>{labelText(invoiceStatuses, safeInvoice.status)}</Text>
               </View>
             </View>
           </View>
+
+          <CustomFieldsView defs={invoiceCustomFields} values={(safeInvoice as any).custom_fields} />
 
           {/* ── Line items ── */}
           <View style={doc.columnHeader}>
@@ -661,38 +646,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  statusRowLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: LABEL,
-    marginRight: 4,
-  },
-  statusPill: {
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 3,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: '#ffffff',
-  },
-  statusPillActive: {
-    backgroundColor: NAVY,
-    borderColor: NAVY,
-  },
-  statusPillText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: LABEL,
-  },
-  statusPillTextActive: {
-    color: '#ffffff',
   },
   sendHintRow: {
     paddingHorizontal: 16,

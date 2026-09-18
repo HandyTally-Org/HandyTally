@@ -1,38 +1,29 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { Slot, Stack, useRouter } from 'expo-router';
+import { Slot, Stack, usePathname, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, Image, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native';
 import 'react-native-reanimated';
-import { PaperProvider, MD3LightTheme } from 'react-native-paper';
+import { PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Drawer } from 'expo-router/drawer';
 import { DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawer';
 import { ActivityIndicator } from 'react-native-paper';
 
-import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider } from '../contexts/AuthContext';
+import { ThemeProvider, useAppTheme } from '../contexts/ThemeContext';
+import { TenantGate } from '../components/TenantGate';
+import { themed } from '../constants/Colors';
+import { navigationThemeFor, paperThemeFor } from '../constants/paperTheme';
+import '../styles/theme.css';
 import '../styles/print.css';
-import { usePathname } from 'expo-router';
 import { supabase } from '../lib/supabase';
-import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
-
-// Create a custom theme with dark gray primary color
-const theme = {
-  ...MD3LightTheme,
-  colors: {
-    ...MD3LightTheme.colors,
-    primary: '#444444',
-    onPrimary: 'white',
-    primaryContainer: '#444444',
-    onPrimaryContainer: 'white',
-  },
-};
 
 // The session check for the (app) group lives in app/(app)/_layout.tsx (HT-12).
 
@@ -103,7 +94,7 @@ function CustomDrawerContent(props: any) {
           </View>
           <Text style={styles.handyTallyText}>HandyTally</Text>
         </View>
-        
+
         <View style={styles.footerTextContainer}>
           <View style={styles.termsRow}>
             <TouchableOpacity onPress={() => Linking.openURL('https://handytally.com/terms')}>
@@ -121,58 +112,44 @@ function CustomDrawerContent(props: any) {
 
       {/* Sign Out button at the very bottom */}
       <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-        <Ionicons name="log-out-outline" size={20} color="#333" />
+        <Ionicons name="log-out-outline" size={20} color={themed.text} />
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
     </DrawerContentScrollView>
   );
 }
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded, error] = useFonts({
-    // Add your custom fonts here
-  });
+// HT-68: Paper and the navigation container take the organisation's theme
+// from the ThemeProvider above; the same tokens feed the CSS variables that
+// the hand-styled views read through `themed`, so both sides switch together.
+function ThemedApp({ isServer }: { isServer: boolean }) {
+  const { scheme, colors } = useAppTheme();
+  const paperTheme = useMemo(() => paperThemeFor(scheme), [scheme]);
+  const navigationTheme = useMemo(() => navigationThemeFor(scheme), [scheme]);
 
-  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
-  useEffect(() => {
-    if (error) throw error;
-  }, [error]);
-
-  useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
-
-  if (!loaded) {
-    return null;
-  }
-
-  // Only render the app if we're in a browser environment
-  const isServer = typeof window === 'undefined';
-  
   return (
-    <AuthProvider>
-      <PaperProvider theme={theme}>
+      <PaperProvider theme={paperTheme}>
         <SafeAreaProvider>
-          <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+          <View style={{ flex: 1, backgroundColor: themed.bg }}>
+            {/* HT-38: unknown customer subdomains stop here. */}
+            <TenantGate>
             <Stack
               screenOptions={{
                 headerShown: false,
-                contentStyle: { backgroundColor: '#ffffff' },
+                contentStyle: { backgroundColor: themed.bg },
               }}
             >
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+        <NavigationThemeProvider value={navigationTheme}>
+          <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
                 {!isServer && (
                   <Drawer
                     drawerContent={(props) => <CustomDrawerContent {...props} />}
                     screenOptions={{
                       headerShown: false,
-                      drawerActiveBackgroundColor: '#e6e6e6',
-                      drawerActiveTintColor: '#333',
-                      drawerInactiveTintColor: '#333',
+                      drawerStyle: { backgroundColor: themed.panel },
+                      drawerActiveBackgroundColor: colors.active,
+                      drawerActiveTintColor: colors.text,
+                      drawerInactiveTintColor: colors.text,
                       drawerLabelStyle: {
                         marginLeft: -20,
                         fontSize: 16,
@@ -224,11 +201,43 @@ export default function RootLayout() {
                   </Drawer>
                 )}
           {isServer && <Slot />}
-        </ThemeProvider>
+        </NavigationThemeProvider>
             </Stack>
+            </TenantGate>
           </View>
         </SafeAreaProvider>
       </PaperProvider>
+  );
+}
+
+export default function RootLayout() {
+  const [loaded, error] = useFonts({
+    // Add your custom fonts here
+  });
+
+  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
+  useEffect(() => {
+    if (error) throw error;
+  }, [error]);
+
+  useEffect(() => {
+    if (loaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [loaded]);
+
+  if (!loaded) {
+    return null;
+  }
+
+  // Only render the app if we're in a browser environment
+  const isServer = typeof window === 'undefined';
+
+  return (
+    <AuthProvider>
+      <ThemeProvider>
+        <ThemedApp isServer={isServer} />
+      </ThemeProvider>
     </AuthProvider>
   );
 }
@@ -262,17 +271,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 15,
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    borderTopColor: themed.line,
   },
   signOutText: {
     marginLeft: 10,
     fontSize: 16,
-    color: '#333',
+    color: themed.text,
   },
   footerContainer: {
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    borderTopColor: themed.line,
     alignItems: 'center',
   },
   handyTallyLogoContainer: {
@@ -302,7 +311,7 @@ const styles = StyleSheet.create({
   handyTallyText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: themed.text,
   },
   footerTextContainer: {
     alignItems: 'center',
@@ -313,20 +322,20 @@ const styles = StyleSheet.create({
   },
   termsText: {
     fontSize: 12,
-    color: '#666',
+    color: themed.muted,
   },
   divider: {
     fontSize: 12,
-    color: '#666',
+    color: themed.muted,
     marginHorizontal: 4,
   },
   copyrightText: {
     fontSize: 12,
-    color: '#666',
+    color: themed.muted,
     marginBottom: 2,
   },
   versionText: {
     fontSize: 12,
-    color: '#666',
+    color: themed.muted,
   },
 });

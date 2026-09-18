@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { Text, Button, Searchbar, Card, DataTable, Chip, IconButton, Dialog, Portal, Snackbar, TextInput, RadioButton, ActivityIndicator, Tooltip } from 'react-native-paper';
+import { Text, Button, Searchbar, Card, DataTable, IconButton, Dialog, Portal, Snackbar, TextInput, RadioButton, ActivityIndicator, Tooltip } from 'react-native-paper';
+import { LabelPill, LabelPillRow } from '../../components/LabelPill';
 import { supabase } from '../../lib/api';
 import { styles as globalStyles } from '../../styles';
 import { JobDialog } from '../../components/JobDialog';
@@ -10,6 +11,9 @@ import { exportWorkbook, pickWorkbook, sheetRows, confirmAction } from '../../ut
 import { ImportExportButtons } from '../../components/ImportExportButtons';
 import { useOrganizationMembers } from '../../hooks/useOrganizationMembers';
 import { assigneeLabel } from '../../utils/inviteUser';
+import { useLabels } from '../../hooks/useLabels';
+import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
+import { formatClientAddress, formatDateTime } from '../../utils/formatting';
 
 type Job = {
   uid: number;
@@ -17,10 +21,15 @@ type Job = {
   description: string;
   client_id: number;
   client_name: string;
+  // HT-56: read-only lookups from the selected client, shown as list columns.
+  client_address: string;
+  client_phone: string;
   start_date: string;
   end_date: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  status: string;
   created_at: string;
+  /** HT-53: values of the organisation's custom fields, keyed by field key. */
+  custom_fields?: Record<string, unknown>;
   // HT-35: user id of the organisation member the job is assigned to.
   assigned_to: string | null;
 };
@@ -31,6 +40,9 @@ type Client = {
   email?: string;
   phone?: string;
   address?: string;
+  city?: string;
+  state?: string;
+  zip?: number | string;
 };
 
 export default function JobsScreen() {
@@ -67,36 +79,33 @@ export default function JobsScreen() {
   const assigneeName = (job: Pick<Job, 'assigned_to'>) =>
     membersLoading && job.assigned_to ? '…' : assigneeLabel(job.assigned_to, members);
 
-  useEffect(() => {
+  useRefreshOnFocus(() => {
     fetchJobs();
-  }, []);
-
-  useEffect(() => {
-    if (clients.length === 0) {
-      fetchClients();
-    }
-  }, [clients.length]);
+    fetchClients();
+  });
 
   async function fetchJobs() {
     try {
       setLoading(true);
       
-      // Fetch jobs with client names
+      // Fetch jobs with the client's name and, for HT-56, address and phone
       const { data, error } = await supabase
         .from('jobs')
         .select(`
           *,
-          clients:client_id (name)
+          clients:client_id (name, address, city, state, zip, phone)
         `)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
       
       if (data) {
-        // Transform the data to include client_name
+        // Transform the data to include client_name, client_address, client_phone
         const transformedData = data.map(job => ({
           ...job,
-          client_name: job.clients?.name || 'Unknown Client'
+          client_name: job.clients?.name || 'Unknown Client',
+          client_address: formatClientAddress(job.clients),
+          client_phone: job.clients?.phone || ''
         }));
         
         setJobs(transformedData);
@@ -251,7 +260,9 @@ export default function JobsScreen() {
         ...editingJob,
         uid: jobId,           // Ensure uid is a number
         client_id: clientId,  // Ensure client_id is a number
-        client_name: client ? client.name : 'Unknown Client'
+        client_name: client ? client.name : 'Unknown Client',
+        client_address: formatClientAddress(client),
+        client_phone: client?.phone || ''
       };
       
       // Update the jobs list with the edited job
@@ -299,6 +310,7 @@ export default function JobsScreen() {
         start_date: jobData.start_date,
         end_date: jobData.end_date,
         assigned_to: jobData.assigned_to ?? null,
+        custom_fields: jobData.custom_fields ?? {},
       };
       
       // Remove any undefined values
@@ -329,7 +341,9 @@ export default function JobsScreen() {
         ...data[0],
         uid: Number(data[0].uid),      // Ensure uid is a number
         client_id: clientId,           // Ensure client_id is a number
-        client_name: client ? client.name : 'Unknown Client'
+        client_name: client ? client.name : 'Unknown Client',
+        client_address: formatClientAddress(client),
+        client_phone: client?.phone || ''
       };
       
       setJobs([newJob, ...jobs]);
@@ -340,35 +354,6 @@ export default function JobsScreen() {
       alert(`Error: ${error.message || 'Failed to add job'}`);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const formatDate = (dateString: string | undefined) => {
-    if (!dateString) return '';
-    
-    try {
-      // Create a Date object from the ISO string
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return '';
-      
-      // Adjust for timezone to prevent date shifting
-      // This creates a local date object that preserves the date as stored
-      const timezoneOffset = date.getTimezoneOffset() * 60000; // offset in milliseconds
-      const localDate = new Date(date.getTime() - timezoneOffset);
-      
-      // Format date in MM/DD/YYYY format with proper timezone consideration
-      const formattedDate = localDate.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        timeZone: 'UTC' // Using UTC here prevents further shifting
-      });
-      
-      console.log(`Original date: ${dateString}, Formatted: ${formattedDate}`);
-      return formattedDate;
-    } catch (error) {
-      console.error('Error formatting date:', error);
-      return dateString; // Return original if there's an error
     }
   };
 
@@ -388,6 +373,8 @@ export default function JobsScreen() {
       filtered = filtered.filter(job => 
         job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         job.client_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        job.client_address?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        job.client_phone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         job.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         assigneeName(job).toLowerCase().includes(searchQuery.toLowerCase())
       );
@@ -408,6 +395,12 @@ export default function JobsScreen() {
           break;
         case 'client_name':
           comparison = (a.client_name || '').localeCompare(b.client_name || '');
+          break;
+        case 'client_address':
+          comparison = (a.client_address || '').localeCompare(b.client_address || '');
+          break;
+        case 'client_phone':
+          comparison = (a.client_phone || '').localeCompare(b.client_phone || '');
           break;
         case 'assigned_to':
           comparison = assigneeName(a).localeCompare(assigneeName(b));
@@ -434,12 +427,8 @@ export default function JobsScreen() {
     return filtered;
   };
 
-  const statusOptions = [
-    { value: 'pending', label: 'Pending' },
-    { value: 'in_progress', label: 'In Progress' },
-    { value: 'completed', label: 'Completed' },
-    { value: 'cancelled', label: 'Cancelled' }
-  ];
+  // HT-49: statuses, names and chip colours come from the label module.
+  const statusOptions = useLabels('job_status');
 
   const toggleStatusFilter = (status: string) => {
     if (selectedStatuses.includes(status)) {
@@ -948,59 +937,19 @@ export default function JobsScreen() {
       </View>
       
       
-      <View style={styles.filtersContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll}>
-                    <Chip 
-            selected={selectedStatuses.length === 0}
-            onPress={() => setSelectedStatuses([])}
-            style={[styles.filterChip, { borderRadius: 4 }]}
-                      mode="outlined"
-                      showSelectedCheck={false}
-                    >
-            All
-                    </Chip>
-          
-          <Chip
-            selected={selectedStatuses.includes('pending')}
-            onPress={() => toggleStatusFilter('pending')}
-            style={[styles.filterChip, { backgroundColor: selectedStatuses.includes('pending') ? '#FFF9C4' : undefined, borderRadius: 4 }]}
-            mode="outlined"
-            showSelectedCheck={false}
-          >
-            Pending
-          </Chip>
-          
-          <Chip
-            selected={selectedStatuses.includes('in_progress')}
-            onPress={() => toggleStatusFilter('in_progress')}
-            style={[styles.filterChip, { backgroundColor: selectedStatuses.includes('in_progress') ? '#BBDEFB' : undefined, borderRadius: 4 }]}
-            mode="outlined"
-            showSelectedCheck={false}
-          >
-            In Progress
-          </Chip>
-          
-          <Chip
-            selected={selectedStatuses.includes('completed')}
-            onPress={() => toggleStatusFilter('completed')}
-            style={[styles.filterChip, { backgroundColor: selectedStatuses.includes('completed') ? '#C8E6C9' : undefined, borderRadius: 4 }]}
-            mode="outlined"
-            showSelectedCheck={false}
-          >
-            Completed
-          </Chip>
-          
-          <Chip
-            selected={selectedStatuses.includes('cancelled')}
-            onPress={() => toggleStatusFilter('cancelled')}
-            style={[styles.filterChip, { backgroundColor: selectedStatuses.includes('cancelled') ? '#FFCDD2' : undefined, borderRadius: 4 }]}
-            mode="outlined"
-            showSelectedCheck={false}
-          >
-            Cancelled
-          </Chip>
-        </ScrollView>
-                  </View>
+      <LabelPillRow>
+        <LabelPill label="All" selected={selectedStatuses.length === 0} onPress={() => setSelectedStatuses([])} />
+        {statusOptions.map(option => (
+          <LabelPill
+            key={option.value}
+            label={option.label}
+            color={option.color}
+            textColor={option.textColor}
+            selected={selectedStatuses.includes(option.value)}
+            onPress={() => toggleStatusFilter(option.value)}
+          />
+        ))}
+      </LabelPillRow>
       
       <Card style={styles.tableCard}>
         <DataTable style={{ backgroundColor: '#ffffff' }}>
@@ -1018,6 +967,20 @@ export default function JobsScreen() {
               Client
             </DataTable.Title>
             <DataTable.Title
+              style={{ flex: 2 }}
+              onPress={() => handleSort('client_address')}
+              sortDirection={sortColumn === 'client_address' ? sortDirection : undefined}
+            >
+              Address
+            </DataTable.Title>
+            <DataTable.Title
+              style={{ flex: 1.2 }}
+              onPress={() => handleSort('client_phone')}
+              sortDirection={sortColumn === 'client_phone' ? sortDirection : undefined}
+            >
+              Phone
+            </DataTable.Title>
+            <DataTable.Title
               onPress={() => handleSort('assigned_to')}
               sortDirection={sortColumn === 'assigned_to' ? sortDirection : undefined}
             >
@@ -1029,37 +992,41 @@ export default function JobsScreen() {
             >
               Status
             </DataTable.Title>
-            <DataTable.Title 
+            <DataTable.Title
+              style={{ flex: 1.5 }}
               onPress={() => handleSort('start_date')}
               sortDirection={sortColumn === 'start_date' ? sortDirection : undefined}
             >
               Start Date
             </DataTable.Title>
-            <DataTable.Title 
+            <DataTable.Title
+              style={{ flex: 1.5 }}
               onPress={() => handleSort('end_date')}
               sortDirection={sortColumn === 'end_date' ? sortDirection : undefined}
             >
               End Date
             </DataTable.Title>
-            <DataTable.Title>Actions</DataTable.Title>
+            <DataTable.Title style={{ flex: 1.3 }}>Actions</DataTable.Title>
           </DataTable.Header>
           
           {loading ? (
             <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
-              <DataTable.Cell style={{ flex: 6 }}>
+              <DataTable.Cell style={{ flex: 8 }}>
                 <ActivityIndicator size="small" style={{ marginRight: 8 }} />
                 Loading jobs...
               </DataTable.Cell>
             </DataTable.Row>
           ) : getFilteredJobs().length === 0 ? (
             <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
-              <DataTable.Cell style={{ flex: 6 }}>No jobs found</DataTable.Cell>
+              <DataTable.Cell style={{ flex: 8 }}>No jobs found</DataTable.Cell>
             </DataTable.Row>
           ) : (
             getFilteredJobs().map(job => (
               <DataTable.Row key={job.uid} style={{ backgroundColor: '#ffffff' }}>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{job.title}</DataTable.Cell>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{job.client_name}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff', flex: 2 }}>{job.client_address}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff', flex: 1.2 }}>{job.client_phone}</DataTable.Cell>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{assigneeName(job)}</DataTable.Cell>
                 <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
                   <select
@@ -1079,9 +1046,9 @@ export default function JobsScreen() {
                     ))}
                   </select>
                 </DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(job.start_date)}</DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(job.end_date)}</DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff', flex: 1.5 }}>{formatDateTime(job.start_date)}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff', flex: 1.5 }}>{formatDateTime(job.end_date)}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: '#ffffff', flex: 1.3 }}>
                   <View style={styles.actionButtons}>
                     <IconButton
                       icon="pencil"
@@ -1433,16 +1400,6 @@ const styles = StyleSheet.create({
   addButton: {
     marginLeft: 8,
   },
-  filtersContainer: {
-    marginBottom: 16,
-    flexDirection: 'row',
-  },
-  filtersScroll: {
-    flexGrow: 0,
-  },
-  filterChip: {
-    marginRight: 8,
-  },
   tableCard: {
     flex: 1,
     backgroundColor: '#ffffff',
@@ -1536,20 +1493,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     marginLeft: 8,
-  },
-  getStatusColor: (status: string) => {
-    switch (status) {
-      case 'pending':
-        return '#FFF9C4';
-      case 'in_progress':
-        return '#BBDEFB';
-      case 'completed':
-        return '#C8E6C9';
-      case 'cancelled':
-        return '#FFCDD2';
-      default:
-        return '#FFFFFF';
-    }
   },
   jobName: {
     color: 'black',

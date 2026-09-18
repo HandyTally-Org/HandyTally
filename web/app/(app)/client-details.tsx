@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text, Button, Card, DataTable, TextInput, ActivityIndicator, IconButton, Portal, Dialog, Snackbar } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -7,6 +7,13 @@ import { styles as globalStyles } from '../../styles';
 import { formatDate } from '../../utils/formatting';
 import { MaterialIcons } from '@expo/vector-icons';
 import { NotesSection } from '../../components/NotesSection';
+import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
+import { useCustomFields } from '../../hooks/useCustomFields';
+import { CustomFieldInputs } from '../../components/CustomFields';
+import { normalizeCustomValues, validateCustomValues } from '../../constants/customFields';
+import { FormField, FormRow } from '../../components/FormDialog';
+import { FormActions, FormPanel, FormSection, outlinedInputProps } from '../../components/FormLayout';
+import { themed } from '../../constants/Colors';
 
 export default function ClientDetailsScreen() {
   const router = useRouter();
@@ -16,8 +23,11 @@ export default function ClientDetailsScreen() {
   const [invoices, setInvoices] = useState([]);
   const [activeSection, setActiveSection] = useState('info');
   const [loading, setLoading] = useState(true);
-  const [editedClient, setEditedClient] = useState(null);
+  const [editedClient, setEditedClient] = useState<any>(null);
   const [saving, setSaving] = useState(false);
+  // HT-52: the organisation's custom fields, edited alongside the built-in ones.
+  const customDefs = useCustomFields('clients');
+  const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
   const [jobToDelete, setJobToDelete] = useState<string | null>(null);
   const [invoiceToDelete, setInvoiceToDelete] = useState<string | null>(null);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
@@ -25,7 +35,7 @@ export default function ClientDetailsScreen() {
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
 
-  useEffect(() => {
+  useRefreshOnFocus(() => {
     if (id) {
       fetchClientDetails();
     }
@@ -92,19 +102,34 @@ export default function ClientDetailsScreen() {
   const handleSaveClient = async () => {
     if (!editedClient) return;
     
+    const customValues = editedClient.custom_fields ?? {};
+    const nextCustomErrors = validateCustomValues(customDefs, customValues);
+    setCustomErrors(nextCustomErrors);
+    if (Object.keys(nextCustomErrors).length > 0) return;
+
+    // HT-66: clients.zip is numeric, so a cleared field must go up as null and
+    // anything that is not a number is rejected here instead of by Postgres.
+    const zipText = String(editedClient.zip ?? '').trim();
+    if (zipText && !/^\d+$/.test(zipText)) {
+      alert('ZIP must contain digits only');
+      return;
+    }
+    const zip = zipText ? Number(zipText) : null;
+
     try {
       setSaving(true);
       
       const { error } = await supabase
         .from('clients')
         .update({
+          custom_fields: normalizeCustomValues(customDefs, customValues),
           name: editedClient.name,
           email: editedClient.email,
           phone: editedClient.phone,
           address: editedClient.address,
           city: editedClient.city,
           state: editedClient.state,
-          zip: editedClient.zip,
+          zip,
           tag: editedClient.tag,
           notes: editedClient.notes
         })
@@ -228,14 +253,14 @@ export default function ClientDetailsScreen() {
               padding: 16,
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: activeSection === 'info' ? '#ccc' : 'transparent'
+              backgroundColor: activeSection === 'info' ? themed.active : 'transparent'
             }}
             onPress={() => setActiveSection('info')}
           >
             <View style={{ width: 24, marginRight: 12 }}>
-              <MaterialIcons name="dashboard" size={20} color={activeSection === 'info' ? '#000' : '#666666'} />
+              <MaterialIcons name="dashboard" size={20} color={themed.navDashboard} />
             </View>
-            <Text style={{ color: activeSection === 'info' ? '#000' : '#666666' }}>Info</Text>
+            <Text style={{ color: activeSection === 'info' ? themed.text : themed.muted }}>Info</Text>
           </TouchableOpacity>
           
           {/* Invoices section */}
@@ -244,14 +269,14 @@ export default function ClientDetailsScreen() {
               padding: 16,
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: activeSection === 'invoices' ? '#ccc' : 'transparent'
+              backgroundColor: activeSection === 'invoices' ? themed.active : 'transparent'
             }}
             onPress={() => setActiveSection('invoices')}
           >
             <View style={{ width: 24, marginRight: 12 }}>
-              <MaterialIcons name="description" size={20} color={activeSection === 'invoices' ? '#000' : '#666666'} />
+              <MaterialIcons name="description" size={20} color={themed.navInvoices} />
             </View>
-            <Text style={{ color: activeSection === 'invoices' ? '#000' : '#666666' }}>Invoices</Text>
+            <Text style={{ color: activeSection === 'invoices' ? themed.text : themed.muted }}>Invoices</Text>
           </TouchableOpacity>
           
           {/* Jobs section */}
@@ -260,14 +285,14 @@ export default function ClientDetailsScreen() {
               padding: 16,
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: activeSection === 'jobs' ? '#ccc' : 'transparent'
+              backgroundColor: activeSection === 'jobs' ? themed.active : 'transparent'
             }}
             onPress={() => setActiveSection('jobs')}
           >
             <View style={{ width: 24, marginRight: 12 }}>
-              <MaterialIcons name="work" size={20} color={activeSection === 'jobs' ? '#000' : '#666666'} />
+              <MaterialIcons name="work" size={20} color={themed.navJobs} />
             </View>
-            <Text style={{ color: activeSection === 'jobs' ? '#000' : '#666666' }}>Jobs</Text>
+            <Text style={{ color: activeSection === 'jobs' ? themed.text : themed.muted }}>Jobs</Text>
           </TouchableOpacity>
           
           {/* Documentation header */}
@@ -281,14 +306,14 @@ export default function ClientDetailsScreen() {
               padding: 16,
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: activeSection === 'notes' ? '#ccc' : 'transparent'
+              backgroundColor: activeSection === 'notes' ? themed.active : 'transparent'
             }}
             onPress={() => setActiveSection('notes')}
           >
             <View style={{ width: 24, marginRight: 12 }}>
-              <MaterialIcons name="sticky-note-2" size={20} color={activeSection === 'notes' ? '#000' : '#666666'} />
+              <MaterialIcons name="sticky-note-2" size={20} color={themed.railNotes} />
             </View>
-            <Text style={{ color: activeSection === 'notes' ? '#000' : '#666666' }}>Notes</Text>
+            <Text style={{ color: activeSection === 'notes' ? themed.text : themed.muted }}>Notes</Text>
           </TouchableOpacity>
           
           {/* Logs section */}
@@ -297,14 +322,14 @@ export default function ClientDetailsScreen() {
               padding: 16,
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: activeSection === 'logs' ? '#ccc' : 'transparent'
+              backgroundColor: activeSection === 'logs' ? themed.active : 'transparent'
             }}
             onPress={() => setActiveSection('logs')}
           >
             <View style={{ width: 24, marginRight: 12 }}>
-              <MaterialIcons name="list-alt" size={20} color={activeSection === 'logs' ? '#000' : '#666666'} />
+              <MaterialIcons name="list-alt" size={20} color={themed.railLogs} />
             </View>
-            <Text style={{ color: activeSection === 'logs' ? '#000' : '#666666' }}>Logs</Text>
+            <Text style={{ color: activeSection === 'logs' ? themed.text : themed.muted }}>Logs</Text>
           </TouchableOpacity>
           
           {/* Spacer to push the back button to the bottom */}
@@ -323,111 +348,106 @@ export default function ClientDetailsScreen() {
             onPress={() => router.push('/clients')}
           >
             <View style={{ width: 24, marginRight: 12 }}>
-              <MaterialIcons name="arrow-back" size={20} color="#666666" />
+              <MaterialIcons name="arrow-back" size={20} color={themed.muted} />
             </View>
-            <Text style={{ color: '#666666' }}>Back to Clients</Text>
+            <Text style={{ color: themed.muted }}>Back to Clients</Text>
           </TouchableOpacity>
         </View>
         
         {/* Main Content */}
         <ScrollView style={{ flex: 1, padding: 16, borderWidth: 0, borderColor: '#e0e0e0' }}>
           {activeSection === 'info' && (
-            <View style={{ backgroundColor: '#ffffff' }}>
-              <Text style={{ fontSize: 20, fontWeight: 'normal', marginBottom: 16, backgroundColor: '#ffffff' }}>Client Information</Text>
-              
-              <View style={{ marginBottom: 16, backgroundColor: '#ffffff' }}>
-                <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Name</Text>
-                <TextInput
-                  value={editedClient?.name || ''}
-                  onChangeText={(text) => setEditedClient({ ...editedClient, name: text })}
-                  style={{ marginBottom: 16 }}
-                  mode="outlined"
-                />
-                
-                <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Email</Text>
-                <TextInput
-                  value={editedClient?.email || ''}
-                  onChangeText={(text) => setEditedClient({ ...editedClient, email: text })}
-                  style={{ marginBottom: 16 }}
-                  mode="outlined"
-                />
-                
-                <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Phone</Text>
-                <TextInput
-                  value={editedClient?.phone || ''}
-                  onChangeText={(text) => setEditedClient({ ...editedClient, phone: text })}
-                  style={{ marginBottom: 16 }}
-                  mode="outlined"
-                />
-                
-                <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Address</Text>
-                <TextInput
-                  value={editedClient?.address || ''}
-                  onChangeText={(text) => setEditedClient({ ...editedClient, address: text })}
-                  style={{ marginBottom: 16 }}
-                  mode="outlined"
-                />
-                
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <View style={{ flex: 2 }}>
-                    <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>City</Text>
+            <FormPanel title="Client Information" subtitle="Contact details, address and notes for this client.">
+              <FormSection title="Contact">
+                <FormField label="Name">
+                  <TextInput
+                    value={editedClient?.name || ''}
+                    onChangeText={(text) => setEditedClient({ ...editedClient, name: text })}
+                    {...outlinedInputProps}
+                  />
+                </FormField>
+                <FormRow>
+                  <FormField label="Email">
+                    <TextInput
+                      value={editedClient?.email || ''}
+                      onChangeText={(text) => setEditedClient({ ...editedClient, email: text })}
+                      {...outlinedInputProps}
+                    />
+                  </FormField>
+                  <FormField label="Phone">
+                    <TextInput
+                      value={editedClient?.phone || ''}
+                      onChangeText={(text) => setEditedClient({ ...editedClient, phone: text })}
+                      {...outlinedInputProps}
+                    />
+                  </FormField>
+                </FormRow>
+              </FormSection>
+
+              <FormSection title="Address">
+                <FormField label="Address">
+                  <TextInput
+                    value={editedClient?.address || ''}
+                    onChangeText={(text) => setEditedClient({ ...editedClient, address: text })}
+                    {...outlinedInputProps}
+                  />
+                </FormField>
+                <FormRow weights={[2, 1, 1]}>
+                  <FormField label="City">
                     <TextInput
                       value={editedClient?.city || ''}
                       onChangeText={(text) => setEditedClient({ ...editedClient, city: text })}
-                      style={{ marginBottom: 16 }}
-                      mode="outlined"
+                      {...outlinedInputProps}
                     />
-                  </View>
-                  
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>State</Text>
+                  </FormField>
+                  <FormField label="State">
                     <TextInput
                       value={editedClient?.state || ''}
                       onChangeText={(text) => setEditedClient({ ...editedClient, state: text })}
-                      style={{ marginBottom: 16 }}
-                      mode="outlined"
+                      {...outlinedInputProps}
                     />
-                  </View>
-                  
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>ZIP</Text>
+                  </FormField>
+                  <FormField label="ZIP">
                     <TextInput
                       value={editedClient?.zip || ''}
                       onChangeText={(text) => setEditedClient({ ...editedClient, zip: text })}
-                      style={{ marginBottom: 16 }}
-                      mode="outlined"
+                      {...outlinedInputProps}
                     />
-                  </View>
-                </View>
-                
-                <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Tag</Text>
-                <TextInput
-                  value={editedClient?.tag || ''}
-                  onChangeText={(text) => setEditedClient({ ...editedClient, tag: text })}
-                  style={{ marginBottom: 16 }}
-                  mode="outlined"
-                />
-                
-                <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Notes</Text>
-                <TextInput
-                  value={editedClient?.notes || ''}
-                  onChangeText={(text) => setEditedClient({ ...editedClient, notes: text })}
-                  style={{ marginBottom: 16 }}
-                  mode="outlined"
-                  multiline
-                  numberOfLines={4}
-                />
-                
-                <Button 
-                  mode="contained" 
-                  onPress={handleSaveClient}
-                  loading={saving}
-                  disabled={saving}
-                >
-                  Save Changes
-                </Button>
-              </View>
-            </View>
+                  </FormField>
+                </FormRow>
+              </FormSection>
+
+              <FormSection title="Details">
+                <FormField label="Tag">
+                  <TextInput
+                    value={editedClient?.tag || ''}
+                    onChangeText={(text) => setEditedClient({ ...editedClient, tag: text })}
+                    {...outlinedInputProps}
+                  />
+                </FormField>
+                <FormField label="Notes">
+                  <TextInput
+                    value={editedClient?.notes || ''}
+                    onChangeText={(text) => setEditedClient({ ...editedClient, notes: text })}
+                    {...outlinedInputProps}
+                    multiline
+                    numberOfLines={4}
+                  />
+                </FormField>
+              </FormSection>
+
+              <CustomFieldInputs
+                defs={customDefs}
+                values={editedClient?.custom_fields ?? {}}
+                errors={customErrors}
+                onChange={(key, value) => {
+                  setEditedClient({ ...editedClient, custom_fields: { ...(editedClient?.custom_fields ?? {}), [key]: value } });
+                  if (customErrors[key]) setCustomErrors(current => ({ ...current, [key]: '' }));
+                }}
+              />
+
+              <FormActions onSubmit={handleSaveClient} submitLabel="Save Changes" submitting={saving} />
+            </FormPanel>
           )}
           
           {activeSection === 'jobs' && (

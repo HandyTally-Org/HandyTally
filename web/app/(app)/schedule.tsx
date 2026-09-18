@@ -5,6 +5,9 @@ import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { sendJobInvite } from '../../utils/sendJobInvite';
 import { JobDialog } from '../../components/JobDialog';
+import { useLabels } from '../../hooks/useLabels';
+import type { LabelDef } from '../../constants/labels';
+import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 import {
   Calendar,
   CalendarEvent,
@@ -32,7 +35,7 @@ function clientName(row: JobRow): string {
 }
 
 // A job with no end, or an end before its start, shows as a one-hour block.
-function jobToEvent(row: JobRow): CalendarEvent | null {
+function jobToEvent(row: JobRow, labels: readonly LabelDef[]): CalendarEvent | null {
   if (!row.start_date) return null;
   const start = new Date(row.start_date);
   if (isNaN(start.getTime())) return null;
@@ -47,12 +50,13 @@ function jobToEvent(row: JobRow): CalendarEvent | null {
     subtitle: clientName(row),
     description: row.description || undefined,
     status: row.status || undefined,
-    ...colorsForStatus(row.status),
+    ...colorsForStatus(row.status, labels),
   };
 }
 
 export default function ScheduleScreen() {
   const router = useRouter();
+  const jobStatuses = useLabels('job_status');
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [range, setRange] = useState<DateRange | null>(null);
@@ -80,7 +84,7 @@ export default function ScheduleScreen() {
 
       const next: CalendarEvent[] = [];
       for (const row of (data ?? []) as JobRow[]) {
-        const event = jobToEvent(row);
+        const event = jobToEvent(row, jobStatuses);
         if (event) next.push(event);
       }
       setEvents(next);
@@ -90,7 +94,7 @@ export default function ScheduleScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [jobStatuses]);
 
   const handleRangeChange = useCallback(
     (visible: DateRange) => {
@@ -103,6 +107,10 @@ export default function ScheduleScreen() {
   const refresh = useCallback(() => {
     if (range) fetchJobs(range);
   }, [range, fetchJobs]);
+
+  // The calendar loads a range when it first reports one; this re-reads the
+  // same range after a job was edited on its own page (HT-13).
+  useRefreshOnFocus(refresh);
 
   const openJob = useCallback(
     (event: CalendarEvent) => {
@@ -144,6 +152,7 @@ export default function ScheduleScreen() {
           start_date: jobData.start_date,
           end_date: jobData.end_date,
           assigned_to: jobData.assigned_to ?? null,
+          custom_fields: jobData.custom_fields ?? {},
         });
         if (error) throw new Error(error.message);
         setNewJobDefaults(null);

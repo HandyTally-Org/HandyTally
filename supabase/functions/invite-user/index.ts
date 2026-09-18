@@ -184,16 +184,30 @@ serve(async (req) => {
 
   const { data: organization } = await supabase
     .from("organizations")
-    .select("id, name")
+    .select("id, name, subdomain")
     .eq("id", organizationId)
     .maybeSingle();
   if (!organization) {
     return json({ error: "Organization not found" }, 404);
   }
 
-  const appOrigin = (APP_URL || req.headers.get("Origin") || "").replace(/\/+$/, "");
+  // HT-39: the set-password link must open on the host the admin invited
+  // from (wgelectricus.handytally.com, not the apex), so the request's Origin
+  // is used — but only when it is one of our hosts, since any authenticated
+  // caller can put an arbitrary Origin header on a request and the link goes
+  // into an email.
+  const ALLOWED_ORIGIN = /^https:\/\/([a-z0-9-]+\.)?handytally\.com$|^http:\/\/localhost(:\d+)?$/;
+  const requestOrigin = (req.headers.get("Origin") || "").replace(/\/+$/, "");
+  // HT-65 (F): one bundle serves every subdomain, so an APP_URL pinned to one
+  // host would send demo's invites to wgelectric's site. The validated request
+  // Origin wins, then the organisation's own subdomain, and APP_URL only as a
+  // last resort (a caller with no Origin and an organisation with no subdomain).
+  const appOrigin =
+    (ALLOWED_ORIGIN.test(requestOrigin) ? requestOrigin : "") ||
+    (organization.subdomain ? `https://${organization.subdomain}.handytally.com` : "") ||
+    (APP_URL || "").replace(/\/+$/, "");
   if (!appOrigin) {
-    return json({ error: "Cannot build the invite link: set APP_URL on the function" }, 500);
+    return json({ error: "Cannot build the invite link: the request origin is not a HandyTally host, the organization has no subdomain and APP_URL is not set" }, 500);
   }
 
   // --- Create the account, or find the existing one ------------------------

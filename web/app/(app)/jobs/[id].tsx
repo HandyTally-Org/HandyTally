@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, ScrollView, Platform, Pressable, TouchableOpacity, Dimensions, Modal } from 'react-native';
-import { Text, Button, Card, SegmentedButtons, FAB, TextInput, Dialog, Portal, Divider, Chip, DataTable, ActivityIndicator, RadioButton, List, IconButton, Menu, Snackbar, Surface } from 'react-native-paper';
+import { Text, Button, Card, SegmentedButtons, FAB, TextInput, Dialog, Portal, Divider, DataTable, ActivityIndicator, RadioButton, List, IconButton, Menu, Snackbar, Surface } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { sendJobInvite } from '../../../utils/sendJobInvite';
 import { supabase } from '../../../lib/supabase';
@@ -10,12 +10,19 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from 'date-fns';
-import { JobForm } from '../../../components/JobForm';
+import { JobForm, type JobFormHandle } from '../../../components/JobForm';
 import { useOrganizationMembers } from '../../../hooks/useOrganizationMembers';
 import { assigneeLabel } from '../../../utils/inviteUser';
 import { InvoiceDetails } from '../../../components/InvoiceDetails';
 import { InvoiceForm } from '../../../components/InvoiceForm';
 import { NotesSection } from '../../../components/NotesSection';
+import { useLabels } from '../../../hooks/useLabels';
+import { labelColor, labelText, labelTextColor } from '../../../constants/labels';
+import { themed } from '../../../constants/Colors';
+import { LabelPill } from '../../../components/LabelPill';
+import { useRefreshOnFocus } from '../../../hooks/useRefreshOnFocus';
+import { useCustomFields } from '../../../hooks/useCustomFields';
+import { CustomFieldsView } from '../../../components/CustomFields';
 
 // Let's create a simple calendar component using the existing libraries
 interface SimpleCalendarProps {
@@ -189,10 +196,16 @@ interface Material {
 
 export default function JobDetailsScreen() {
   const { id } = useLocalSearchParams();
+  // HT-49: statuses, names and colours for every picker and chip on this page.
+  const jobStatuses = useLabels('job_status');
+  // HT-53: this organisation's custom fields for Jobs.
+  const jobCustomFields = useCustomFields('jobs');
   const router = useRouter();
   // HT-35: turns jobs.assigned_to into a name on the Info tab.
   const { members, loading: membersLoading } = useOrganizationMembers();
   const [selectedTab, setSelectedTab] = useState('info');
+  // HT-61: lets the Unsaved Changes dialog's Save button submit the edit form.
+  const jobFormRef = useRef<JobFormHandle>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [invoices, setInvoices] = useState([]);
   const [attachments, setAttachments] = useState([]);
@@ -300,14 +313,15 @@ export default function JobDetailsScreen() {
   const [startDatePickerVisible, setStartDatePickerVisible] = useState(false);
   const [endDatePickerVisible, setEndDatePickerVisible] = useState(false);
 
-  useEffect(() => {
-    if (id) {
-      fetchJobDetails();
-      fetchServices();
-      fetchMaterials();
-      fetchInvoices();
-      fetchClientsAndJobs();
-    }
+  useRefreshOnFocus(() => {
+    if (!id) return;
+    // Coming back mid-edit must not discard what the user has typed.
+    if (editMode && hasUnsavedChanges) return;
+    fetchJobDetails();
+    fetchServices();
+    fetchMaterials();
+    fetchInvoices();
+    fetchClientsAndJobs();
   }, [id]);
 
   useEffect(() => {
@@ -968,6 +982,7 @@ export default function JobDetailsScreen() {
         start_date: updatedJobData.start_date,
         end_date: updatedJobData.end_date,
         assigned_to: updatedJobData.assigned_to ?? null,
+        custom_fields: updatedJobData.custom_fields ?? {},
       };
       
       // Remove any undefined values
@@ -990,11 +1005,20 @@ export default function JobDetailsScreen() {
         return false;
       }
       
+      // The form only carries client_id, so re-read the client row: without
+      // it the Info tab showed "No client" until the page was reloaded (HT-13).
+      const { data: clientRow } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('uid', clientId)
+        .maybeSingle();
+
       // Make sure to update the job in state with the correct types
       const updatedJob = {
         ...updatedJobData,
         uid: jobId,         // Ensure it's stored as a number
-        client_id: clientId  // Ensure it's stored as a number
+        client_id: clientId,  // Ensure it's stored as a number
+        client: clientRow ?? job?.client ?? null,
       };
       
       setJob(updatedJob);
@@ -1034,7 +1058,7 @@ export default function JobDetailsScreen() {
   const renderStatusDropdown = () => {
     if (!showStatusDropdown) return null;
     
-    const statuses = ['pending', 'in_progress', 'completed', 'cancelled'];
+    const statuses = jobStatuses;
     
     return (
       <View style={{
@@ -1055,7 +1079,7 @@ export default function JobDetailsScreen() {
       }}>
         {statuses.map((status) => (
           <Pressable
-            key={status}
+            key={status.value}
             style={({ hovered }) => ({
               padding: 16,
               backgroundColor: hovered ? '#f5f5f5' : '#ffffff',
@@ -1063,7 +1087,7 @@ export default function JobDetailsScreen() {
               borderBottomColor: '#f0f0f0',
             })}
             onPress={() => {
-              handleStatusChange(status);
+              handleStatusChange(status.value);
               setShowStatusDropdown(false);
             }}
           >
@@ -1072,11 +1096,11 @@ export default function JobDetailsScreen() {
                 width: 16, 
                 height: 16, 
                 borderRadius: 8, 
-                backgroundColor: getStatusColor(status),
+                backgroundColor: status.color,
                 marginRight: 8 
               }} />
               <Text style={{ textTransform: 'capitalize' }}>
-                {status.replace('_', ' ')}
+                {status.label}
               </Text>
             </View>
           </Pressable>
@@ -1088,7 +1112,7 @@ export default function JobDetailsScreen() {
   const WebStatusDropdown = () => {
     if (!showStatusDropdown) return null;
     
-    const statuses = ['pending', 'in_progress', 'completed', 'cancelled'];
+    const statuses = jobStatuses;
     
     return (
       <div style={{
@@ -1105,9 +1129,9 @@ export default function JobDetailsScreen() {
       }}>
         {statuses.map((status) => (
           <div
-            key={status}
+            key={status.value}
             onClick={() => {
-              handleStatusChange(status);
+              handleStatusChange(status.value);
               setShowStatusDropdown(false);
             }}
             style={{
@@ -1130,11 +1154,11 @@ export default function JobDetailsScreen() {
                 width: '16px', 
                 height: '16px', 
                 borderRadius: '8px', 
-                backgroundColor: getStatusColor(status),
+                backgroundColor: status.color,
                 marginRight: '8px' 
               }} />
               <span style={{ textTransform: 'capitalize' }}>
-                {status.replace('_', ' ')}
+                {status.label}
               </span>
             </div>
           </div>
@@ -1168,29 +1192,37 @@ export default function JobDetailsScreen() {
     };
   }, [editMode, hasUnsavedChanges]);
 
-  // Add a function to handle navigation item clicks
+  // HT-61: switching tabs from the left nav. The edit form only lives on the
+  // Info tab, so leaving Info ends edit mode; if the form has unsaved changes
+  // the Unsaved Changes dialog asks first and finishes the switch afterwards.
   const handleNavigationItemClick = (tab) => {
-    if (editMode && hasUnsavedChanges) {
-      // Show confirmation dialog
-      setShowExitConfirmation(true);
-      // Store the tab they were trying to navigate to
+    if (editMode && hasUnsavedChanges && tab !== 'info') {
       setPendingNavigation(tab);
-    } else {
-      // If not in edit mode or no unsaved changes, just switch tabs
-      setSelectedTab(tab);
+      setShowExitConfirmation(true);
+      return;
     }
+    if (editMode && tab !== 'info') {
+      setEditMode(false);
+    }
+    setSelectedTab(tab);
   };
 
-  // Add a function to handle job form changes
+  // JobForm reports every edit here; the flag drives the tab guard above,
+  // Cancel, and the browser's leave-page warning.
   const handleJobFormChange = () => {
-    setHasChanges(true);
+    setHasUnsavedChanges(true);
   };
 
-  // Add a function to handle form submission
+  // Save from the form (or from the Unsaved Changes dialog) leaves edit mode
+  // and, when a tab click prompted the save, moves on to that tab.
   const handleUpdateJobWithConfirmation = async (updatedJobData) => {
     await handleUpdateJob(updatedJobData);
     setHasUnsavedChanges(false);
     setEditMode(false);
+    if (pendingNavigation) {
+      setSelectedTab(pendingNavigation);
+      setPendingNavigation(null);
+    }
   };
 
   // Add a function to handle cancellation
@@ -1212,21 +1244,6 @@ export default function JobDetailsScreen() {
     if (pendingNavigation) {
       handleNavigationItemClick(pendingNavigation);
       setPendingNavigation(null);
-    }
-  };
-
-  // Add this function near the other utility functions
-  const getInvoiceStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'paid':
-        return '#e8f5e9'; // Light green
-      case 'sent':
-        return '#fff3e0'; // Light orange
-      case 'overdue':
-        return '#ffebee'; // Light red
-      case 'draft':
-      default:
-        return '#f5f5f5'; // Light gray
     }
   };
 
@@ -1273,6 +1290,7 @@ export default function JobDetailsScreen() {
           total: updatedInvoice.total,
           notes: updatedInvoice.notes,
           status: updatedInvoice.status,
+          custom_fields: updatedInvoice.custom_fields ?? {},
           updated_at: new Date().toISOString()
         })
         .eq('uid', updatedInvoice.uid);
@@ -1561,11 +1579,12 @@ export default function JobDetailsScreen() {
   }
 
   const renderContent = () => {
-    // If in edit mode, show the JobForm instead of the regular content
-    if (editMode) {
+    // The edit form replaces the Info tab only; every other tab keeps its own content
+    if (editMode && selectedTab === 'info') {
       return (
         <View style={styles.editFormContainer}>
-          <JobForm 
+          <JobForm
+            ref={jobFormRef}
             job={job}
             onSubmit={handleUpdateJobWithConfirmation}
             onCancel={handleCancelEdit}
@@ -1641,40 +1660,22 @@ export default function JobDetailsScreen() {
               {membersLoading && job?.assigned_to ? '…' : assigneeLabel(job?.assigned_to, members)}
             </DataTable.Cell>
             <DataTable.Cell style={{ justifyContent: 'center' }}>
-              <Chip
-                style={{ backgroundColor: getStatusColor(job?.status), alignSelf: 'center' }}
-                textStyle={{ color: getStatusTextColor(job?.status), fontWeight: '600', fontSize: 12 }}
-                compact
-              >
-                {job?.status || 'Unknown'}
-              </Chip>
+              <LabelPill
+                size="sm"
+                style={{ alignSelf: 'center' }}
+                label={labelText(jobStatuses, job?.status) || 'Unknown'}
+                color={labelColor(jobStatuses, job?.status)}
+                textColor={labelTextColor(jobStatuses, job?.status)}
+              />
             </DataTable.Cell>
             <DataTable.Cell>{job?.start_date ? formatDate(job.start_date) : 'Not set'}</DataTable.Cell>
             <DataTable.Cell>{job?.end_date ? formatDate(job.end_date) : 'Not set'}</DataTable.Cell>
           </DataTable.Row>
         </DataTable>
+
+        <CustomFieldsView defs={jobCustomFields} values={job?.custom_fields} />
       </View>
     );
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'pending': return '#FFF9C4';
-      case 'in_progress': return '#BBDEFB';
-      case 'completed': return '#C8E6C9';
-      case 'cancelled': return '#FFCDD2';
-      default: return '#F5F5F5';
-    }
-  };
-
-  const getStatusTextColor = (status) => {
-    switch (status) {
-      case 'pending': return '#8a6d00';
-      case 'in_progress': return '#0d47a1';
-      case 'completed': return '#1b5e20';
-      case 'cancelled': return '#b71c1c';
-      default: return '#666666';
-    }
   };
 
   const renderInvoicesTab = () => {
@@ -2509,13 +2510,11 @@ export default function JobDetailsScreen() {
               selectedTab === 'info' && styles.selectedItem
             ]}
             onPress={() => handleNavigationItemClick('info')}
-            disabled={editMode && hasUnsavedChanges}
           >
-            <MaterialIcons name="dashboard" size={24} color="#666666" />
+            <MaterialIcons name="dashboard" size={24} color={themed.navDashboard} />
             <Text style={[
               styles.navigationText,
-              selectedTab === 'info' && styles.selectedText,
-              (editMode && hasUnsavedChanges) ? { color: '#cccccc' } : {}
+              selectedTab === 'info' && styles.selectedText
             ]}>Info</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -2524,17 +2523,15 @@ export default function JobDetailsScreen() {
               selectedTab === 'invoices' && styles.selectedItem
             ]}
             onPress={() => handleNavigationItemClick('invoices')}
-            disabled={editMode && hasUnsavedChanges}
           >
             <MaterialCommunityIcons
               name="file-document-outline"
               size={24}
-              color={selectedTab === 'invoices' ? '#000000' : '#666666'}
+              color={themed.navInvoices}
             />
             <Text style={[
               styles.navigationText,
-              selectedTab === 'invoices' && styles.selectedText,
-              (editMode && hasUnsavedChanges) ? { color: '#cccccc' } : {}
+              selectedTab === 'invoices' && styles.selectedText
             ]}>Invoices</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -2543,17 +2540,15 @@ export default function JobDetailsScreen() {
               selectedTab === 'costs' && styles.selectedItem
             ]}
             onPress={() => handleNavigationItemClick('costs')}
-            disabled={editMode && hasUnsavedChanges}
           >
             <MaterialCommunityIcons
               name="currency-usd"
               size={24}
-              color={selectedTab === 'costs' ? '#000000' : '#666666'}
+              color={themed.railCosts}
             />
             <Text style={[
               styles.navigationText,
-              selectedTab === 'costs' && styles.selectedText,
-              (editMode && hasUnsavedChanges) ? { color: '#cccccc' } : {}
+              selectedTab === 'costs' && styles.selectedText
             ]}>Costs</Text>
           </TouchableOpacity>
 
@@ -2565,17 +2560,15 @@ export default function JobDetailsScreen() {
               selectedTab === 'notes' && styles.selectedItem
             ]}
             onPress={() => handleNavigationItemClick('notes')}
-            disabled={editMode && hasUnsavedChanges}
           >
             <MaterialCommunityIcons
               name="note-text-outline"
               size={24}
-              color={selectedTab === 'notes' ? '#000000' : '#666666'}
+              color={themed.railNotes}
             />
             <Text style={[
               styles.navigationText,
-              selectedTab === 'notes' && styles.selectedText,
-              (editMode && hasUnsavedChanges) ? { color: '#cccccc' } : {}
+              selectedTab === 'notes' && styles.selectedText
             ]}>Notes</Text>
           </TouchableOpacity>
          
@@ -2596,9 +2589,9 @@ export default function JobDetailsScreen() {
           onPress={() => router.push('/jobs')}
         >
           <View style={{ width: 24, marginRight: 12 }}>
-            <MaterialIcons name="arrow-back" size={20} color="#666666" />
+            <MaterialIcons name="arrow-back" size={20} color={themed.muted} />
           </View>
-          <Text style={{ color: '#666666' }}>Back to Jobs</Text>
+          <Text style={{ color: themed.muted }}>Back to Jobs</Text>
         </TouchableOpacity>
       </View>
 
@@ -2640,9 +2633,9 @@ export default function JobDetailsScreen() {
           }}
         >
           <View>
-            {['pending', 'in_progress', 'completed', 'cancelled'].map((status) => (
+            {jobStatuses.map((status) => (
               <Pressable
-                key={status}
+                key={status.value}
                 style={({ hovered }) => ({
                   padding: 16,
                   backgroundColor: hovered ? '#f5f5f5' : '#ffffff',
@@ -2650,7 +2643,7 @@ export default function JobDetailsScreen() {
                   borderBottomColor: '#f0f0f0',
                 })}
                 onPress={() => {
-                  handleStatusChange(status);
+                  handleStatusChange(status.value);
                   setShowStatusDropdown(false);
                 }}
               >
@@ -2659,11 +2652,11 @@ export default function JobDetailsScreen() {
                     width: 16, 
                     height: 16, 
                     borderRadius: 8, 
-                    backgroundColor: getStatusColor(status),
+                    backgroundColor: status.color,
                     marginRight: 8 
                   }} />
                   <Text style={{ textTransform: 'capitalize' }}>
-                    {status.replace('_', ' ')}
+                    {status.label}
                   </Text>
                 </View>
               </Pressable>
@@ -2694,14 +2687,18 @@ export default function JobDetailsScreen() {
               setShowExitConfirmation(false);
             }}>Discard</Button>
             
-            <Button onPress={() => setShowExitConfirmation(false)}>Cancel</Button>
-            
-            <Button mode="contained" onPress={() => {
-              // Trigger save function
-              // This would need to call your form's submit handler
-              // After saving, it would navigate to the pending tab
-              // For now, just close the dialog
+            <Button onPress={() => {
+              // Stay on the form; forget the tab that was clicked
+              setPendingNavigation(null);
               setShowExitConfirmation(false);
+            }}>Cancel</Button>
+
+            <Button mode="contained" onPress={() => {
+              // Submit the form; handleUpdateJobWithConfirmation then leaves
+              // edit mode and opens the pending tab. A validation failure
+              // keeps the form open with its own message.
+              setShowExitConfirmation(false);
+              jobFormRef.current?.submit();
             }}>Save</Button>
           </Dialog.Actions>
         </Dialog>
@@ -3106,15 +3103,15 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   selectedItem: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: themed.active,
   },
   navigationText: {
     marginLeft: 12,
     fontSize: 14,
-    color: '#666666',
+    color: themed.muted,
   },
   selectedText: {
-    color: '#000000',
+    color: themed.text,
     fontWeight: '500',
   },
   headerCard: {

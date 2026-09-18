@@ -62,4 +62,54 @@ export function formatPhone(phone: string | null | undefined): string {
   
   // Return original if not 10 digits
   return phone;
-} 
+}
+
+/**
+ * HT-56: format a timestamp as `MM/DD/YYYY hh:mm AM/PM` in the browser's
+ * local time zone, the same shape the job edit form uses.
+ * @param dateString ISO timestamp (or anything `new Date` accepts)
+ * @returns Formatted date-time, or '' when empty/invalid
+ */
+export function formatDateTime(dateString: string | null | undefined): string {
+  if (!dateString) return '';
+
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return '';
+
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const year = date.getFullYear();
+  const hours24 = date.getHours();
+  const hours12 = String(hours24 % 12 || 12).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const amPm = hours24 < 12 ? 'AM' : 'PM';
+
+  return `${month}/${day}/${year} ${hours12}:${minutes} ${amPm}`;
+}
+
+/** The client columns that make up a postal address. */
+export type ClientAddressParts = {
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  /** clients.zip is numeric in the database, so it may arrive as a number or a numeric string. */
+  zip?: number | string | null;
+};
+
+/**
+ * HT-56: join a client's address, city, state and zip as
+ * `"{address}, {city}, {state} {zip}"`, skipping empty parts so there are no
+ * dangling separators. Returns '' when every part is empty.
+ */
+export function formatClientAddress(client: ClientAddressParts | null | undefined): string {
+  if (!client) return '';
+
+  const text = (value: string | number | null | undefined): string =>
+    value === null || value === undefined ? '' : String(value).trim();
+
+  // numeric zips: drop any decimal tail ("18503.00" -> "18503"), never add separators.
+  const zip = text(client.zip).replace(/\.0*$/, '');
+  const stateZip = [text(client.state), zip].filter(Boolean).join(' ');
+
+  return [text(client.address), text(client.city), stateZip].filter(Boolean).join(', ');
+}

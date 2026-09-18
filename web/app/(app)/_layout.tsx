@@ -1,29 +1,35 @@
 import { Drawer } from 'expo-router/drawer';
 import { usePathname, useRouter } from 'expo-router';
-import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions } from 'react-native';
-import { DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawer';
-import { useState, useEffect } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import { DrawerContentScrollView } from '@react-navigation/drawer';
+import { useState, useEffect, useMemo } from 'react';
 import {supabase} from "@/lib/supabase";
 import { useAuth } from '../../contexts/AuthContext';
+import { useAppTheme } from '../../contexts/ThemeContext';
+import { themed } from '../../constants/Colors';
+import { NAV_ITEMS } from '../../constants/navigation';
+import { applyNavSettings } from '../../constants/organizationSettings';
 
 // Custom drawer content component
 function CustomDrawerContent(props: any) {
   const [isCollapsed, setIsCollapsed] = useState(true);
-  const [adminExpanded, setAdminExpanded] = useState(false);
+  const [submenuOpen, setSubmenuOpen] = useState<Record<string, boolean>>({});
   const router = useRouter();
   const pathname = usePathname();
   // HT-12: only organisation admins (and superusers) see the Admin section.
-  const { isAdmin } = useAuth();
+  // HT-50: the organisation's saved order and hidden entries apply to every
+  // member; the routes themselves stay registered below whatever is hidden.
+  const { isAdmin, settings } = useAuth();
+  const navItems = useMemo(() => applyNavSettings(NAV_ITEMS, settings.nav), [settings.nav]);
 
   // Function to toggle drawer state
   const toggleDrawer = () => {
     setIsCollapsed(!isCollapsed);
   };
 
-  // Function to toggle admin submenu
-  const toggleAdminSubmenu = () => {
-    setAdminExpanded(!adminExpanded);
+  const toggleSubmenu = (key: string) => {
+    setSubmenuOpen(open => ({ ...open, [key]: !open[key] }));
   };
 
   // Check if a path is active (exact match)
@@ -49,274 +55,100 @@ function CustomDrawerContent(props: any) {
         }
     };
 
-  // Auto-expand admin menu if on an admin page
+  // Open a submenu when one of its pages is reached by URL.
   useEffect(() => {
-    if (pathname.startsWith('/admin/') && !adminExpanded) {
-      setAdminExpanded(true);
+    for (const item of NAV_ITEMS) {
+      if (item.children && pathname.startsWith(`${item.route}/`) && !submenuOpen[item.key]) {
+        setSubmenuOpen(open => ({ ...open, [item.key]: true }));
+      }
     }
   }, [pathname]);
-  
+
   return (
-    <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+    <View style={{ flex: 1, backgroundColor: themed.panel }}>
       {/* Header with toggle button */}
       <View style={styles.drawerHeader}>
         <TouchableOpacity onPress={toggleDrawer} style={styles.toggleButton}>
-          <Ionicons name={isCollapsed ? "menu" : "menu-outline"} size={24} color="#333" />
+          <Ionicons name={isCollapsed ? "menu" : "menu-outline"} size={24} color={themed.text} />
         </TouchableOpacity>
         </View>
-        
+
       <DrawerContentScrollView {...props} contentContainerStyle={{ flexGrow: 1 }}>
-        {/* Custom drawer items with conditional rendering based on collapsed state */}
+        {/* HT-48: every entry comes from constants/navigation.ts */}
+        {/* HT-68: each glyph carries its module's hue (item.color); the active
+            row stays a neutral fill, so the coloured icon is the accent. */}
         <View style={styles.drawerContent}>
-          {/* Dashboard */}
-          <TouchableOpacity
-            onPress={() => router.push('/')}
-            style={[
-              styles.drawerItem,
-              isPathActive('/') && styles.drawerItemFocused,
-              isCollapsed && styles.drawerItemCollapsed
-            ]}
-          >
-            <View style={styles.drawerItemIcon}>
-              <Ionicons name="grid-outline" size={24} color={isPathActive('/') ? '#333' : '#666'} />
-            </View>
-            {!isCollapsed && (
-              <Text style={[
-                styles.drawerItemLabel,
-                isPathActive('/') && styles.drawerItemLabelFocused
-              ]}>
-                Dashboard
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Clients */}
-          <TouchableOpacity
-            onPress={() => router.push('/clients')}
-            style={[
-              styles.drawerItem,
-              isPathActive('/clients') && styles.drawerItemFocused,
-              isCollapsed && styles.drawerItemCollapsed
-            ]}
-          >
-            <View style={styles.drawerItemIcon}>
-              <Ionicons name="people-outline" size={24} color={isPathActive('/clients') ? '#333' : '#666'} />
-            </View>
-            {!isCollapsed && (
-              <Text style={[
-                styles.drawerItemLabel,
-                isPathActive('/clients') && styles.drawerItemLabelFocused
-              ]}>
-                Clients
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Jobs */}
-          <TouchableOpacity
-            onPress={() => router.push('/jobs')}
-            style={[
-              styles.drawerItem,
-              isPathActive('/jobs') && styles.drawerItemFocused,
-              isCollapsed && styles.drawerItemCollapsed
-            ]}
-          >
-            <View style={styles.drawerItemIcon}>
-              <Ionicons name="briefcase-outline" size={24} color={isPathActive('/jobs') ? '#333' : '#666'} />
-            </View>
-            {!isCollapsed && (
-              <Text style={[
-                styles.drawerItemLabel,
-                isPathActive('/jobs') && styles.drawerItemLabelFocused
-              ]}>
-                Jobs
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Invoices */}
-          <TouchableOpacity
-            onPress={() => router.push('/invoices')}
-            style={[
-              styles.drawerItem,
-              isPathActive('/invoices') && styles.drawerItemFocused,
-              isCollapsed && styles.drawerItemCollapsed
-            ]}
-          >
-            <View style={styles.drawerItemIcon}>
-              <Ionicons name="document-text-outline" size={24} color={isPathActive('/invoices') ? '#333' : '#666'} />
-            </View>
-            {!isCollapsed && (
-              <Text style={[
-                styles.drawerItemLabel,
-                isPathActive('/invoices') && styles.drawerItemLabelFocused
-              ]}>
-                Invoices
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Labor */}
-          <TouchableOpacity
-            onPress={() => router.push('/labor')}
-            style={[
-              styles.drawerItem,
-              isPathActive('/labor') && styles.drawerItemFocused,
-              isCollapsed && styles.drawerItemCollapsed
-            ]}
-          >
-            <View style={styles.drawerItemIcon}>
-              <Ionicons name="hammer-outline" size={24} color={isPathActive('/labor') ? '#333' : '#666'} />
-            </View>
-            {!isCollapsed && (
-              <Text style={[
-                styles.drawerItemLabel,
-                isPathActive('/labor') && styles.drawerItemLabelFocused
-              ]}>
-                Labor
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Inventory */}
-          <TouchableOpacity
-            onPress={() => router.push('/inventory')}
-            style={[
-              styles.drawerItem,
-              isPathActive('/inventory') && styles.drawerItemFocused,
-              isCollapsed && styles.drawerItemCollapsed
-            ]}
-          >
-            <View style={styles.drawerItemIcon}>
-              <Ionicons name="cube-outline" size={24} color={isPathActive('/inventory') ? '#333' : '#666'} />
-            </View>
-            {!isCollapsed && (
-              <Text style={[
-                styles.drawerItemLabel,
-                isPathActive('/inventory') && styles.drawerItemLabelFocused
-              ]}>
-                Inventory
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Schedule */}
-          <TouchableOpacity
-            onPress={() => router.push('/schedule')}
-            style={[
-              styles.drawerItem,
-              isPathActive('/schedule') && styles.drawerItemFocused,
-              isCollapsed && styles.drawerItemCollapsed
-            ]}
-          >
-            <View style={styles.drawerItemIcon}>
-              <Ionicons name="calendar-outline" size={24} color={isPathActive('/schedule') ? '#333' : '#666'} />
-            </View>
-            {!isCollapsed && (
-              <Text style={[
-                styles.drawerItemLabel,
-                isPathActive('/schedule') && styles.drawerItemLabelFocused
-              ]}>
-                Schedule
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Admin with submenu: admins only (HT-12) */}
-          {isAdmin && (
-          <View>
-            <TouchableOpacity
-              onPress={toggleAdminSubmenu}
-              style={[
-                styles.drawerItem,
-                isPathActive('/admin') && styles.drawerItemFocused,
-                isCollapsed && styles.drawerItemCollapsed
-              ]}
-            >
-              <View style={styles.drawerItemIcon}>
-                <Ionicons 
-                  name="settings-outline" 
-                  size={24} 
-                  color={isPathActive('/admin') ? '#333' : '#666'} 
-                />
-              </View>
-              {!isCollapsed && (
-                <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={[
-                    styles.drawerItemLabel,
-                    isPathActive('/admin') && styles.drawerItemLabelFocused
-                  ]}>
-                    Admin
-                  </Text>
-                  <Ionicons 
-                    name={adminExpanded ? "chevron-down" : "chevron-forward"} 
-                    size={16} 
-                    color="#666" 
-                  />
-                </View>
-              )}
-            </TouchableOpacity>
-
-            {/* Admin submenu items */}
-            {(adminExpanded || isPathPartOfRoute('/admin/')) && (
-              <View style={[
-                styles.submenu,
-                isCollapsed && styles.submenuCollapsed
-              ]}>
-                {/* Admin/Users */}
+          {navItems.map(item => {
+            if (item.adminOnly && !isAdmin) return null;
+            const active = isPathActive(item.route);
+            const children = item.children;
+            const expanded = !!children && (submenuOpen[item.key] || isPathPartOfRoute(`${item.route}/`));
+            return (
+              <View key={item.key}>
                 <TouchableOpacity
-                  onPress={() => router.push('/admin/users')}
+                  onPress={() => (children ? toggleSubmenu(item.key) : router.push(item.route as any))}
                   style={[
-                    styles.submenuItem,
-                    isPathActive('/admin/users') && styles.submenuItemFocused,
-                    isCollapsed && styles.submenuItemCollapsed
+                    styles.drawerItem,
+                    active && styles.drawerItemFocused,
+                    isCollapsed && styles.drawerItemCollapsed
                   ]}
                 >
-                  <View style={[styles.submenuItemIcon, isCollapsed && { marginRight: 0 }]}>
-                    <Ionicons name="people" size={20} color={isPathActive('/admin/users') ? '#333' : '#666'} />
+                  <View style={styles.drawerItemIcon}>
+                    <Ionicons name={item.icon} size={24} color={themed[item.color]} />
                   </View>
                   {!isCollapsed && (
-                    <Text style={[
-                      styles.submenuItemLabel,
-                      isPathActive('/admin/users') && styles.submenuItemLabelFocused
-                    ]}>
-                      Users
-                    </Text>
+                    children ? (
+                      <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={[styles.drawerItemLabel, active && styles.drawerItemLabelFocused]}>
+                          {item.label}
+                        </Text>
+                        <Ionicons name={expanded ? 'chevron-down' : 'chevron-forward'} size={16} color={themed.muted} />
+                      </View>
+                    ) : (
+                      <Text style={[styles.drawerItemLabel, active && styles.drawerItemLabelFocused]}>
+                        {item.label}
+                      </Text>
+                    )
                   )}
                 </TouchableOpacity>
 
-                {/* Admin/Company */}
-                <TouchableOpacity
-                  onPress={() => router.push('/admin/company')}
-                  style={[
-                    styles.submenuItem,
-                    isPathActive('/admin/company') && styles.submenuItemFocused,
-                    isCollapsed && styles.submenuItemCollapsed
-                  ]}
-                >
-                  <View style={[styles.submenuItemIcon, isCollapsed && { marginRight: 0 }]}>
-                    <Ionicons name="business" size={20} color={isPathActive('/admin/company') ? '#333' : '#666'} />
+                {children && expanded && (
+                  <View style={[styles.submenu, isCollapsed && styles.submenuCollapsed]}>
+                    {children.map(child => {
+                      const childActive = isPathActive(child.route);
+                      return (
+                        <TouchableOpacity
+                          key={child.key}
+                          onPress={() => router.push(child.route as any)}
+                          style={[
+                            styles.submenuItem,
+                            childActive && styles.submenuItemFocused,
+                            isCollapsed && styles.submenuItemCollapsed
+                          ]}
+                        >
+                          <View style={[styles.submenuItemIcon, isCollapsed && { marginRight: 0 }]}>
+                            <Ionicons name={child.icon} size={20} color={themed[child.color]} />
+                          </View>
+                          {!isCollapsed && (
+                            <Text style={[styles.submenuItemLabel, childActive && styles.submenuItemLabelFocused]}>
+                              {child.label}
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
-                  {!isCollapsed && (
-                    <Text style={[
-                      styles.submenuItemLabel,
-                      isPathActive('/admin/company') && styles.submenuItemLabelFocused
-                    ]}>
-                      Company
-                    </Text>
-                  )}
-                </TouchableOpacity>
+                )}
               </View>
-            )}
-          </View>
-          )}
+            );
+          })}
         </View>
 
         {/* Add the HandyTally logo at the bottom */}
         <View style={[styles.footerContainer, isCollapsed && styles.footerContainerCollapsed]}>
           <View style={styles.handyTallyLogoContainer}>
-            <Image 
-              source={require('../../assets/favicon-32x32.png')} 
+            <Image
+              source={require('../../assets/favicon-32x32.png')}
               style={styles.handyTallyLogo}
               resizeMode="contain"
             />
@@ -324,7 +156,7 @@ function CustomDrawerContent(props: any) {
               <Text style={styles.handyTallyText}>HandyTally</Text>
             )}
       </View>
-      
+
           {!isCollapsed && (
             <View style={styles.footerTextContainer}>
               <View style={styles.termsRow}>
@@ -336,7 +168,7 @@ function CustomDrawerContent(props: any) {
               <Text style={styles.versionText}>v1.0</Text>
                 {/* Sign Out button at the very bottom */}
                 <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-                    <Ionicons name="log-out-outline" size={20} color="#333" />
+                    <Ionicons name="log-out-outline" size={20} color={themed.text} />
                     <Text style={styles.signOutText}>Sign Out</Text>
                 </TouchableOpacity>
             </View>
@@ -350,7 +182,8 @@ function CustomDrawerContent(props: any) {
 export default function AppLayout() {
   // HT-12: the (app) group needs a session. Nothing enforced this before; a
   // signed-out visitor got every screen with empty data.
-  const { session, isLoading } = useAuth();
+  const { session, isLoading, membershipLoaded, tenant } = useAuth();
+  const { colors } = useAppTheme();
   const router = useRouter();
 
   useEffect(() => {
@@ -363,6 +196,12 @@ export default function AppLayout() {
     return null;
   }
 
+  // HT-38: on a customer host, wait for the membership check so a non-member
+  // never sees another organisation's screens before being signed out.
+  if (tenant.status === 'found' && !membershipLoaded) {
+    return null;
+  }
+
   return (
     <Drawer
       drawerContent={(props) => <CustomDrawerContent {...props} />}
@@ -371,105 +210,41 @@ export default function AppLayout() {
         drawerType: 'permanent',
         drawerStyle: {
           width: 'auto', // This will be controlled by our custom component
+          backgroundColor: themed.panel,
+          borderRightColor: themed.line,
         },
-        drawerActiveBackgroundColor: '#e6e6e6',
-        drawerActiveTintColor: '#333',
-        drawerInactiveTintColor: '#333',
+        drawerActiveBackgroundColor: colors.active,
+        drawerActiveTintColor: colors.text,
+        drawerInactiveTintColor: colors.text,
         drawerLabelStyle: {
           marginLeft: -20,
           fontSize: 16,
         },
       }}
     >
-      <Drawer.Screen
-        name="index"
-        options={{
-          drawerLabel: 'Dashboard',
-          title: 'Dashboard',
-          drawerIcon: ({ color }) => <Ionicons name="grid-outline" size={22} color={color} />,
-        }}
-      />
-      <Drawer.Screen
-        name="clients"
-        options={{
-          drawerLabel: 'Clients',
-          title: 'Clients',
-          drawerIcon: ({ color }) => <Ionicons name="people-outline" size={22} color={color} />,
-        }}
-      />
-      <Drawer.Screen
-        name="jobs"
-        options={{
-          drawerLabel: 'Jobs',
-          title: 'Jobs',
-          drawerIcon: ({ color }) => <Ionicons name="briefcase-outline" size={22} color={color} />,
-        }}
-      />
-      <Drawer.Screen
-        name="calendar"
-        options={{
-          drawerLabel: "Calendar",
-          title: "Calendar",
-          drawerIcon: ({ color }) => <Ionicons name="calendar-outline" size={22} color={color} />,
-        }}
-      />
-      <Drawer.Screen
-        name="invoices"
-        options={{
-          drawerLabel: 'Invoices',
-          title: 'Invoices',
-          drawerIcon: ({ color }) => <Ionicons name="document-text-outline" size={22} color={color} />,
-        }}
-      />
-      <Drawer.Screen
-        name="labor"
-        options={{
-          drawerLabel: 'Labor',
-          title: 'Labor',
-          drawerIcon: ({ color }) => <Ionicons name="hammer-outline" size={22} color={color} />,
-        }}
-      />
-      <Drawer.Screen
-        name="inventory"
-        options={{
-          drawerLabel: 'Inventory',
-          title: 'Inventory',
-          drawerIcon: ({ color }) => <Ionicons name="cube-outline" size={22} color={color} />,
-        }}
-      />
-      <Drawer.Screen
-        name="schedule"
-        options={{
-          drawerLabel: "Schedule",
-          title: "Schedule",
-          drawerIcon: ({ color }) => <Ionicons name="calendar-outline" size={22} color={color} />,
-        }}
-      />
-      <Drawer.Screen
-        name="admin"
-        options={{
-          drawerLabel: 'Admin',
-          title: 'Admin',
-          drawerIcon: ({ color }) => <Ionicons name="settings-outline" size={22} color={color} />,
-        }}
-      />
-      {/* These screens are hidden in the drawer but still accessible via routes */}
-      <Drawer.Screen
-        name="admin/users"
-        options={{
-          drawerLabel: () => null,
-          title: 'Users',
-          drawerItemStyle: { height: 0 },
-        }}
-      />
-      <Drawer.Screen
-        name="admin/company"
-        options={{
-          drawerLabel: () => null,
-          title: 'Company',
-          drawerItemStyle: { height: 0 },
-        }}
-      />
+      {/* HT-48: one registration per nav entry; submenu pages are routable but hidden from the default list. */}
+      {NAV_ITEMS.map(item => (
+        <Drawer.Screen
+          key={item.key}
+          name={item.screen}
+          options={{
+            drawerLabel: item.label,
+            title: item.label,
+            drawerIcon: ({ color }) => <Ionicons name={item.icon} size={22} color={color} />,
+          }}
+        />
+      ))}
+      {NAV_ITEMS.flatMap(item => item.children ?? []).map(child => (
+        <Drawer.Screen
+          key={child.key}
+          name={child.screen}
+          options={{
+            drawerLabel: () => null,
+            title: child.label,
+            drawerItemStyle: { height: 0 },
+          }}
+        />
+      ))}
     </Drawer>
   );
 }
@@ -480,8 +255,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    backgroundColor: '#ffffff',
+    borderBottomColor: themed.line,
+    backgroundColor: themed.panel,
   },
   toggleButton: {
     width: 40,
@@ -494,30 +269,30 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: 15,
         borderTopWidth: 1,
-        borderTopColor: '#e0e0e0',
+        borderTopColor: themed.line,
     },
     signOutText: {
         marginLeft: 10,
         fontSize: 16,
-        color: '#333',
+        color: themed.text,
     },
   drawerContent: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   drawerItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   drawerItemCollapsed: {
     justifyContent: 'center',
     paddingHorizontal: 8,
   },
   drawerItemFocused: {
-    backgroundColor: '#e6e6e6',
+    backgroundColor: themed.active,
   },
   drawerItemIcon: {
     marginRight: 16,
@@ -526,14 +301,14 @@ const styles = StyleSheet.create({
   },
   drawerItemLabel: {
     fontSize: 16,
-    color: '#333',
+    color: themed.text,
   },
   drawerItemLabelFocused: {
     fontWeight: 'bold',
   },
   submenu: {
     marginLeft: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   submenuCollapsed: {
     marginLeft: 0,
@@ -543,14 +318,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     paddingHorizontal: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   submenuItemCollapsed: {
     justifyContent: 'center',
     paddingHorizontal: 8,
   },
   submenuItemFocused: {
-    backgroundColor: '#e6e6e6',
+    backgroundColor: themed.active,
   },
   submenuItemIcon: {
     marginRight: 16,
@@ -559,7 +334,7 @@ const styles = StyleSheet.create({
   },
   submenuItemLabel: {
     fontSize: 14,
-    color: '#333',
+    color: themed.text,
   },
   submenuItemLabelFocused: {
     fontWeight: 'bold',
@@ -567,9 +342,9 @@ const styles = StyleSheet.create({
   footerContainer: {
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    borderTopColor: themed.line,
     marginTop: 20,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   footerContainerCollapsed: {
     alignItems: 'center',
@@ -593,7 +368,7 @@ const styles = StyleSheet.create({
   handyTallyText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: themed.text,
   },
   footerTextContainer: {
     alignItems: 'center',
@@ -604,20 +379,20 @@ const styles = StyleSheet.create({
   },
   termsText: {
     fontSize: 12,
-    color: '#666',
+    color: themed.muted,
   },
   divider: {
     fontSize: 12,
-    color: '#666',
+    color: themed.muted,
     marginHorizontal: 4,
   },
   copyrightText: {
     fontSize: 12,
-    color: '#666',
+    color: themed.muted,
     marginBottom: 2,
   },
   versionText: {
     fontSize: 12,
-    color: '#666',
+    color: themed.muted,
   },
-}); 
+});

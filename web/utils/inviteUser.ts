@@ -4,9 +4,11 @@ import { supabase } from '../lib/supabase';
 //
 // Inviting goes through the invite-user edge function, because creating the
 // auth account and emailing the one-time set-password link both need the
-// service role. Listing, role changes and deactivation are database functions
-// that check the caller's role themselves (see the
-// organization_member_management migration).
+// service role. Listing, role changes, deactivation and removal are database
+// functions that check the caller's role themselves (see the
+// organization_member_management and users_superusers_remove_delete
+// migrations). Deleting an account (HT-65) is the delete-user edge function,
+// again because the Auth admin API needs the service role.
 
 export type InvitableRole = 'admin' | 'user' | 'technician';
 
@@ -22,6 +24,10 @@ export type OrganizationMember = {
   email: string;
   first_name: string | null;
   last_name: string | null;
+  /**
+   * 'superuser' rows are the platform accounts (HT-65): they hold no
+   * membership row, appear on every organisation's list and take no actions.
+   */
   role: InvitableRole | 'superuser';
   is_active: boolean;
   joined_at: string;
@@ -49,6 +55,24 @@ export function assigneeLabel(
   return member.is_active ? memberDisplayName(member) : `${memberDisplayName(member)} (inactive)`;
 }
 
+// Calls an edge function and surfaces its { error } body as the thrown
+// message. On a non-2xx supabase-js only says "Edge Function returned a
+// non-2xx status code"; the function's body is on error.context.
+async function invokeFunction<T>(name: string, body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke(name, { body });
+  if (error) {
+    let reason = error.message;
+    try {
+      const parsed = await error.context?.json();
+      if (parsed?.error) reason = parsed.error;
+    } catch {
+      // Body was not JSON; keep the generic message.
+    }
+    throw new Error(reason);
+  }
+  return data as T;
+}
+
 export type InviteUserInput = {
   organizationId: string;
   email: string;
@@ -66,24 +90,7 @@ export type InviteUserResult = {
 };
 
 export async function inviteUser(input: InviteUserInput): Promise<InviteUserResult> {
-  const { data, error } = await supabase.functions.invoke('invite-user', {
-    body: input,
-  });
-
-  if (error) {
-    // On a non-2xx supabase-js only says "Edge Function returned a non-2xx
-    // status code"; the function's { error } body is on error.context.
-    let reason = error.message;
-    try {
-      const body = await error.context?.json();
-      if (body?.error) reason = body.error;
-    } catch {
-      // Body was not JSON; keep the generic message.
-    }
-    throw new Error(reason);
-  }
-
-  return data as InviteUserResult;
+  return invokeFunction<InviteUserResult>('invite-user', input);
 }
 
 export async function listOrganizationMembers(organizationId: string): Promise<OrganizationMember[]> {
@@ -108,4 +115,59 @@ export async function setMemberActive(organizationId: string, userId: string, ac
     active,
   });
   if (error) throw new Error(error.message);
+}
+
+// HT-65: drop the membership row. The account stays, and so does any other
+// organisation the person belongs to. The database refuses self-removal,
+// superusers and the organisation's last active admin.
+export async function removeOrganizationMember(organizationId: string, userId: string): Promise<void> {
+  const { error } = await supabase.rpc('remove_organization_member', {
+    org_id: organizationId,
+    target_user_id: userId,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export type DeleteUserResult = {
+  deleted: true;
+  userId: string;
+  email: string;
+};
+
+// HT-65: delete the auth account outright; profile and memberships cascade,
+// records the person created keep a blank author. The function refuses the
+// caller's own account, superusers, and (for an organisation admin) anyone
+// who also belongs to an organisation the caller does not administer.
+export async function deleteUserAccount(input: { userId: string; organizationId: string }): Promise<DeleteUserResult> {
+  return invokeFunction<DeleteUserResult>('delete-user', input);
+}
+
+export type UserImportUpdate = {
+  user_id: string;
+  role?: InvitableRole;
+  is_active?: boolean;
+  first_name?: string;
+  last_name?: string;
+};
+
+export type UserImportRemoval = {
+  user_id: string;
+  /** Memberships the person still holds elsewhere; 0 means the account can go. */
+  memberships_left: number;
+};
+
+// HT-46: apply the membership half of an Excel import in one transaction;
+// the database refuses the whole call when any row breaks a guard.
+export async function applyUserImport(
+  organizationId: string,
+  updates: UserImportUpdate[],
+  removals: string[],
+): Promise<UserImportRemoval[]> {
+  const { data, error } = await supabase.rpc('apply_user_import', {
+    org_id: organizationId,
+    updates,
+    removals,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as UserImportRemoval[];
 }

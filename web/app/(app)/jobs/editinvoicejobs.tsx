@@ -188,6 +188,7 @@ export default function EditInvoiceJobScreen() {
           total: updatedInvoice.total,
           notes: updatedInvoice.notes,
           status: updatedInvoice.status,
+          custom_fields: updatedInvoice.custom_fields ?? {},
         })
         .eq('uid', invoiceId);
 

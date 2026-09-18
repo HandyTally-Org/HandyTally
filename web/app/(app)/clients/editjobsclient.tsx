@@ -76,6 +76,7 @@ export default function EditJobClientScreen() {
         end_date: jobData.end_date,
         start_time: jobData.start_time,
         end_time: jobData.end_time,
+        custom_fields: jobData.custom_fields ?? {},
       };
       
       // Update job in database

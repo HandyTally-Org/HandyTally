@@ -1,6 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-
-export const supabase = createClient(
-  'https://supabase.axiappm.com',
-  'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc2NTc3MDAwMCwiZXhwIjo0OTIxNDQzNjAwLCJyb2xlIjoiYW5vbiJ9.gO1H0XzlOU2T9ayabs3A5k6RsNLqqCUv93IG8k3wflk'
-); 
+// One Supabase client for the whole app. Screens that import from lib/api
+// historically got their own bare client, which sent no tenant header
+// (HT-38 / HT-55) and ran a second auth session; keep this a re-export.
+export { supabase } from './supabase';

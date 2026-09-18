@@ -36,7 +36,7 @@ The product is delivered as an **Expo / React Native** codebase that targets the
 | **Inventory & Services** | Materials with stock levels and low-stock warnings; service catalog with rates |
 | **Labor** | Labor entries against jobs |
 | **Admin** | Company profile and logo, user management backed directly by `auth.users` |
-| **Multi-tenancy** | Organizations with per-org subdomains, memberships and roles (`user`, `admin`, `superuser`) |
+| **Multi-tenancy** | Organizations with per-org subdomains, memberships and roles (`user`, `admin`, `superuser`); the subdomain in the address bar selects the organization and gates sign-in to its members |
 | **Superuser console** | Separate `admin-app` for creating organizations and managing users across tenants |
 
 ## Architecture
@@ -167,7 +167,7 @@ Each function reads its secrets from the project's function secrets — see [Con
 | --- | --- | --- |
 | `EXPO_PUBLIC_SUPABASE_URL` | web, admin-app | Supabase API URL |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | web, admin-app | Supabase anon key |
-| `EXPO_PUBLIC_BASE_DOMAIN` | web, admin-app | Base domain used to build per-organization subdomains |
+| `EXPO_PUBLIC_BASE_DOMAIN` | web, admin-app | Root domain; the web app derives the tenant from `<subdomain>.<base>` in the address bar (HT-38) |
 
 ### Edge function secrets
 
@@ -198,6 +198,7 @@ Core tables (see `supabase/migrations/` for the authoritative definitions):
 | Table | Notes |
 | --- | --- |
 | `organizations`, `organization_memberships` | Tenant and membership with `user_role` (`user` / `admin` / `superuser`) |
+| `organization_settings` | Per-organisation Admin › Settings: sidebar order, label overrides, custom field definitions (`jsonb`), and colour theme (`text`, `light`/`dark`) |
 | `user_profiles`, `profiles`, `user_roles` | Per-user profile, role and active flag |
 | `company`, `company_attachments` | Company details and logo (stored inline as base64) |
 | `clients` | Contact details, tags |
@@ -219,7 +220,7 @@ Core tables (see `supabase/migrations/` for the authoritative definitions):
 
 - **Web** — every push to `master` runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml): `npm ci` → `npx expo export --platform web` → `wrangler deploy`, which publishes `dist/` as the `handytally-web` Cloudflare Worker described in [`web/wrangler.jsonc`](web/wrangler.jsonc). Pull requests run the build only.
 - **Database & functions** — `supabase db push` and `supabase functions deploy` against the linked project. Function secrets are managed with `supabase secrets set`.
-- **Tenant subdomains** — `create-organization` only inserts the row. A wildcard route on the Worker plus a proxied `*.handytally.com` DNS record serve every subdomain from the same bundle (HT-37); nothing is provisioned per tenant.
+- **Tenant subdomains** — `create-organization` only inserts the row. A wildcard route on the Worker plus a proxied `*.handytally.com` DNS record serve every subdomain from the same bundle (HT-37); nothing is provisioned per tenant. Onboarding a customer is [`Docs/deploy-customer.md`](Docs/deploy-customer.md).
 
 ## Development workflow
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Text, Button, Searchbar, Snackbar, Card, IconButton, DataTable, ActivityIndicator, Dialog, Portal } from 'react-native-paper';
 import { supabase } from '../../lib/supabase';
@@ -6,6 +6,7 @@ import { ServiceDialog, ServiceDraft } from '../../components/ServiceDialog';
 import { ImportExportButtons } from '../../components/ImportExportButtons';
 import { styles as globalStyles } from '../../styles';
 import { exportWorkbook, pickWorkbook, sheetRows, hasColumn, confirmAction } from '../../utils/excel';
+import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 
 export type Service = {
   uid: number;
@@ -14,6 +15,8 @@ export type Service = {
   rate: number;
   unit: string;
   category: string;
+  /** HT-52: values of the organisation's custom fields, keyed by field key. */
+  custom_fields?: Record<string, unknown>;
 };
 
 export default function ServicesScreen() {
@@ -30,9 +33,7 @@ export default function ServicesScreen() {
   const [sortDirection, setSortDirection] = useState<'ascending' | 'descending'>('ascending');
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    fetchServices();
-  }, []);
+  useRefreshOnFocus(fetchServices);
 
   async function fetchServices() {
     try {

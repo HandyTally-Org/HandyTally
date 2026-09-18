@@ -9,6 +9,10 @@ import { useRouter } from 'expo-router';
 import { exportWorkbook, pickWorkbook, sheetRows, confirmAction } from '../../utils/excel';
 import { ImportExportButtons } from '../../components/ImportExportButtons';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useLabels } from '../../hooks/useLabels';
+import { labelColor, labelText, labelTextColor } from '../../constants/labels';
+import { LabelPill, LabelPillRow } from '../../components/LabelPill';
+import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 
 type Client = {
   uid: string;
@@ -43,14 +47,12 @@ type Invoice = {
   due_date?: string;
 };
 
-// Tags a client can be assigned, matching the tag filter buttons.
-const CLIENT_TAGS: { value: string; label: string }[] = [
-  { value: 'existing', label: 'Existing' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'prospect', label: 'Prospect' },
-];
-
 export default function ClientsScreen() {
+  // HT-49: the tags a client can carry, with their filter-button colours.
+  const CLIENT_TAGS = useLabels('client_tag');
+  // Badge colours for the jobs and invoices listed in the client panel.
+  const jobStatuses = useLabels('job_status');
+  const invoiceStatuses = useLabels('invoice_status');
   const router = useRouter();
   console.log('Router object:', router);
   const [clients, setClients] = useState<Client[]>([]);
@@ -72,9 +74,7 @@ export default function ClientsScreen() {
   const [showClientDetails, setShowClientDetails] = useState(false);
   const [activeDetailTab, setActiveDetailTab] = useState('info');
 
-  useEffect(() => {
-    fetchClients();
-  }, []);
+  useRefreshOnFocus(fetchClients);
 
   useEffect(() => {
     if (clients.length > 0) {
@@ -386,27 +386,6 @@ export default function ClientsScreen() {
     }
   };
 
-  const getStatusColor = (status: string | null | undefined): string => {
-    if (!status) return '#999999'; // Default gray for null/undefined
-    
-    switch (status.toLowerCase()) {
-      case 'active':
-      case 'completed':
-      case 'paid':
-        return '#4CAF50'; // Green
-      case 'pending':
-      case 'in_progress':
-      case 'draft':
-        return '#FFC107'; // Yellow/Amber
-      case 'cancelled':
-      case 'overdue':
-        return '#F44336'; // Red
-      case 'estimate':
-        return '#2196F3'; // Blue
-      default:
-        return '#9E9E9E'; // Gray for unknown status
-    }
-  };
 
   const filterClients = () => {
     let filtered = [...clients];
@@ -647,54 +626,19 @@ export default function ClientsScreen() {
       </View>
       
       
-          <View style={{ 
-            flexDirection: 'row', 
-            marginBottom: 16, 
-            marginTop: 16,
-            justifyContent: 'flex-start',
-            gap: 8
-          }}>
-            <Button
-              mode={selectedTags.length === 0 ? 'contained' : 'outlined'}
-              onPress={() => setSelectedTags([])}
-              style={{ minWidth: 80, borderRadius: 4 }}
-            >
-              All
-            </Button>
-            <Button
-              mode={selectedTags.includes('existing') ? 'contained' : 'outlined'}
-              onPress={() => toggleTagFilter('existing')}
-              style={{ 
-                minWidth: 80, 
-                borderRadius: 4,
-                backgroundColor: selectedTags.includes('existing') ? '#2196F3' : undefined 
-              }}
-            >
-              Existing
-            </Button>
-            <Button
-              mode={selectedTags.includes('pending') ? 'contained' : 'outlined'}
-              onPress={() => toggleTagFilter('pending')}
-              style={{ 
-                minWidth: 80, 
-                borderRadius: 4,
-                backgroundColor: selectedTags.includes('pending') ? '#FFC107' : undefined 
-              }}
-            >
-              Pending
-            </Button>
-            <Button
-              mode={selectedTags.includes('prospect') ? 'contained' : 'outlined'}
-              onPress={() => toggleTagFilter('prospect')}
-              style={{ 
-                minWidth: 80, 
-                borderRadius: 4,
-                backgroundColor: selectedTags.includes('prospect') ? '#4CAF50' : undefined 
-              }}
-            >
-              Prospect
-            </Button>
-          </View>
+          <LabelPillRow style={{ marginTop: 16 }}>
+            <LabelPill label="All" selected={selectedTags.length === 0} onPress={() => setSelectedTags([])} />
+            {CLIENT_TAGS.map(tag => (
+              <LabelPill
+                key={tag.value}
+                label={tag.label}
+                color={tag.color}
+                textColor={tag.textColor}
+                selected={selectedTags.includes(tag.value)}
+                onPress={() => toggleTagFilter(tag.value)}
+              />
+            ))}
+          </LabelPillRow>
           
           <View style={{
             margin: 0,
@@ -875,11 +819,12 @@ export default function ClientsScreen() {
                       <Card.Content>
                         <View style={styles.relatedItemHeader}>
                           <Text style={styles.relatedItemTitle}>{job.title}</Text>
-                          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(job.status) }]}>
-                            <Text style={styles.statusText}>
-                              {job.status?.replace('_', ' ').toUpperCase()}
-                            </Text>
-                          </View>
+                          <LabelPill
+                            size="sm"
+                            label={labelText(jobStatuses, job.status)}
+                            color={labelColor(jobStatuses, job.status)}
+                            textColor={labelTextColor(jobStatuses, job.status)}
+                          />
                         </View>
                         <Text style={styles.relatedItemDate}>Created: {formatDate(job.created_at)}</Text>
                       </Card.Content>
@@ -898,11 +843,12 @@ export default function ClientsScreen() {
                       <Card.Content>
                         <View style={styles.relatedItemHeader}>
                           <Text style={styles.relatedItemTitle}>Invoice #{invoice.invoice_number}</Text>
-                          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(invoice.status) }]}>
-                            <Text style={styles.statusText}>
-                              {invoice.status?.toUpperCase()}
-                            </Text>
-                          </View>
+                          <LabelPill
+                            size="sm"
+                            label={labelText(invoiceStatuses, invoice.status)}
+                            color={labelColor(invoiceStatuses, invoice.status)}
+                            textColor={labelTextColor(invoiceStatuses, invoice.status)}
+                          />
                         </View>
                         <Text style={styles.relatedItemAmount}>
                           Amount: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(invoice.total || 0)}
@@ -1136,9 +1082,12 @@ export default function ClientsScreen() {
                         <DataTable.Row key={job.uid}>
                           <DataTable.Cell>{job.title}</DataTable.Cell>
                           <DataTable.Cell>
-                            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(job.status) }]}>
-                              <Text style={styles.statusText}>{job.status?.replace('_', ' ').toUpperCase()}</Text>
-                            </View>
+                            <LabelPill
+                              size="sm"
+                              label={labelText(jobStatuses, job.status)}
+                              color={labelColor(jobStatuses, job.status)}
+                              textColor={labelTextColor(jobStatuses, job.status)}
+                            />
                           </DataTable.Cell>
                           <DataTable.Cell>{formatDate(job.start_date)}</DataTable.Cell>
                           <DataTable.Cell>{formatDate(job.end_date)}</DataTable.Cell>
@@ -1199,9 +1148,12 @@ export default function ClientsScreen() {
                             {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(invoice.total || 0)}
                           </DataTable.Cell>
                           <DataTable.Cell>
-                            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(invoice.status) }]}>
-                              <Text style={styles.statusText}>{invoice.status?.toUpperCase()}</Text>
-                            </View>
+                            <LabelPill
+                              size="sm"
+                              label={labelText(invoiceStatuses, invoice.status)}
+                              color={labelColor(invoiceStatuses, invoice.status)}
+                              textColor={labelTextColor(invoiceStatuses, invoice.status)}
+                            />
                           </DataTable.Cell>
                           <DataTable.Cell>
                             <View style={{ flexDirection: 'row' }}>
@@ -1306,16 +1258,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 16,
     textAlign: 'center',
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-  statusText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: 'bold',
   },
   listContainer: {
     paddingBottom: 80,

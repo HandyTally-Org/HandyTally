@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { Text, Button, Card, Tabs, Tab, TextInput, ActivityIndicator, IconButton, DataTable, Portal, Dialog, Snackbar } from 'react-native-paper';
 import { useLocalSearchParams, useRouter, Link } from 'expo-router';
 import { supabase } from '../../../lib/api';
 import { styles as globalStyles } from '../../../styles';
 import { formatDate, formatCurrency } from '../../../utils/formatting';
+import { useRefreshOnFocus } from '../../../hooks/useRefreshOnFocus';
 
 type Client = {
   uid: string;
@@ -60,7 +61,7 @@ export default function ClientDetailScreen() {
   console.log('Client details page loaded with params:', params);
   console.log('Client ID:', id);
 
-  useEffect(() => {
+  useRefreshOnFocus(() => {
     if (id) {
       fetchClientDetails();
     }

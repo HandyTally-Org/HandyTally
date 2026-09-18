@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Text, Button, Searchbar, Snackbar, Card, DataTable, IconButton, ActivityIndicator, Dialog, Portal } from 'react-native-paper';
 import { supabase } from '../../lib/supabase';
@@ -6,6 +6,7 @@ import { MaterialDialog, MaterialDraft } from '../../components/MaterialDialog';
 import { ImportExportButtons } from '../../components/ImportExportButtons';
 import { styles as globalStyles } from '../../styles';
 import { exportWorkbook, pickWorkbook, sheetRows, hasColumn, confirmAction } from '../../utils/excel';
+import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 
 export type Material = {
   uid: string;
@@ -21,6 +22,8 @@ export type Material = {
   is_active: boolean;
   created_at?: string;
   updated_at?: string;
+  /** HT-52: values of the organisation's custom fields, keyed by field key. */
+  custom_fields?: Record<string, unknown>;
 };
 
 export default function MaterialsScreen() {
@@ -36,9 +39,7 @@ export default function MaterialsScreen() {
   const [sortColumn, setSortColumn] = useState<string>('name');
   const [sortDirection, setSortDirection] = useState<'ascending' | 'descending'>('ascending');
 
-  useEffect(() => {
-    fetchMaterials();
-  }, []);
+  useRefreshOnFocus(fetchMaterials);
 
   async function fetchMaterials() {
     try {

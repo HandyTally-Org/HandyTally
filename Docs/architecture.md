@@ -131,9 +131,10 @@ Postgres ORs permissive policies together, so generation 1 makes generation 2 in
 - `organization_memberships` links users to organizations with a role and `is_active`.
 - `clients`, `jobs`, `jobs_attachments`, `invoices`, `company`, … carry a nullable `organization_id` (added 2025-08-08, indexed).
 - `create-organization` creates the tenant: validates the subdomain (3–63 chars, `[a-z0-9-]`, not in a reserved list, unique) and inserts the row with `domain = <sub>.<BASE_DOMAIN>` and `status = active`. Hosting needs nothing per tenant: the Cloudflare Worker serves every `*.handytally.com` host from the one bundle (HT-37).
-- The web app reads `EXPO_PUBLIC_BASE_DOMAIN` to build subdomain URLs.
+- **The hostname picks the tenant (HT-38).** `web/lib/tenant.ts` reads the first-level subdomain of `EXPO_PUBLIC_BASE_DOMAIN` from `window.location`; `AuthContext` resolves it with `get_organization_by_subdomain()` (SECURITY DEFINER, callable by anon, active rows only) before sign-in, and a signed-in user must hold an active membership of that organisation or is signed out with a message. An unknown subdomain renders `TenantGate`'s "No company found at this address" page. The apex, `www`, `localhost` and the `workers.dev` URL carry no tenant and fall back to the user's best membership.
+- **New rows are stamped from the request.** `web/lib/supabase.ts` sends the subdomain as the `x-tenant-subdomain` header; `auto_set_organization_id()` reads it through PostgREST's `request.headers` setting and stamps that organisation after checking membership. Precedence: a value already on the row (if the caller may use it) > the request's tenant > best membership. No insert site needed changing.
 
-**Current state:** the schema and policies are org-aware; the web app is not. It never filters by `organization_id` or stamps it on insert, and, per the HT-14 analysis, every existing row has `organization_id = NULL`. Tenant isolation is therefore not yet enforced end-to-end. See [DI-02](dev-issues.md#di-02).
+**Current state (HT-55):** isolation is enforced in the database. Each organisation-scoped table has a single `tenant_scoped` policy (`for all to authenticated`) built on `tenant_row_visible(organization_id)`: on a customer host the row must belong to `current_organization_id()` (derived from the `x-tenant-subdomain` header) and the caller must be a member or superuser; on the apex the caller's active memberships apply and superusers see everything. Nothing is granted to `anon`. The screens do not filter by organisation themselves; they do not need to.
 
 ## 5. Data model
 
@@ -144,6 +145,7 @@ Authoritative source: `supabase/migrations/`. The 2025 files are dumps of the ho
 | Table | Key columns |
 | --- | --- |
 | `organizations` | `id`, `name`, `subdomain` (unique), timestamps |
+| `organization_settings` | One row per organisation (HT-50): `nav` (sidebar order + hidden keys), `labels` (renamed / recoloured / added status and tag values, HT-51), `custom_fields` (definitions, HT-52/53), all `jsonb`. Read by any active member, written by admins; loaded in `AuthContext` next to the organisation and re-read when it changes |
 | `organization_memberships` | `user_id`, `organization_id`, `role user_role`, `is_active` |
 | `user_profiles` | `id` (= `auth.users.id`), `role user_role`, `is_active` |
 | `profiles` | Legacy per-user profile |
@@ -265,7 +267,7 @@ browser ─ https://<sub>.handytally.com ─► Cloudflare wildcard route ─►
 | Auto-injected into functions | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` |
 | Local | `web/.env`, `admin-app/.env`, `supabase/functions/.env` (templates committed as `.env.example`) |
 
-`web/lib/supabase.ts` currently hard-codes the URL and anon key instead of reading the `EXPO_PUBLIC_*` variables — [DI-05](dev-issues.md#di-05).
+`web/lib/supabase.ts` reads `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` / `EXPO_PUBLIC_BASE_DOMAIN`, falling back to the production values (public by construction) when unset — DI-05 closed by HT-38.
 
 ## 10. Testing and quality gates
 
