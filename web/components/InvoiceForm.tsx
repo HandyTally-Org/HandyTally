@@ -171,6 +171,8 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
   const [materials, setMaterials] = useState<Material[]>([]);
   const { organization } = useAuth();
   const [companyInfo, setCompanyInfo] = useState<CompanyProfile | null>(null);
+  // The invoice's own organisation when editing, the session's for a new one.
+  const companyOrganizationId = (initialInvoice as any)?.organization_id ?? organization?.id;
   // HT-78: Company > Documents rows marked "On invoices"; label + details
   // only (never file_data), previewed here the same way the sent document renders them.
   const [companyDocuments, setCompanyDocuments] = useState<{ label: string; value: string; fileName: string | null }[]>([]);
@@ -198,7 +200,7 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
 
   useEffect(() => {
     fetchCompanyInfo();
-  }, [organization?.id]);
+  }, [companyOrganizationId]);
 
   useEffect(() => {
     // Calculate totals whenever items, the fee, or the tax rate change.
@@ -286,7 +288,7 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
 
   const fetchCompanyInfo = async () => {
     try {
-      setCompanyInfo(await fetchCompanyProfile(organization?.id));
+      setCompanyInfo(await fetchCompanyProfile(companyOrganizationId));
     } catch (error) {
       console.error('Error fetching company info:', error);
     }

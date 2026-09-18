@@ -89,11 +89,15 @@ export function InvoiceDetails({
     invoice_items: invoice?.invoice_items || []
   };
   
+  // The invoice's own organisation, not the session's: a superuser on the
+  // apex or localhost reads every organisation's invoices while the session
+  // resolves to whichever membership ranks first.
+  const companyOrganizationId = (safeInvoice as any).organization_id ?? organization?.id;
   useEffect(() => {
-    fetchCompanyProfile(organization?.id)
+    fetchCompanyProfile(companyOrganizationId)
       .then(setCompanyInfo)
       .catch(error => console.error('Error fetching company info:', error));
-  }, [organization?.id]);
+  }, [companyOrganizationId]);
 
   const logoUri = companyLogo || companyInfo?.logo_url || null;
   // What Print, PDF and both emails put in the header.
