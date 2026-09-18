@@ -198,7 +198,7 @@ Core tables (see `supabase/migrations/` for the authoritative definitions):
 | Table | Notes |
 | --- | --- |
 | `organizations`, `organization_memberships` | Tenant and membership with `user_role` (`user` / `admin` / `superuser`) |
-| `organization_settings` | Per-organisation Admin › Settings: sidebar order, label overrides, custom field definitions (`jsonb`) |
+| `organization_settings` | Per-organisation Admin › Settings: sidebar order, label overrides, custom field definitions (`jsonb`), and colour theme (`text`, `light`/`dark`) |
 | `user_profiles`, `profiles`, `user_roles` | Per-user profile, role and active flag |
 | `company`, `company_attachments` | Company details and logo (stored inline as base64) |
 | `clients` | Contact details, tags |

@@ -1,3 +1,4 @@
+import type { ThemeScheme } from './Colors';
 import type { OrganizationLabels } from './labels';
 import { parseCustomFieldDefs, type OrganizationCustomFields } from './customFields';
 import type { NavItem } from './navigation';
@@ -20,6 +21,8 @@ export type OrganizationSettings = {
   labels: OrganizationLabels;
   /** organization_settings.custom_fields: field definitions per section (HT-52). */
   customFields: OrganizationCustomFields;
+  /** organization_settings.theme: the colour theme every member gets (HT-68). */
+  theme: ThemeScheme;
 };
 
 export const DEFAULT_NAV_SETTINGS: NavSettings = { order: [], hidden: [] };
@@ -28,6 +31,7 @@ export const DEFAULT_ORGANIZATION_SETTINGS: OrganizationSettings = {
   nav: DEFAULT_NAV_SETTINGS,
   labels: {},
   customFields: {},
+  theme: 'light',
 };
 
 /** A row as PostgREST returns it; every column may be missing or malformed. */
@@ -36,6 +40,7 @@ export type OrganizationSettingsRow = {
   nav?: unknown;
   labels?: unknown;
   custom_fields?: unknown;
+  theme?: unknown;
 };
 
 const stringList = (value: unknown): string[] =>
@@ -43,6 +48,9 @@ const stringList = (value: unknown): string[] =>
 
 const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+
+/** 'dark' when the column says so; anything else, including a row from before HT-68, is light. */
+export const parseThemeScheme = (value: unknown): ThemeScheme => (value === 'dark' ? 'dark' : 'light');
 
 /** Turn a row into settings, tolerating anything the columns might hold. */
 export function parseOrganizationSettings(row: OrganizationSettingsRow | null | undefined): OrganizationSettings {
@@ -52,6 +60,7 @@ export function parseOrganizationSettings(row: OrganizationSettingsRow | null | 
     nav: { order: stringList(nav.order), hidden: stringList(nav.hidden) },
     labels: record(row.labels) as OrganizationLabels,
     customFields: parseCustomFieldDefs(row.custom_fields),
+    theme: parseThemeScheme(row.theme),
   };
 }
 

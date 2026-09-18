@@ -72,8 +72,8 @@ type AuthContextType = {
   organizationLabels: OrganizationLabels | null;
   /**
    * The organisation's Settings row (HT-50): sidebar order, label overrides,
-   * custom field definitions. Defaults until the row is read, and for an
-   * organisation that has never saved one.
+   * custom field definitions and, since HT-68, the colour theme. Defaults
+   * until the row is read, and for an organisation that has never saved one.
    */
   settings: OrganizationSettings;
   /** False until the settings row for the current organisation has been read. */
@@ -221,7 +221,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const { data, error } = await supabase
       .from('organization_settings')
-      .select('organization_id, nav, labels, custom_fields')
+      .select('organization_id, nav, labels, custom_fields, theme')
       .eq('organization_id', organizationId)
       .maybeSingle();
     if (error) {

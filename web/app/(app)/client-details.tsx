@@ -13,6 +13,7 @@ import { CustomFieldInputs } from '../../components/CustomFields';
 import { normalizeCustomValues, validateCustomValues } from '../../constants/customFields';
 import { FormField, FormRow } from '../../components/FormDialog';
 import { FormActions, FormPanel, FormSection, outlinedInputProps } from '../../components/FormLayout';
+import { themed } from '../../constants/Colors';
 
 export default function ClientDetailsScreen() {
   const router = useRouter();
@@ -252,14 +253,14 @@ export default function ClientDetailsScreen() {
               padding: 16,
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: activeSection === 'info' ? '#ccc' : 'transparent'
+              backgroundColor: activeSection === 'info' ? themed.active : 'transparent'
             }}
             onPress={() => setActiveSection('info')}
           >
             <View style={{ width: 24, marginRight: 12 }}>
-              <MaterialIcons name="dashboard" size={20} color={activeSection === 'info' ? '#000' : '#666666'} />
+              <MaterialIcons name="dashboard" size={20} color={themed.navDashboard} />
             </View>
-            <Text style={{ color: activeSection === 'info' ? '#000' : '#666666' }}>Info</Text>
+            <Text style={{ color: activeSection === 'info' ? themed.text : themed.muted }}>Info</Text>
           </TouchableOpacity>
           
           {/* Invoices section */}
@@ -268,14 +269,14 @@ export default function ClientDetailsScreen() {
               padding: 16,
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: activeSection === 'invoices' ? '#ccc' : 'transparent'
+              backgroundColor: activeSection === 'invoices' ? themed.active : 'transparent'
             }}
             onPress={() => setActiveSection('invoices')}
           >
             <View style={{ width: 24, marginRight: 12 }}>
-              <MaterialIcons name="description" size={20} color={activeSection === 'invoices' ? '#000' : '#666666'} />
+              <MaterialIcons name="description" size={20} color={themed.navInvoices} />
             </View>
-            <Text style={{ color: activeSection === 'invoices' ? '#000' : '#666666' }}>Invoices</Text>
+            <Text style={{ color: activeSection === 'invoices' ? themed.text : themed.muted }}>Invoices</Text>
           </TouchableOpacity>
           
           {/* Jobs section */}
@@ -284,14 +285,14 @@ export default function ClientDetailsScreen() {
               padding: 16,
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: activeSection === 'jobs' ? '#ccc' : 'transparent'
+              backgroundColor: activeSection === 'jobs' ? themed.active : 'transparent'
             }}
             onPress={() => setActiveSection('jobs')}
           >
             <View style={{ width: 24, marginRight: 12 }}>
-              <MaterialIcons name="work" size={20} color={activeSection === 'jobs' ? '#000' : '#666666'} />
+              <MaterialIcons name="work" size={20} color={themed.navJobs} />
             </View>
-            <Text style={{ color: activeSection === 'jobs' ? '#000' : '#666666' }}>Jobs</Text>
+            <Text style={{ color: activeSection === 'jobs' ? themed.text : themed.muted }}>Jobs</Text>
           </TouchableOpacity>
           
           {/* Documentation header */}
@@ -305,14 +306,14 @@ export default function ClientDetailsScreen() {
               padding: 16,
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: activeSection === 'notes' ? '#ccc' : 'transparent'
+              backgroundColor: activeSection === 'notes' ? themed.active : 'transparent'
             }}
             onPress={() => setActiveSection('notes')}
           >
             <View style={{ width: 24, marginRight: 12 }}>
-              <MaterialIcons name="sticky-note-2" size={20} color={activeSection === 'notes' ? '#000' : '#666666'} />
+              <MaterialIcons name="sticky-note-2" size={20} color={themed.railNotes} />
             </View>
-            <Text style={{ color: activeSection === 'notes' ? '#000' : '#666666' }}>Notes</Text>
+            <Text style={{ color: activeSection === 'notes' ? themed.text : themed.muted }}>Notes</Text>
           </TouchableOpacity>
           
           {/* Logs section */}
@@ -321,14 +322,14 @@ export default function ClientDetailsScreen() {
               padding: 16,
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: activeSection === 'logs' ? '#ccc' : 'transparent'
+              backgroundColor: activeSection === 'logs' ? themed.active : 'transparent'
             }}
             onPress={() => setActiveSection('logs')}
           >
             <View style={{ width: 24, marginRight: 12 }}>
-              <MaterialIcons name="list-alt" size={20} color={activeSection === 'logs' ? '#000' : '#666666'} />
+              <MaterialIcons name="list-alt" size={20} color={themed.railLogs} />
             </View>
-            <Text style={{ color: activeSection === 'logs' ? '#000' : '#666666' }}>Logs</Text>
+            <Text style={{ color: activeSection === 'logs' ? themed.text : themed.muted }}>Logs</Text>
           </TouchableOpacity>
           
           {/* Spacer to push the back button to the bottom */}
@@ -347,9 +348,9 @@ export default function ClientDetailsScreen() {
             onPress={() => router.push('/clients')}
           >
             <View style={{ width: 24, marginRight: 12 }}>
-              <MaterialIcons name="arrow-back" size={20} color="#666666" />
+              <MaterialIcons name="arrow-back" size={20} color={themed.muted} />
             </View>
-            <Text style={{ color: '#666666' }}>Back to Clients</Text>
+            <Text style={{ color: themed.muted }}>Back to Clients</Text>
           </TouchableOpacity>
         </View>
         

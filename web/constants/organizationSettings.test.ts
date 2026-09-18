@@ -5,6 +5,7 @@ const item = (key: string, pinned = false): NavItem => ({
   key,
   label: key,
   icon: 'grid-outline',
+  color: 'navDashboard',
   route: `/${key}`,
   screen: key,
   pinned: pinned || undefined,
@@ -64,11 +65,20 @@ describe('parseOrganizationSettings', () => {
     expect(parsed.nav).toEqual({ order: ['jobs'], hidden: [] });
     expect(parsed.labels).toEqual({});
     expect(parsed.customFields).toEqual({});
+    expect(parsed.theme).toBe('light');
     expect(
       parseOrganizationSettings({
         organization_id: 'x',
         custom_fields: { clients: [{ key: 'po', label: 'PO', type: 'text', required: false }] },
       }).customFields.clients,
     ).toEqual([{ key: 'po', label: 'PO', type: 'text', required: false, options: undefined }]);
+  });
+
+  it('reads the theme column, and is light for anything but dark (HT-68)', () => {
+    expect(parseOrganizationSettings(null).theme).toBe('light');
+    expect(parseOrganizationSettings({ organization_id: 'x' }).theme).toBe('light');
+    expect(parseOrganizationSettings({ organization_id: 'x', theme: 'dark' }).theme).toBe('dark');
+    expect(parseOrganizationSettings({ organization_id: 'x', theme: 'blue' }).theme).toBe('light');
+    expect(parseOrganizationSettings({ organization_id: 'x', theme: 1 }).theme).toBe('light');
   });
 });
