@@ -8,6 +8,7 @@ import { styles as globalStyles } from '../../styles';
 import { exportWorkbook, pickWorkbook, sheetRows, hasColumn, confirmAction } from '../../utils/excel';
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 import { themed } from '../../constants/Colors';
+import { useFeedback } from '../../contexts/FeedbackContext';
 
 export type Material = {
   uid: string;
@@ -28,6 +29,7 @@ export type Material = {
 };
 
 export default function MaterialsScreen() {
+  const { notify } = useFeedback();
   const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -230,10 +232,10 @@ export default function MaterialsScreen() {
         { name: 'Materials', rows: exportData, columnWidths: [36, 15, 25, 30, 10, 10, 10, 15, 15, 15, 10] },
       ]);
 
-      alert('Materials exported successfully. This file can be used for import.\n\nTo delete a material, change the "delete" column value to "y".');
+      notify('Materials exported. Set the "delete" column to "y" in the file to delete a material on import.', 'success');
     } catch (error) {
       console.error('Error exporting materials:', error);
-      alert('Failed to export materials. Please try again.');
+      notify('Failed to export materials. Please try again.', 'error');
     }
   };
 
@@ -244,17 +246,17 @@ export default function MaterialsScreen() {
 
       const rows = sheetRows(workbook);
       if (!rows || rows.length === 0) {
-        alert('No data found in the spreadsheet.');
+        notify('No data found in the spreadsheet.', 'info');
         return;
       }
       if (!hasColumn(rows, 'name')) {
-        alert('The spreadsheet must have a "name" column.');
+        notify('The spreadsheet must have a "name" column.', 'error');
         return;
       }
       await importMaterials(rows);
     } catch (error: any) {
       console.error('Error importing materials:', error);
-      alert(`Failed to import materials: ${error.message}`);
+      notify(`Failed to import materials: ${error.message}`, 'error');
     }
   };
 
@@ -432,13 +434,13 @@ export default function MaterialsScreen() {
         resultMessages.push(`${deleteErrorCount} materials failed to delete`);
       }
       
-      alert(resultMessages.join('\n'));
-      
+      notify(resultMessages.join(' · '), 'info');
+
       // Refresh the materials list
       fetchMaterials();
     } catch (error) {
       console.error('Error importing materials:', error);
-      alert(`Failed to import materials: ${error.message}`);
+      notify(`Failed to import materials: ${error.message}`, 'error');
     }
   };
 

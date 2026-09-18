@@ -8,6 +8,7 @@ import { styles as globalStyles } from '../../styles';
 import { exportWorkbook, pickWorkbook, sheetRows, hasColumn, confirmAction } from '../../utils/excel';
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 import { themed } from '../../constants/Colors';
+import { useFeedback } from '../../contexts/FeedbackContext';
 
 export type Service = {
   uid: number;
@@ -21,6 +22,7 @@ export type Service = {
 };
 
 export default function ServicesScreen() {
+  const { notify } = useFeedback();
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -223,10 +225,10 @@ export default function ServicesScreen() {
         { name: 'Services', rows: exportData, columnWidths: [36, 25, 30, 10, 10, 15, 10, 10] },
       ]);
 
-      alert('Services exported successfully. This file can be used for import.\n\nTo delete a service, change the "delete" column value to "y".');
+      notify('Services exported. Set the "delete" column to "y" in the file to delete a service on import.', 'success');
     } catch (error) {
       console.error('Error exporting services:', error);
-      alert('Failed to export services. Please try again.');
+      notify('Failed to export services. Please try again.', 'error');
     }
   };
 
@@ -237,17 +239,17 @@ export default function ServicesScreen() {
 
       const rows = sheetRows(workbook);
       if (!rows || rows.length === 0) {
-        alert('No data found in the spreadsheet.');
+        notify('No data found in the spreadsheet.', 'info');
         return;
       }
       if (!hasColumn(rows, 'name')) {
-        alert('The spreadsheet must have a "name" column.');
+        notify('The spreadsheet must have a "name" column.', 'error');
         return;
       }
       await importServices(rows);
     } catch (error: any) {
       console.error('Error importing services:', error);
-      alert(`Failed to import services: ${error.message}`);
+      notify(`Failed to import services: ${error.message}`, 'error');
     }
   };
 
@@ -534,12 +536,12 @@ export default function ServicesScreen() {
         resultMessages.push(`${deleteErrorCount} services failed to delete`);
       }
       
-      alert(resultMessages.join('\n'));
-      
+      notify(resultMessages.join(' · '), 'info');
+
       fetchServices();
     } catch (error) {
       console.error('Error importing services:', error);
-      alert(`Failed to import services: ${error.message}`);
+      notify(`Failed to import services: ${error.message}`, 'error');
     }
   };
 
