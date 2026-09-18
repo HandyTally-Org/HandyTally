@@ -76,8 +76,10 @@ serve(async (req) => {
             }, 400);
         }
 
-        // Check for reserved subdomains
-        const reservedSubdomains = ['www', 'api', 'admin', 'app', 'mail', 'ftp', 'localhost', 'staging', 'test'];
+        // Check for reserved subdomains. `prod` and `demo` are the release
+        // tiers (HT-41): they exist as organisations already and must never be
+        // handed to a customer.
+        const reservedSubdomains = ['www', 'api', 'admin', 'app', 'mail', 'ftp', 'localhost', 'staging', 'test', 'prod', 'demo'];
         if (reservedSubdomains.includes(subdomain)) {
             return json({ error: 'Subdomain is reserved and cannot be used' }, 400);
         }
