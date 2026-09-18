@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, ScrollView, StyleSheet } from 'react-native';
 import { Text, Button, Searchbar, Snackbar, Card, DataTable, IconButton, ActivityIndicator, Dialog, Portal } from 'react-native-paper';
 import { supabase } from '../../lib/supabase';
 import { MaterialDialog, MaterialDraft } from '../../components/MaterialDialog';
@@ -450,11 +450,12 @@ export default function MaterialsScreen() {
       <View style={{
         backgroundColor: themed.panel,
         width: '100%',
-        height: '100%',
+        flex: 1,
       }}>
         <View style={{
           padding: 16,
           backgroundColor: themed.panel,
+          flex: 1,
         }}>
           <Text style={{
             fontFamily: 'System',
@@ -497,12 +498,15 @@ export default function MaterialsScreen() {
             </View>
           </View>
           
-          <View style={{
-            flex: 1,
-            margin: 16,
-            marginTop: 0,
-            backgroundColor: themed.panel,
-          }}>
+          <ScrollView
+            style={{
+              flex: 1,
+              margin: 16,
+              marginTop: 0,
+              backgroundColor: themed.panel,
+            }}
+            contentContainerStyle={{ paddingBottom: 24 }}
+          >
             <Card style={{
               backgroundColor: themed.panel,
               borderRadius: 8,
@@ -629,9 +633,9 @@ export default function MaterialsScreen() {
                 </DataTable>
               </Card.Content>
             </Card>
-          </View>
+          </ScrollView>
         </View>
-        
+
         <MaterialDialog
           visible={showAddForm}
           title="Add material"

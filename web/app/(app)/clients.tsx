@@ -618,16 +618,20 @@ export default function ClientsScreen() {
             ))}
           </LabelPillRow>
           
-          <View style={{
-            margin: 0,
-            padding: 0,
-            borderWidth: 0,
-            borderColor: 'transparent',
-            backgroundColor: 'transparent',
-            shadowOpacity: 0,
-            elevation: 0
-          }}>
-            <DataTable style={{ 
+          <ScrollView
+            style={{
+              flex: 1,
+              margin: 0,
+              padding: 0,
+              borderWidth: 0,
+              borderColor: 'transparent',
+              backgroundColor: 'transparent',
+              shadowOpacity: 0,
+              elevation: 0
+            }}
+            contentContainerStyle={{ paddingBottom: 24 }}
+          >
+            <DataTable style={{
               backgroundColor: themed.panel, 
               borderWidth: 0,
               borderColor: 'transparent',
@@ -740,8 +744,8 @@ export default function ClientsScreen() {
             ))
           )}
         </DataTable>
-          </View>
-      
+          </ScrollView>
+
       <ClientDialog
         visible={showAddForm}
         title={editingClient ? 'Edit client' : 'Add client'}
