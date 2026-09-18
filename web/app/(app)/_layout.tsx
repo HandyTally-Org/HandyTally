@@ -208,6 +208,10 @@ export default function AppLayout() {
       screenOptions={{
         headerShown: false,
         drawerType: 'permanent',
+        // HT-68: the scene behind every screen follows the theme (React
+        // Navigation would otherwise paint its light default under any
+        // screen that does not cover the full height).
+        sceneStyle: { backgroundColor: themed.bg },
         drawerStyle: {
           width: 'auto', // This will be controlled by our custom component
           backgroundColor: themed.panel,

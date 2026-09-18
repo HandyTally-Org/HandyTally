@@ -1,5 +1,6 @@
 import React from 'react';
 import { Text, StyleSheet } from 'react-native';
+import { themed } from '../constants/Colors';
 
 type PageHeaderProps = {
   title: string;
@@ -18,6 +19,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 26,
     marginBottom: 16,
-    color: '#333333',
+    color: themed.text,
   },
 }); 

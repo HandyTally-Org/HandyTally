@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { themed } from '../constants/Colors';
 
 // HT-62: the one way a job status, invoice status or client tag is drawn as a
 // pill, whether it is a filter on the Jobs / Invoices / Clients pages, a
@@ -19,12 +20,14 @@ export function pillTextOn(bg: string, preferred: string): string {
   return lum > 0.62 ? preferred : '#ffffff';
 }
 
-const NEUTRAL_FILL = '#111827';
-const NEUTRAL_TEXT = '#ffffff';
-const OUTLINE_BG = '#ffffff';
-const OUTLINE_BORDER = '#d1d5db';
-const OUTLINE_BORDER_HOVER = '#9ca3af';
-const OUTLINE_TEXT = '#111827';
+// HT-68: the neutral "All" pill and the outlined (unselected) state follow
+// the theme; a label's own fill/text colours are data and stay as they are.
+const NEUTRAL_FILL = themed.primary;
+const NEUTRAL_TEXT = themed.onPrimary;
+const OUTLINE_BG = themed.panel;
+const OUTLINE_BORDER = themed.line;
+const OUTLINE_BORDER_HOVER = themed.faint;
+const OUTLINE_TEXT = themed.text;
 
 export type LabelPillProps = {
   label: string;

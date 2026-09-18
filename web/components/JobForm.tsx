@@ -21,8 +21,9 @@ import { memberDisplayName, assigneeLabel } from '../utils/inviteUser';
 import { useCustomFields } from '../hooks/useCustomFields';
 import { CustomFieldInputs } from './CustomFields';
 import { FormField, FormRow } from './FormDialog';
-import { FormActions, FormPanel, FormSection, formLayoutTheme, outlinedInputProps } from './FormLayout';
+import { FormActions, FormPanel, FormSection, formLayoutTheme, useOutlinedInputProps } from './FormLayout';
 import { normalizeCustomValues, validateCustomValues, type CustomFieldValues } from '../constants/customFields';
+import { themed } from '../constants/Colors';
 
 type Job = {
   uid: number;  // Changed from string to number to match bigint8 in database
@@ -62,6 +63,7 @@ export const JobForm = forwardRef<JobFormHandle, JobFormProps>(function JobForm(
   { job, defaults, onSubmit, onCancel, submitting = false, onChange, embedded = false },
   ref
 ) {
+  const outlinedInputProps = useOutlinedInputProps();
   const [formData, setFormData] = useState<Omit<Job, 'uid'>>({
     client_id: job?.client_id || 0,  // Always ensure client_id exists
     title: job?.title || '',
@@ -473,7 +475,7 @@ export const JobForm = forwardRef<JobFormHandle, JobFormProps>(function JobForm(
   const Wrapper: any = embedded ? View : ScrollView;
   const wrapperProps = embedded
     ? {}
-    : { style: { flex: 1, backgroundColor: '#ffffff', height: '100%' }, contentContainerStyle: { paddingBottom: 80 } };
+    : { style: { flex: 1, backgroundColor: themed.panel, height: '100%' }, contentContainerStyle: { paddingBottom: 80 } };
   const Body: any = embedded ? View : FormPanel;
 
   const activeAssignees = members.filter(m => m.is_active);
@@ -769,7 +771,7 @@ const fieldStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: formLayoutTheme.inputBorder,
     borderRadius: 8,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   fieldDisabled: {
     opacity: 0.6,
@@ -792,7 +794,7 @@ const fieldStyles = StyleSheet.create({
   },
   menu: {
     position: 'absolute',
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
     borderWidth: 1,
     borderColor: formLayoutTheme.inputBorder,
     borderRadius: 8,
@@ -807,17 +809,17 @@ const fieldStyles = StyleSheet.create({
   menuItem: {
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-    backgroundColor: '#ffffff',
+    borderBottomColor: themed.line,
+    backgroundColor: themed.panel,
   },
   menuItemLast: {
     borderBottomWidth: 0,
   },
   menuItemSelected: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: themed.soft,
   },
   menuItemHover: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: themed.soft,
   },
   menuItemText: {
     fontSize: 15,

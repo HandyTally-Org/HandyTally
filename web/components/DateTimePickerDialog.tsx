@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { Portal, Dialog, Button, Text, TextInput, IconButton, HelperText } from 'react-native-paper';
 import { calendarTheme } from './calendar/theme';
+import { useAppTheme } from '../contexts/ThemeContext';
 
 // A popup for picking a date and a time. The calendar is a plain month grid
 // and the time is typed into a text field ("5:00", "17:30", "5pm" all work)
@@ -103,6 +104,8 @@ function buildGrid(year: number, month: number): DayCell[] {
 }
 
 export function DateTimePickerDialog({ visible, title, value, fallback, onDismiss, onConfirm }: DateTimePickerDialogProps) {
+  // Paper parses these props, so they need hex for the active theme.
+  const { colors: themeColors } = useAppTheme();
   const [viewYear, setViewYear] = useState(() => new Date().getFullYear());
   const [viewMonth, setViewMonth] = useState(() => new Date().getMonth());
   const [selected, setSelected] = useState<DayCell>(() => {
@@ -260,7 +263,7 @@ export function DateTimePickerDialog({ visible, title, value, fallback, onDismis
               returnKeyType="done"
               error={showError}
               style={pickerStyles.timeInput}
-              outlineColor={calendarTheme.borderStrong}
+              outlineColor={themeColors.line}
               activeOutlineColor={calendarTheme.accent}
               left={<TextInput.Icon icon="clock-outline" color={calendarTheme.mutedText} />}
             />
@@ -291,7 +294,7 @@ export function DateTimePickerDialog({ visible, title, value, fallback, onDismis
         </View>
 
         <Dialog.Actions style={pickerStyles.actions}>
-          <Button onPress={onDismiss} textColor={calendarTheme.mutedText}>Cancel</Button>
+          <Button onPress={onDismiss} textColor={themeColors.muted}>Cancel</Button>
           <Button mode="contained" onPress={confirm} disabled={!result} style={pickerStyles.doneButton}>
             Done
           </Button>

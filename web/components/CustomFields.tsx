@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { Button, Menu, Switch, Text, TextInput } from 'react-native-paper';
 import { FormField, formTheme, inputStyle } from './FormDialog';
 import { formatCustomValue, hasCustomValue, type CustomFieldDef, type CustomFieldValues } from '../constants/customFields';
+import { themed } from '../constants/Colors';
 
 // HT-52: the custom-fields block every form and detail page shares. Inputs
 // render one control per definition in the organisation's order; the block
@@ -187,5 +188,5 @@ const styles = StyleSheet.create({
   viewRow: { flexDirection: 'row', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: formTheme.border },
   viewLabel: { width: 160, color: formTheme.mutedText },
   viewValue: { flex: 1, color: formTheme.text },
-  viewEmpty: { color: '#9CA3AF' },
+  viewEmpty: { color: themed.faint },
 });

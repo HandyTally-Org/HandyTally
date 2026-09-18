@@ -1066,9 +1066,9 @@ export default function JobDetailsScreen() {
         top: 40,
         left: 0,
         width: 200,
-        backgroundColor: '#ffffff',
+        backgroundColor: themed.panel,
         borderWidth: 1,
-        borderColor: '#e0e0e0',
+        borderColor: themed.line,
         borderRadius: 4,
         zIndex: 9999,
         elevation: 9,
@@ -1084,7 +1084,7 @@ export default function JobDetailsScreen() {
               padding: 16,
               backgroundColor: hovered ? '#f5f5f5' : '#ffffff',
               borderBottomWidth: 1,
-              borderBottomColor: '#f0f0f0',
+              borderBottomColor: themed.line,
             })}
             onPress={() => {
               handleStatusChange(status.value);
@@ -1120,7 +1120,7 @@ export default function JobDetailsScreen() {
         top: '40px',
         left: 0,
         width: '200px',
-        backgroundColor: '#ffffff',
+        backgroundColor: themed.panel,
         border: '1px solid #e0e0e0',
         borderRadius: '4px',
         zIndex: 9999,
@@ -1136,13 +1136,13 @@ export default function JobDetailsScreen() {
             }}
             style={{
               width: '100%',
-              backgroundColor: '#ffffff',
+              backgroundColor: themed.panel,
               borderBottom: '1px solid #f0f0f0',
               padding: '12px',
               cursor: 'pointer'
             }}
-            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
-            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = themed.soft}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = themed.panel}
           >
             <div style={{ 
               display: 'flex', 
@@ -1543,7 +1543,7 @@ export default function JobDetailsScreen() {
       </DataTable.Row>
     ))}
     
-    <DataTable.Row style={{ backgroundColor: '#f5f5f5' }}>
+    <DataTable.Row style={{ backgroundColor: themed.soft }}>
       <DataTable.Cell style={{ fontWeight: 'bold' }}>Total</DataTable.Cell>
       <DataTable.Cell></DataTable.Cell>
       <DataTable.Cell style={{ fontWeight: 'bold' }}>
@@ -1626,7 +1626,7 @@ export default function JobDetailsScreen() {
             onPress={handleSendInvite}
             loading={sendingInvite}
             disabled={sendingInvite}
-            style={styles.editButton}
+            style={styles.secondaryButton}
           >
             Send calendar invite
           </Button>
@@ -1828,7 +1828,7 @@ export default function JobDetailsScreen() {
             <Card 
               style={{ 
                 marginBottom: 0, // Reduce bottom margin to avoid visual separation
-                backgroundColor: '#ffffff',
+                backgroundColor: themed.panel,
                 elevation: 0,
                 shadowOpacity: 0,
                 borderWidth: 0,
@@ -1846,7 +1846,7 @@ export default function JobDetailsScreen() {
                   <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>Services</Text>
                   
                   {selectedServices.map((item, index) => (
-                    <View key={`service-${index}`} style={{ marginBottom: 12, borderWidth: 1, borderColor: '#eee', padding: 12, borderRadius: 4 }}>
+                    <View key={`service-${index}`} style={{ marginBottom: 12, borderWidth: 1, borderColor: themed.line, padding: 12, borderRadius: 4 }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                         <Text style={{ fontWeight: 'bold' }}>{item.service.name}</Text>
                         <IconButton icon="close" size={20} onPress={() => removeServiceItem(index)} />
@@ -1871,14 +1871,14 @@ export default function JobDetailsScreen() {
                           label="Total ($)"
                           value={(parseFloat(item.rate || '0') * parseFloat(item.quantity || '0')).toFixed(2)}
                           disabled
-                          style={{ flex: 1, backgroundColor: '#f5f5f5' }}
+                          style={{ flex: 1, backgroundColor: themed.soft }}
                         />
                       </View>
                     </View>
                   ))}
                   
                   {selectedServices.length > 0 && (
-                    <View style={{ marginTop: 8, marginBottom: 16, padding: 12, backgroundColor: '#f9f9f9', borderRadius: 4 }}>
+                    <View style={{ marginTop: 8, marginBottom: 16, padding: 12, backgroundColor: themed.soft, borderRadius: 4 }}>
                       <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'right' }}>
                         Total Labor Cost: ${calculateTotals().serviceTotal.toFixed(2)}
                       </Text>
@@ -1892,7 +1892,7 @@ export default function JobDetailsScreen() {
                     onPress={handleServiceMenuOpen}
                     style={{ 
                       borderWidth: 1, 
-                      borderColor: '#ccc', 
+                      borderColor: themed.line, 
                       borderRadius: 25, 
                       marginTop: 8
                     }}
@@ -1912,7 +1912,7 @@ export default function JobDetailsScreen() {
                   <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>Materials</Text>
                   
                   {selectedMaterials.map((item, index) => (
-                    <View key={`material-${index}`} style={{ marginBottom: 12, borderWidth: 1, borderColor: '#eee', padding: 12, borderRadius: 4 }}>
+                    <View key={`material-${index}`} style={{ marginBottom: 12, borderWidth: 1, borderColor: themed.line, padding: 12, borderRadius: 4 }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                         <Text style={{ fontWeight: 'bold' }}>{item.material.name}</Text>
                         <IconButton icon="close" size={20} onPress={() => removeMaterialItem(index)} />
@@ -1937,14 +1937,14 @@ export default function JobDetailsScreen() {
                           label="Total ($)"
                           value={(parseFloat(item.cost || '0') * parseFloat(item.quantity || '0')).toFixed(2)}
                           disabled
-                          style={{ flex: 1, backgroundColor: '#f5f5f5' }}
+                          style={{ flex: 1, backgroundColor: themed.soft }}
                         />
                       </View>
                     </View>
                   ))}
                   
                   {selectedMaterials.length > 0 && (
-                    <View style={{ marginTop: 8, marginBottom: 16, padding: 12, backgroundColor: '#f9f9f9', borderRadius: 4 }}>
+                    <View style={{ marginTop: 8, marginBottom: 16, padding: 12, backgroundColor: themed.soft, borderRadius: 4 }}>
                       <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'right' }}>
                         Total Material Cost: ${calculateTotals().materialTotal.toFixed(2)}
                       </Text>
@@ -1958,7 +1958,7 @@ export default function JobDetailsScreen() {
                     onPress={handleMaterialMenuOpen}
                     style={{ 
                       borderWidth: 1, 
-                      borderColor: '#ccc', 
+                      borderColor: themed.line, 
                       borderRadius: 25, 
                       marginTop: 8
                     }}
@@ -1978,7 +1978,7 @@ export default function JobDetailsScreen() {
                   <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>Custom Items</Text>
                   
                   {customItems.map((item, index) => (
-                    <View key={`custom-${index}`} style={{ marginBottom: 12, borderWidth: 1, borderColor: '#eee', padding: 12, borderRadius: 4 }}>
+                    <View key={`custom-${index}`} style={{ marginBottom: 12, borderWidth: 1, borderColor: themed.line, padding: 12, borderRadius: 4 }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Text style={{ fontWeight: 'bold' }}>{item.description}</Text>
                         <IconButton icon="close" size={20} onPress={() => removeCustomItem(index)} />
@@ -2012,7 +2012,7 @@ export default function JobDetailsScreen() {
                     onPress={addCustomItem}
                     style={{ 
                       borderWidth: 1, 
-                      borderColor: '#ccc', 
+                      borderColor: themed.line, 
                       borderRadius: 25, 
                       marginTop: 8
                     }}
@@ -2029,7 +2029,7 @@ export default function JobDetailsScreen() {
                 
                 {/* Grand total section */}
                 {(selectedServices.length > 0 || selectedMaterials.length > 0 || customItems.length > 0) && (
-                  <View style={{ padding: 16, backgroundColor: '#f5f5f5', borderRadius: 4, marginTop: 10 }}>
+                  <View style={{ padding: 16, backgroundColor: themed.soft, borderRadius: 4, marginTop: 10 }}>
                     <Text style={{ fontSize: 18, fontWeight: 'bold', textAlign: 'right' }}>
                       Grand Total: ${calculateTotals().grandTotal.toFixed(2)}
                     </Text>
@@ -2044,7 +2044,7 @@ export default function JobDetailsScreen() {
               justifyContent: 'flex-end', 
               marginTop: 0, // Remove top margin
               padding: 16,
-              backgroundColor: '#ffffff',
+              backgroundColor: themed.panel,
               borderTopWidth: 0,
               borderColor: 'transparent',
               elevation: 0,
@@ -2064,7 +2064,7 @@ export default function JobDetailsScreen() {
               <Button 
                 mode="contained" 
                 onPress={handleSaveCosts}
-                style={{ backgroundColor: '#333' }}
+                style={{ backgroundColor: themed.primary }}
               >
                 Save All Costs
               </Button>
@@ -2098,7 +2098,7 @@ export default function JobDetailsScreen() {
                   </DataTable.Row>
                 ))}
                 
-                <DataTable.Row style={{ backgroundColor: '#f5f5f5' }}>
+                <DataTable.Row style={{ backgroundColor: themed.soft }}>
                   <DataTable.Cell style={{ fontWeight: 'bold' }}>Total</DataTable.Cell>
                   <DataTable.Cell></DataTable.Cell>
                   <DataTable.Cell style={{ fontWeight: 'bold' }}>
@@ -2584,7 +2584,7 @@ export default function JobDetailsScreen() {
             flexDirection: 'row',
             alignItems: 'center',
             borderTopWidth: 1,
-            borderTopColor: '#e0e0e0',
+            borderTopColor: themed.line,
           }}
           onPress={() => router.push('/jobs')}
         >
@@ -2610,7 +2610,7 @@ export default function JobDetailsScreen() {
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
         duration={3000}
-        style={{ backgroundColor: '#333' }}
+        style={{ backgroundColor: themed.primary }}
         action={{
           label: 'Dismiss',
           onPress: () => setSnackbarVisible(false),
@@ -2624,7 +2624,7 @@ export default function JobDetailsScreen() {
           visible={showStatusDropdown}
           onDismiss={() => setShowStatusDropdown(false)}
           contentContainerStyle={{
-            backgroundColor: 'white',
+            backgroundColor: themed.panel,
             padding: 0,
             margin: 20,
             maxWidth: 300,
@@ -2640,7 +2640,7 @@ export default function JobDetailsScreen() {
                   padding: 16,
                   backgroundColor: hovered ? '#f5f5f5' : '#ffffff',
                   borderBottomWidth: 1,
-                  borderBottomColor: '#f0f0f0',
+                  borderBottomColor: themed.line,
                 })}
                 onPress={() => {
                   handleStatusChange(status.value);
@@ -2716,7 +2716,7 @@ export default function JobDetailsScreen() {
                   <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>Services</Text>
                   
                   {selectedServices.map((item, index) => (
-                    <View key={`service-${index}`} style={{ marginBottom: 12, borderWidth: 1, borderColor: '#eee', padding: 12, borderRadius: 4 }}>
+                    <View key={`service-${index}`} style={{ marginBottom: 12, borderWidth: 1, borderColor: themed.line, padding: 12, borderRadius: 4 }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                         <Text style={{ fontWeight: 'bold' }}>{item.service.name}</Text>
                         <IconButton icon="close" size={20} onPress={() => removeServiceItem(index)} />
@@ -2741,7 +2741,7 @@ export default function JobDetailsScreen() {
                           label="Total ($)"
                           value={(parseFloat(item.rate || '0') * parseFloat(item.quantity || '0')).toFixed(2)}
                           disabled
-                          style={{ flex: 1, backgroundColor: '#f5f5f5' }}
+                          style={{ flex: 1, backgroundColor: themed.soft }}
                         />
                       </View>
                     </View>
@@ -2749,7 +2749,7 @@ export default function JobDetailsScreen() {
                   
                   {/* Add total services cost calculation */}
                   {selectedServices.length > 0 && (
-                    <View style={{ marginTop: 8, marginBottom: 16, padding: 12, backgroundColor: '#f9f9f9', borderRadius: 4 }}>
+                    <View style={{ marginTop: 8, marginBottom: 16, padding: 12, backgroundColor: themed.soft, borderRadius: 4 }}>
                       <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'right' }}>
                         Total Labor Cost: ${calculateTotals().serviceTotal.toFixed(2)}
                       </Text>
@@ -2764,7 +2764,7 @@ export default function JobDetailsScreen() {
                     onPress={handleServiceMenuOpen}
                     style={{ 
                       borderWidth: 1, 
-                      borderColor: '#ccc', 
+                      borderColor: themed.line, 
                       borderRadius: 25, 
                       marginTop: 8
                     }}
@@ -2784,7 +2784,7 @@ export default function JobDetailsScreen() {
                   <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>Materials</Text>
                   
                   {selectedMaterials.map((item, index) => (
-                    <View key={`material-${index}`} style={{ marginBottom: 12, borderWidth: 1, borderColor: '#eee', padding: 12, borderRadius: 4 }}>
+                    <View key={`material-${index}`} style={{ marginBottom: 12, borderWidth: 1, borderColor: themed.line, padding: 12, borderRadius: 4 }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                         <Text style={{ fontWeight: 'bold' }}>{item.material.name}</Text>
                         <IconButton icon="close" size={20} onPress={() => removeMaterialItem(index)} />
@@ -2809,7 +2809,7 @@ export default function JobDetailsScreen() {
                           label="Total ($)"
                           value={(parseFloat(item.cost || '0') * parseFloat(item.quantity || '0')).toFixed(2)}
                           disabled
-                          style={{ flex: 1, backgroundColor: '#f5f5f5' }}
+                          style={{ flex: 1, backgroundColor: themed.soft }}
                         />
                       </View>
                     </View>
@@ -2817,7 +2817,7 @@ export default function JobDetailsScreen() {
                   
                   {/* Add total materials cost calculation */}
                   {selectedMaterials.length > 0 && (
-                    <View style={{ marginTop: 8, marginBottom: 16, padding: 12, backgroundColor: '#f9f9f9', borderRadius: 4 }}>
+                    <View style={{ marginTop: 8, marginBottom: 16, padding: 12, backgroundColor: themed.soft, borderRadius: 4 }}>
                       <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'right' }}>
                         Total Material Cost: ${calculateTotals().materialTotal.toFixed(2)}
                       </Text>
@@ -2832,7 +2832,7 @@ export default function JobDetailsScreen() {
                     onPress={handleMaterialMenuOpen}
                     style={{ 
                       borderWidth: 1, 
-                      borderColor: '#ccc', 
+                      borderColor: themed.line, 
                       borderRadius: 25, 
                       marginTop: 8
                     }}
@@ -2852,7 +2852,7 @@ export default function JobDetailsScreen() {
                   <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>Custom Items</Text>
                   
                   {customItems.map((item, index) => (
-                    <View key={`custom-${index}`} style={{ marginBottom: 12, borderWidth: 1, borderColor: '#eee', padding: 12, borderRadius: 4 }}>
+                    <View key={`custom-${index}`} style={{ marginBottom: 12, borderWidth: 1, borderColor: themed.line, padding: 12, borderRadius: 4 }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Text style={{ fontWeight: 'bold' }}>{item.description}</Text>
                         <IconButton icon="close" size={20} onPress={() => removeCustomItem(index)} />
@@ -2886,7 +2886,7 @@ export default function JobDetailsScreen() {
                     onPress={addCustomItem}
                     style={{ 
                       borderWidth: 1, 
-                      borderColor: '#ccc', 
+                      borderColor: themed.line, 
                       borderRadius: 25, 
                       marginTop: 8
                     }}
@@ -2909,7 +2909,7 @@ export default function JobDetailsScreen() {
             <Button 
               mode="contained" 
               onPress={handleSaveCosts}
-              style={{ backgroundColor: '#333' }}
+              style={{ backgroundColor: themed.primary }}
             >
               Save All Costs
             </Button>
@@ -2925,7 +2925,7 @@ export default function JobDetailsScreen() {
           style={{ 
             maxWidth: 600, 
             alignSelf: 'center', 
-            backgroundColor: '#ffffff',
+            backgroundColor: themed.panel,
             borderWidth: 0,
             elevation: 0,
             shadowOpacity: 0,
@@ -2933,18 +2933,18 @@ export default function JobDetailsScreen() {
           }}
         >
           <Dialog.Title style={{ 
-            backgroundColor: '#ffffff',
+            backgroundColor: themed.panel,
             borderBottomWidth: 0 
           }}>
             Select a Service
           </Dialog.Title>
           <Dialog.ScrollArea style={{ 
             maxHeight: 400, 
-            backgroundColor: '#ffffff',
+            backgroundColor: themed.panel,
             borderTopWidth: 0,
             borderBottomWidth: 0
           }}>
-            <ScrollView style={{ backgroundColor: '#ffffff' }}>
+            <ScrollView style={{ backgroundColor: themed.panel }}>
               <RadioButton.Group>
                 {services.map(service => (
                   <TouchableOpacity 
@@ -2963,14 +2963,14 @@ export default function JobDetailsScreen() {
                     style={{ 
                       paddingVertical: 8, 
                       borderBottomWidth: 1, 
-                      borderBottomColor: '#f0f0f0', // Lighter border for list items
-                      backgroundColor: '#ffffff'
+                      borderBottomColor: themed.line, // Lighter border for list items
+                      backgroundColor: themed.panel
                     }}
                   >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, backgroundColor: '#ffffff' }}>
-                      <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, backgroundColor: themed.panel }}>
+                      <View style={{ flex: 1, backgroundColor: themed.panel }}>
                         <Text>{service.name}</Text>
-                        <Text style={{ color: '#666', fontSize: 12 }}>
+                        <Text style={{ color: themed.muted, fontSize: 12 }}>
                           ${service.rate ? service.rate.toFixed(2) : (service.price ? service.price.toFixed(2) : '0.00')}
                         </Text>
                       </View>
@@ -2982,7 +2982,7 @@ export default function JobDetailsScreen() {
             </ScrollView>
           </Dialog.ScrollArea>
           <Dialog.Actions style={{ 
-            backgroundColor: '#ffffff',
+            backgroundColor: themed.panel,
             borderTopWidth: 0
           }}>
             <Button onPress={() => setShowServiceDialog(false)}>Cancel</Button>
@@ -2998,7 +2998,7 @@ export default function JobDetailsScreen() {
           style={{ 
             maxWidth: 600, 
             alignSelf: 'center', 
-            backgroundColor: '#ffffff',
+            backgroundColor: themed.panel,
             borderWidth: 0,
             elevation: 0,
             shadowOpacity: 0,
@@ -3006,18 +3006,18 @@ export default function JobDetailsScreen() {
           }}
         >
           <Dialog.Title style={{ 
-            backgroundColor: '#ffffff',
+            backgroundColor: themed.panel,
             borderBottomWidth: 0
           }}>
             Select a Material
           </Dialog.Title>
           <Dialog.ScrollArea style={{ 
             maxHeight: 400, 
-            backgroundColor: '#ffffff',
+            backgroundColor: themed.panel,
             borderTopWidth: 0,
             borderBottomWidth: 0
           }}>
-            <ScrollView style={{ backgroundColor: '#ffffff' }}>
+            <ScrollView style={{ backgroundColor: themed.panel }}>
               <RadioButton.Group>
                 {materials.map(material => (
                   <TouchableOpacity 
@@ -3036,14 +3036,14 @@ export default function JobDetailsScreen() {
                     style={{ 
                       paddingVertical: 8, 
                       borderBottomWidth: 1, 
-                      borderBottomColor: '#f0f0f0', // Lighter border for list items
-                      backgroundColor: '#ffffff'
+                      borderBottomColor: themed.line, // Lighter border for list items
+                      backgroundColor: themed.panel
                     }}
                   >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, backgroundColor: '#ffffff' }}>
-                      <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, backgroundColor: themed.panel }}>
+                      <View style={{ flex: 1, backgroundColor: themed.panel }}>
                         <Text>{material.name}</Text>
-                        <Text style={{ color: '#666', fontSize: 12 }}>
+                        <Text style={{ color: themed.muted, fontSize: 12 }}>
                           ${material.cost ? material.cost.toFixed(2) : (material.price ? material.price.toFixed(2) : '0.00')}
                         </Text>
                       </View>
@@ -3055,7 +3055,7 @@ export default function JobDetailsScreen() {
             </ScrollView>
           </Dialog.ScrollArea>
           <Dialog.Actions style={{ 
-            backgroundColor: '#ffffff',
+            backgroundColor: themed.panel,
             borderTopWidth: 0
           }}>
             <Button onPress={() => setShowMaterialDialog(false)}>Cancel</Button>
@@ -3071,19 +3071,19 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     paddingTop: 40,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   navigationPane: {
     width: 240,
     borderRightWidth: 1,
-    borderRightColor: '#e0e0e0',
+    borderRightColor: themed.line,
     height: '100%',
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   contentPane: {
     flex: 1,
     padding: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   navigationSection: {
     marginBottom: 24,
@@ -3091,7 +3091,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#666666',
+    color: themed.muted,
     marginBottom: 12,
     paddingLeft: 16,
   },
@@ -3115,11 +3115,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   headerCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
     marginBottom: 16,
     elevation: 0,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: themed.line,
   },
   headerContent: {
     flexDirection: 'row',
@@ -3135,7 +3135,7 @@ const styles = StyleSheet.create({
   },
   tabContent: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   tabHeader: {
     flexDirection: 'row',
@@ -3156,10 +3156,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   summaryCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: themed.line,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -3188,10 +3188,10 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   eventsForDayCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
     marginTop: 16,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: themed.line,
   },
   eventNotes: {
     marginTop: 8,
@@ -3218,10 +3218,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   attachmentCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: themed.line,
   },
   attachmentRow: {
     flexDirection: 'row',
@@ -3270,14 +3270,14 @@ const styles = StyleSheet.create({
   },
   calendarGrid: {
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: themed.line,
     borderRadius: 8,
     overflow: 'hidden',
   },
   calendarRow: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: themed.line,
   },
   calendarDay: {
     flex: 1,
@@ -3285,10 +3285,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: themed.line,
   },
   emptyDay: {
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   dayButton: {
     flex: 1,
@@ -3309,7 +3309,7 @@ const styles = StyleSheet.create({
     color: '#2196f3',
   },
   todayDay: {
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   todayDayText: {
     fontWeight: 'bold',
@@ -3359,7 +3359,11 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   editButton: {
-    backgroundColor: '#444444',
+    backgroundColor: themed.primary,
+  },
+  // Outlined: no fill, so the label (theme primary) stays visible in both themes.
+  secondaryButton: {
+    borderColor: themed.line,
   },
   editDialog: {
     width: '80%',
@@ -3371,7 +3375,7 @@ const styles = StyleSheet.create({
   },
   editFormContainer: {
     width: '100%',
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
     padding: 16,
     marginTop: 16,
     height: '100%',
@@ -3388,17 +3392,17 @@ const styles = StyleSheet.create({
   },
   table: {
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: themed.line,
     borderRadius: 4,
     overflow: 'hidden',
   },
   tableHeaderRow: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: themed.soft,
   },
   tableHeaderCell: {
     padding: 12,
     borderRightWidth: 1,
-    borderRightColor: '#e0e0e0',
+    borderRightColor: themed.line,
     justifyContent: 'center',
   },
   tableHeaderText: {
@@ -3408,12 +3412,12 @@ const styles = StyleSheet.create({
   tableRow: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: themed.line,
   },
   tableCell: {
     padding: 12,
     borderRightWidth: 1,
-    borderRightColor: '#e0e0e0',
+    borderRightColor: themed.line,
     justifyContent: 'center',
   },
   tableCellLabel: {
@@ -3421,10 +3425,10 @@ const styles = StyleSheet.create({
     textAlign: 'left',
   },
   totalRow: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: themed.soft,
   },
   grandTotalRow: {
-    backgroundColor: '#e0e0e0',
+    backgroundColor: themed.active,
     fontWeight: 'bold',
   },
   dialog: {
@@ -3434,7 +3438,7 @@ const styles = StyleSheet.create({
     top: '50%',
     left: '50%',
     transform: 'translate(-50%, -50%)',
-    backgroundColor: 'white',
+    backgroundColor: themed.panel,
     padding: 20,
     borderRadius: 8,
     elevation: 5,
@@ -3454,10 +3458,10 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   jobInfoCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: themed.line,
   },
   backButton: {
     marginTop: 8,
@@ -3487,22 +3491,22 @@ const styles = StyleSheet.create({
   dropdownItem: {
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    backgroundColor: '#ffffff',
+    borderBottomColor: themed.line,
+    backgroundColor: themed.panel,
     width: '100%',
     cursor: 'pointer',
   },
   dropdownItemHover: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: themed.soft,
   },
   statusDropdown: {
     position: 'absolute',
     top: 40,
     left: 0,
     right: 0,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: themed.line,
     borderRadius: 4,
     zIndex: 9999,
     elevation: 9,
@@ -3510,7 +3514,7 @@ const styles = StyleSheet.create({
   statusDropdownItem: {
     width: '100%',
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: themed.line,
   },
   // Date Picker Styles
   calendarHeader: {
@@ -3564,13 +3568,13 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 10,
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: themed.line,
     borderRadius: 4,
-    backgroundColor: '#fff',
+    backgroundColor: themed.panel,
   },
   disabledInput: {
-    backgroundColor: '#f0f0f0',
-    borderColor: '#ddd',
+    backgroundColor: themed.soft,
+    borderColor: themed.line,
   },
   modalOverlay: {
     flex: 1,
@@ -3579,7 +3583,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   datePickerModal: {
-    backgroundColor: 'white',
+    backgroundColor: themed.panel,
     borderRadius: 10,
     padding: 20,
     width: '90%',
@@ -3592,7 +3596,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   modalContainer: {
-    backgroundColor: 'white',
+    backgroundColor: themed.panel,
     padding: 20,
     margin: 20,
     borderRadius: 10,

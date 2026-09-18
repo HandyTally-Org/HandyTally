@@ -4,6 +4,7 @@ import { Text, ActivityIndicator, Button, Snackbar } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 import { InvoiceForm } from '../../../components/InvoiceForm';
+import { themed } from '../../../constants/Colors';
 
 export default function EditInvoiceJobScreen() {
   const { id } = useLocalSearchParams();
@@ -265,10 +266,10 @@ export default function EditInvoiceJobScreen() {
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: '#fff' }}>
+    <ScrollView style={{ flex: 1, backgroundColor: themed.panel }}>
       {invoice ? (
         <>
-          <View style={{ padding: 10, backgroundColor: '#ffffff', marginBottom: 10 }}>
+          <View style={{ padding: 10, backgroundColor: themed.panel, marginBottom: 10 }}>
             <Text style={{ fontWeight: 'bold' }}>Debug Info:</Text>
             <Text>Invoice UID: {invoice.uid}</Text>
             <Text>Invoice #: {invoice.invoice_number}</Text>
@@ -324,7 +325,7 @@ function ForcedInvoiceForm({ invoice, jobs, clients, onSubmit, onCancel }) {
   return (
     <View style={{ padding: 0 }}>
       {/* Added header to show we're definitely editing the right invoice */}
-      <View style={{ backgroundColor: '#ffffff', padding: 16, marginBottom: 16 }}>
+      <View style={{ backgroundColor: themed.panel, padding: 16, marginBottom: 16 }}>
         <Text style={{ fontSize: 18, fontWeight: 'bold' }}>
           Editing Invoice #{invoice.invoice_number}
         </Text>

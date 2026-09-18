@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter, Link } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 import { styles as globalStyles } from '../../../styles';
 import { InvoiceForm } from '../../../components/InvoiceForm';
+import { themed } from '../../../constants/Colors';
 
 export default function EditInvoiceClientScreen() {
   const { id: invoiceId, client_id: clientId } = useLocalSearchParams();
@@ -219,7 +220,7 @@ export default function EditInvoiceClientScreen() {
   };
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: '#fff' }}>
+    <ScrollView style={{ flex: 1, backgroundColor: themed.panel }}>
       {loading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" />
@@ -280,7 +281,7 @@ function ForcedInvoiceForm({ invoice, jobs, clients, onSubmit, onCancel, onClien
   return (
     <View style={{ padding: 0 }}>
       {/* Simplify header to show we're editing the invoice */}
-      <View style={{ backgroundColor: '#ffffff', padding: 16, marginBottom: 16 }}>
+      <View style={{ backgroundColor: themed.panel, padding: 16, marginBottom: 16 }}>
         <Text style={{ fontSize: 18, fontWeight: 'bold' }}>
           Editing Invoice #{invoice.invoice_number}
         </Text>

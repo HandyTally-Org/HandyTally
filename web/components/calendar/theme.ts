@@ -1,22 +1,28 @@
 import { findLabel, labelText, type LabelDef } from '../../constants/labels';
+import { themed } from '../../constants/Colors';
 
 // Visual tokens for the calendar, kept in one place so the month grid, the
 // time grid and the dialogs stay consistent.
-
+//
+// HT-68: the surfaces, borders and text are CSS-variable references that
+// follow the organisation's theme (constants/Colors.ts) and are for styles
+// only. The accent, the "now" line and the today tint are fixed: the tint is
+// a translucent accent so it reads on both grounds. A Paper colour prop
+// (outlineColor, textColor, ...) must take hex from useAppTheme().colors.
 export const calendarTheme = {
   accent: '#2563EB',
   accentText: '#FFFFFF',
-  border: '#E5E7EB',
-  borderStrong: '#D1D5DB',
-  background: '#FFFFFF',
-  mutedBackground: '#F9FAFB',
-  text: '#111827',
-  mutedText: '#6B7280',
-  faintText: '#9CA3AF',
-  todayColumn: '#EFF6FF',
+  border: themed.line,
+  borderStrong: themed.line,
+  background: themed.panel,
+  mutedBackground: themed.soft,
+  text: themed.text,
+  mutedText: themed.muted,
+  faintText: themed.faint,
+  todayColumn: 'rgba(37, 99, 235, 0.10)',
   nowLine: '#EF4444',
-  buttonBackground: '#FFFFFF',
-  buttonBorder: '#D1D5DB',
+  buttonBackground: themed.panel,
+  buttonBorder: themed.line,
 };
 
 // Row budget in month view: the day number line, a fixed number of event

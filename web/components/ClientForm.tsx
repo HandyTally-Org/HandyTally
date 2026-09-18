@@ -3,6 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { TextInput, Button, Card, Text, ActivityIndicator } from 'react-native-paper';
 import { styles } from '../styles';
 import { Client } from '../app/(app)/clients';
+import { themed } from '../constants/Colors';
 
 type ClientFormProps = {
   client?: Client | null;
@@ -73,9 +74,9 @@ export function ClientForm({ client, onSubmit, onCancel, submitting = false }: C
   };
 
   return (
-    <Card style={[styles.card, { backgroundColor: '#ffffff' }]}>
+    <Card style={[styles.card, { backgroundColor: themed.panel }]}>
       <Card.Title title={client ? "Edit Client" : "Add New Client"} />
-      <Card.Content style={{ backgroundColor: '#ffffff' }}>
+      <Card.Content style={{ backgroundColor: themed.panel }}>
         <TextInput
           label="Name *"
           value={formData.name}

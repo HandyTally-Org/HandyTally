@@ -12,11 +12,12 @@ import { useCustomFields } from '../../hooks/useCustomFields';
 import { CustomFieldInputs } from '../../components/CustomFields';
 import { normalizeCustomValues, validateCustomValues } from '../../constants/customFields';
 import { FormField, FormRow } from '../../components/FormDialog';
-import { FormActions, FormPanel, FormSection, outlinedInputProps } from '../../components/FormLayout';
+import { FormActions, FormPanel, FormSection, useOutlinedInputProps } from '../../components/FormLayout';
 import { themed } from '../../constants/Colors';
 
 export default function ClientDetailsScreen() {
   const router = useRouter();
+  const outlinedInputProps = useOutlinedInputProps();
   const { id } = useLocalSearchParams();
   const [client, setClient] = useState(null);
   const [jobs, setJobs] = useState([]);
@@ -241,12 +242,12 @@ export default function ClientDetailsScreen() {
   }
 
   return (
-    <View style={{ flex: 1 , backgroundColor: '#ffffff'}}>
-      <Text style={{ fontSize: 12, fontWeight: '600', marginTop: 40, marginBottom: 12, paddingLeft: 16, color: '#666666' }}>CLIENT DETAILS</Text>
+    <View style={{ flex: 1 , backgroundColor: themed.panel}}>
+      <Text style={{ fontSize: 12, fontWeight: '600', marginTop: 40, marginBottom: 12, paddingLeft: 16, color: themed.muted }}>CLIENT DETAILS</Text>
       
       <View style={{ flexDirection: 'row', flex: 1 }}>
         {/* Side Navigation with icons */}
-        <View style={{ width: 200, backgroundColor: '#ffffff', borderRightWidth: 1, borderRightColor: '#e0e0e0', display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <View style={{ width: 200, backgroundColor: themed.panel, borderRightWidth: 1, borderRightColor: themed.line, display: 'flex', flexDirection: 'column', height: '100%' }}>
           {/* Info section */}
           <TouchableOpacity 
             style={{ 
@@ -297,7 +298,7 @@ export default function ClientDetailsScreen() {
           
           {/* Documentation header */}
           <View style={{ padding: 16, paddingBottom: 8 }}>
-            <Text style={{ color: '#666', fontWeight: 'bold', fontSize: 12 }}>DOCUMENTATION</Text>
+            <Text style={{ color: themed.muted, fontWeight: 'bold', fontSize: 12 }}>DOCUMENTATION</Text>
           </View>
           
           {/* Notes section */}
@@ -342,7 +343,7 @@ export default function ClientDetailsScreen() {
               flexDirection: 'row',
               alignItems: 'center',
               borderTopWidth: 1,
-              borderTopColor: '#e0e0e0',
+              borderTopColor: themed.line,
               marginTop: 'auto'
             }}
             onPress={() => router.push('/clients')}
@@ -355,7 +356,7 @@ export default function ClientDetailsScreen() {
         </View>
         
         {/* Main Content */}
-        <ScrollView style={{ flex: 1, padding: 16, borderWidth: 0, borderColor: '#e0e0e0' }}>
+        <ScrollView style={{ flex: 1, padding: 16, borderWidth: 0, borderColor: themed.line }}>
           {activeSection === 'info' && (
             <FormPanel title="Client Information" subtitle="Contact details, address and notes for this client.">
               <FormSection title="Contact">
@@ -568,7 +569,7 @@ export default function ClientDetailsScreen() {
               <Card 
                 style={{ 
                   marginBottom: 16, 
-                  backgroundColor: '#ffffff',
+                  backgroundColor: themed.panel,
                   elevation: 0,
                   shadowOpacity: 0,
                   borderWidth: 0,
@@ -579,7 +580,7 @@ export default function ClientDetailsScreen() {
                 }}
               >
                 <Card.Content style={{ 
-                  backgroundColor: '#ffffff',
+                  backgroundColor: themed.panel,
                   padding: 0
                 }}>
                   <Text>No activity logs available yet.</Text>
