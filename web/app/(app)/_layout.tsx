@@ -7,6 +7,7 @@ import { useState, useEffect, useMemo } from 'react';
 import {supabase} from "@/lib/supabase";
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppTheme } from '../../contexts/ThemeContext';
+import { FeedbackHost } from '../../contexts/FeedbackContext';
 import { themed } from '../../constants/Colors';
 import { NAV_ITEMS } from '../../constants/navigation';
 import { applyNavSettings } from '../../constants/organizationSettings';
@@ -203,53 +204,58 @@ export default function AppLayout() {
   }
 
   return (
-    <Drawer
-      drawerContent={(props) => <CustomDrawerContent {...props} />}
-      screenOptions={{
-        headerShown: false,
-        drawerType: 'permanent',
-        // HT-68: the scene behind every screen follows the theme (React
-        // Navigation would otherwise paint its light default under any
-        // screen that does not cover the full height).
-        sceneStyle: { backgroundColor: themed.bg },
-        drawerStyle: {
-          width: 'auto', // This will be controlled by our custom component
-          backgroundColor: themed.panel,
-          borderRightColor: themed.line,
-        },
-        drawerActiveBackgroundColor: colors.active,
-        drawerActiveTintColor: colors.text,
-        drawerInactiveTintColor: colors.text,
-        drawerLabelStyle: {
-          marginLeft: -20,
-          fontSize: 16,
-        },
-      }}
-    >
-      {/* HT-48: one registration per nav entry; submenu pages are routable but hidden from the default list. */}
-      {NAV_ITEMS.map(item => (
-        <Drawer.Screen
-          key={item.key}
-          name={item.screen}
-          options={{
-            drawerLabel: item.label,
-            title: item.label,
-            drawerIcon: ({ color }) => <Ionicons name={item.icon} size={22} color={color} />,
-          }}
-        />
-      ))}
-      {NAV_ITEMS.flatMap(item => item.children ?? []).map(child => (
-        <Drawer.Screen
-          key={child.key}
-          name={child.screen}
-          options={{
-            drawerLabel: () => null,
-            title: child.label,
-            drawerItemStyle: { height: 0 },
-          }}
-        />
-      ))}
-    </Drawer>
+    <>
+      <Drawer
+        drawerContent={(props) => <CustomDrawerContent {...props} />}
+        screenOptions={{
+          headerShown: false,
+          drawerType: 'permanent',
+          // HT-68: the scene behind every screen follows the theme (React
+          // Navigation would otherwise paint its light default under any
+          // screen that does not cover the full height).
+          sceneStyle: { backgroundColor: themed.bg },
+          drawerStyle: {
+            width: 'auto', // This will be controlled by our custom component
+            backgroundColor: themed.panel,
+            borderRightColor: themed.line,
+          },
+          drawerActiveBackgroundColor: colors.active,
+          drawerActiveTintColor: colors.text,
+          drawerInactiveTintColor: colors.text,
+          drawerLabelStyle: {
+            marginLeft: -20,
+            fontSize: 16,
+          },
+        }}
+      >
+        {/* HT-48: one registration per nav entry; submenu pages are routable but hidden from the default list. */}
+        {NAV_ITEMS.map(item => (
+          <Drawer.Screen
+            key={item.key}
+            name={item.screen}
+            options={{
+              drawerLabel: item.label,
+              title: item.label,
+              drawerIcon: ({ color }) => <Ionicons name={item.icon} size={22} color={color} />,
+            }}
+          />
+        ))}
+        {NAV_ITEMS.flatMap(item => item.children ?? []).map(child => (
+          <Drawer.Screen
+            key={child.key}
+            name={child.screen}
+            options={{
+              drawerLabel: () => null,
+              title: child.label,
+              drawerItemStyle: { height: 0 },
+            }}
+          />
+        ))}
+      </Drawer>
+      {/* HT-75: the notify()/confirm() UI. FeedbackProvider itself lives in
+          the root layout, above PaperProvider -- see contexts/FeedbackContext.tsx. */}
+      <FeedbackHost />
+    </>
   );
 }
 
