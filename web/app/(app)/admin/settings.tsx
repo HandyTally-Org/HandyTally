@@ -3,6 +3,7 @@ import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { IconButton, Snackbar, Switch, Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../../lib/supabase';
+import { themed, type ThemeScheme } from '../../../constants/Colors';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useRequireAdmin } from '../../../hooks/useRequireAdmin';
 import { useRefreshOnFocus } from '../../../hooks/useRefreshOnFocus';
@@ -45,6 +46,10 @@ export default function SettingsScreen() {
   const [ordered, setOrdered] = useState<NavItem[]>(() => editableNavOrder(NAV_ITEMS, settings.nav));
   const [hidden, setHidden] = useState<Set<string>>(() => new Set(settings.nav.hidden));
   const [savedNav, setSavedNav] = useState<NavSettings>(settings.nav);
+  // HT-68: the Appearance switch below the nav editor. Saved with the same
+  // Save button and the same organization_settings row.
+  const [theme, setTheme] = useState<ThemeScheme>(settings.theme);
+  const [savedTheme, setSavedTheme] = useState<ThemeScheme>(settings.theme);
   const [selected, setSelected] = useState<NavItem | null>(null);
   const [tab, setTab] = useState<PaneTab>('fields');
   const [saving, setSaving] = useState(false);
@@ -59,14 +64,16 @@ export default function SettingsScreen() {
     () => toNavSettings(editableNavOrder(NAV_ITEMS, savedNav), new Set(savedNav.hidden)),
     [savedNav],
   );
-  const dirty = JSON.stringify(draft) !== JSON.stringify(savedDraft);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(savedDraft) || theme !== savedTheme;
   useEffect(() => {
     if (!settingsLoaded || dirty) return;
     setOrdered(editableNavOrder(NAV_ITEMS, settings.nav));
     setHidden(new Set(settings.nav.hidden));
     setSavedNav(settings.nav);
+    setTheme(settings.theme);
+    setSavedTheme(settings.theme);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settingsLoaded, settings.nav]);
+  }, [settingsLoaded, settings.nav, settings.theme]);
 
   useRefreshOnFocus(() => {
     if (!dirty) refreshSettings();
@@ -128,6 +135,7 @@ export default function SettingsScreen() {
           {
             organization_id: organization.id,
             nav: draft,
+            theme,
             updated_at: new Date().toISOString(),
             updated_by: (await supabase.auth.getUser()).data.user?.id ?? null,
           },
@@ -138,6 +146,7 @@ export default function SettingsScreen() {
         .select('organization_id');
       if (error) throw error;
       setSavedNav(draft);
+      setSavedTheme(theme);
       await refreshSettings();
       setSnackbar('Settings saved');
     } catch (error: any) {
@@ -220,6 +229,27 @@ export default function SettingsScreen() {
           </DraggableRow>
         );
       })}
+      <View style={styles.appearance}>
+        <Text variant="titleMedium" style={styles.paneTitle}>Appearance</Text>
+        <Text style={styles.hint}>
+          Colour theme for everyone in {organization?.name ?? 'the company'}. Applies the next time the app loads.
+        </Text>
+        <View style={styles.appearanceRow}>
+          <Ionicons name="moon-outline" size={22} color={themed.navSchedule} style={styles.rowIcon} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowLabel}>Dark mode</Text>
+            <Text style={styles.appearanceSub}>
+              {theme === 'dark' ? 'On · dark background, light text' : 'Off · light background, dark text'}
+            </Text>
+          </View>
+          <Switch
+            value={theme === 'dark'}
+            onValueChange={value => setTheme(value ? 'dark' : 'light')}
+            accessibilityLabel="Dark mode"
+          />
+        </View>
+      </View>
+
       <View style={styles.actions}>
         <PrimaryButton label={saving ? 'Saving…' : 'Save'} onPress={save} disabled={saving || !dirty} />
         <OutlineButton label="Reset to defaults" onPress={resetToDefaults} disabled={saving} />
@@ -334,6 +364,9 @@ const styles = StyleSheet.create({
   },
   listContent: { padding: 16 },
   paneTitle: { marginBottom: 4 },
+  appearance: { marginTop: 26, paddingTop: 18, borderTopWidth: 1, borderTopColor: st.border },
+  appearanceRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10 },
+  appearanceSub: { fontSize: 12, color: '#999' },
   hint: { color: '#666', marginBottom: 12 },
   row: {
     flexDirection: 'row',

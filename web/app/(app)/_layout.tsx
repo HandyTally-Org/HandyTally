@@ -6,6 +6,8 @@ import { DrawerContentScrollView } from '@react-navigation/drawer';
 import { useState, useEffect, useMemo } from 'react';
 import {supabase} from "@/lib/supabase";
 import { useAuth } from '../../contexts/AuthContext';
+import { useAppTheme } from '../../contexts/ThemeContext';
+import { themed } from '../../constants/Colors';
 import { NAV_ITEMS } from '../../constants/navigation';
 import { applyNavSettings } from '../../constants/organizationSettings';
 
@@ -61,23 +63,24 @@ function CustomDrawerContent(props: any) {
       }
     }
   }, [pathname]);
-  
+
   return (
-    <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+    <View style={{ flex: 1, backgroundColor: themed.panel }}>
       {/* Header with toggle button */}
       <View style={styles.drawerHeader}>
         <TouchableOpacity onPress={toggleDrawer} style={styles.toggleButton}>
-          <Ionicons name={isCollapsed ? "menu" : "menu-outline"} size={24} color="#333" />
+          <Ionicons name={isCollapsed ? "menu" : "menu-outline"} size={24} color={themed.text} />
         </TouchableOpacity>
         </View>
-        
+
       <DrawerContentScrollView {...props} contentContainerStyle={{ flexGrow: 1 }}>
         {/* HT-48: every entry comes from constants/navigation.ts */}
+        {/* HT-68: each glyph carries its module's hue (item.color); the active
+            row stays a neutral fill, so the coloured icon is the accent. */}
         <View style={styles.drawerContent}>
           {navItems.map(item => {
             if (item.adminOnly && !isAdmin) return null;
             const active = isPathActive(item.route);
-            const color = active ? '#333' : '#666';
             const children = item.children;
             const expanded = !!children && (submenuOpen[item.key] || isPathPartOfRoute(`${item.route}/`));
             return (
@@ -91,7 +94,7 @@ function CustomDrawerContent(props: any) {
                   ]}
                 >
                   <View style={styles.drawerItemIcon}>
-                    <Ionicons name={item.icon} size={24} color={color} />
+                    <Ionicons name={item.icon} size={24} color={themed[item.color]} />
                   </View>
                   {!isCollapsed && (
                     children ? (
@@ -99,7 +102,7 @@ function CustomDrawerContent(props: any) {
                         <Text style={[styles.drawerItemLabel, active && styles.drawerItemLabelFocused]}>
                           {item.label}
                         </Text>
-                        <Ionicons name={expanded ? 'chevron-down' : 'chevron-forward'} size={16} color="#666" />
+                        <Ionicons name={expanded ? 'chevron-down' : 'chevron-forward'} size={16} color={themed.muted} />
                       </View>
                     ) : (
                       <Text style={[styles.drawerItemLabel, active && styles.drawerItemLabelFocused]}>
@@ -124,7 +127,7 @@ function CustomDrawerContent(props: any) {
                           ]}
                         >
                           <View style={[styles.submenuItemIcon, isCollapsed && { marginRight: 0 }]}>
-                            <Ionicons name={child.icon} size={20} color={childActive ? '#333' : '#666'} />
+                            <Ionicons name={child.icon} size={20} color={themed[child.color]} />
                           </View>
                           {!isCollapsed && (
                             <Text style={[styles.submenuItemLabel, childActive && styles.submenuItemLabelFocused]}>
@@ -144,8 +147,8 @@ function CustomDrawerContent(props: any) {
         {/* Add the HandyTally logo at the bottom */}
         <View style={[styles.footerContainer, isCollapsed && styles.footerContainerCollapsed]}>
           <View style={styles.handyTallyLogoContainer}>
-            <Image 
-              source={require('../../assets/favicon-32x32.png')} 
+            <Image
+              source={require('../../assets/favicon-32x32.png')}
               style={styles.handyTallyLogo}
               resizeMode="contain"
             />
@@ -153,7 +156,7 @@ function CustomDrawerContent(props: any) {
               <Text style={styles.handyTallyText}>HandyTally</Text>
             )}
       </View>
-      
+
           {!isCollapsed && (
             <View style={styles.footerTextContainer}>
               <View style={styles.termsRow}>
@@ -165,7 +168,7 @@ function CustomDrawerContent(props: any) {
               <Text style={styles.versionText}>v1.0</Text>
                 {/* Sign Out button at the very bottom */}
                 <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-                    <Ionicons name="log-out-outline" size={20} color="#333" />
+                    <Ionicons name="log-out-outline" size={20} color={themed.text} />
                     <Text style={styles.signOutText}>Sign Out</Text>
                 </TouchableOpacity>
             </View>
@@ -180,6 +183,7 @@ export default function AppLayout() {
   // HT-12: the (app) group needs a session. Nothing enforced this before; a
   // signed-out visitor got every screen with empty data.
   const { session, isLoading, membershipLoaded, tenant } = useAuth();
+  const { colors } = useAppTheme();
   const router = useRouter();
 
   useEffect(() => {
@@ -206,10 +210,12 @@ export default function AppLayout() {
         drawerType: 'permanent',
         drawerStyle: {
           width: 'auto', // This will be controlled by our custom component
+          backgroundColor: themed.panel,
+          borderRightColor: themed.line,
         },
-        drawerActiveBackgroundColor: '#e6e6e6',
-        drawerActiveTintColor: '#333',
-        drawerInactiveTintColor: '#333',
+        drawerActiveBackgroundColor: colors.active,
+        drawerActiveTintColor: colors.text,
+        drawerInactiveTintColor: colors.text,
         drawerLabelStyle: {
           marginLeft: -20,
           fontSize: 16,
@@ -249,8 +255,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    backgroundColor: '#ffffff',
+    borderBottomColor: themed.line,
+    backgroundColor: themed.panel,
   },
   toggleButton: {
     width: 40,
@@ -263,30 +269,30 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: 15,
         borderTopWidth: 1,
-        borderTopColor: '#e0e0e0',
+        borderTopColor: themed.line,
     },
     signOutText: {
         marginLeft: 10,
         fontSize: 16,
-        color: '#333',
+        color: themed.text,
     },
   drawerContent: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   drawerItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   drawerItemCollapsed: {
     justifyContent: 'center',
     paddingHorizontal: 8,
   },
   drawerItemFocused: {
-    backgroundColor: '#e6e6e6',
+    backgroundColor: themed.active,
   },
   drawerItemIcon: {
     marginRight: 16,
@@ -295,14 +301,14 @@ const styles = StyleSheet.create({
   },
   drawerItemLabel: {
     fontSize: 16,
-    color: '#333',
+    color: themed.text,
   },
   drawerItemLabelFocused: {
     fontWeight: 'bold',
   },
   submenu: {
     marginLeft: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   submenuCollapsed: {
     marginLeft: 0,
@@ -312,14 +318,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     paddingHorizontal: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   submenuItemCollapsed: {
     justifyContent: 'center',
     paddingHorizontal: 8,
   },
   submenuItemFocused: {
-    backgroundColor: '#e6e6e6',
+    backgroundColor: themed.active,
   },
   submenuItemIcon: {
     marginRight: 16,
@@ -328,7 +334,7 @@ const styles = StyleSheet.create({
   },
   submenuItemLabel: {
     fontSize: 14,
-    color: '#333',
+    color: themed.text,
   },
   submenuItemLabelFocused: {
     fontWeight: 'bold',
@@ -336,9 +342,9 @@ const styles = StyleSheet.create({
   footerContainer: {
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    borderTopColor: themed.line,
     marginTop: 20,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   footerContainerCollapsed: {
     alignItems: 'center',
@@ -362,7 +368,7 @@ const styles = StyleSheet.create({
   handyTallyText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: themed.text,
   },
   footerTextContainer: {
     alignItems: 'center',
@@ -373,20 +379,20 @@ const styles = StyleSheet.create({
   },
   termsText: {
     fontSize: 12,
-    color: '#666',
+    color: themed.muted,
   },
   divider: {
     fontSize: 12,
-    color: '#666',
+    color: themed.muted,
     marginHorizontal: 4,
   },
   copyrightText: {
     fontSize: 12,
-    color: '#666',
+    color: themed.muted,
     marginBottom: 2,
   },
   versionText: {
     fontSize: 12,
-    color: '#666',
+    color: themed.muted,
   },
-}); 
+});

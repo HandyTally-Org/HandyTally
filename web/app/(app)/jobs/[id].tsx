@@ -18,6 +18,7 @@ import { InvoiceForm } from '../../../components/InvoiceForm';
 import { NotesSection } from '../../../components/NotesSection';
 import { useLabels } from '../../../hooks/useLabels';
 import { labelColor, labelText, labelTextColor } from '../../../constants/labels';
+import { themed } from '../../../constants/Colors';
 import { LabelPill } from '../../../components/LabelPill';
 import { useRefreshOnFocus } from '../../../hooks/useRefreshOnFocus';
 import { useCustomFields } from '../../../hooks/useCustomFields';
@@ -2509,7 +2510,7 @@ export default function JobDetailsScreen() {
             ]}
             onPress={() => handleNavigationItemClick('info')}
           >
-            <MaterialIcons name="dashboard" size={24} color="#666666" />
+            <MaterialIcons name="dashboard" size={24} color={themed.navDashboard} />
             <Text style={[
               styles.navigationText,
               selectedTab === 'info' && styles.selectedText
@@ -2525,7 +2526,7 @@ export default function JobDetailsScreen() {
             <MaterialCommunityIcons
               name="file-document-outline"
               size={24}
-              color={selectedTab === 'invoices' ? '#000000' : '#666666'}
+              color={themed.navInvoices}
             />
             <Text style={[
               styles.navigationText,
@@ -2542,7 +2543,7 @@ export default function JobDetailsScreen() {
             <MaterialCommunityIcons
               name="currency-usd"
               size={24}
-              color={selectedTab === 'costs' ? '#000000' : '#666666'}
+              color={themed.railCosts}
             />
             <Text style={[
               styles.navigationText,
@@ -2562,7 +2563,7 @@ export default function JobDetailsScreen() {
             <MaterialCommunityIcons
               name="note-text-outline"
               size={24}
-              color={selectedTab === 'notes' ? '#000000' : '#666666'}
+              color={themed.railNotes}
             />
             <Text style={[
               styles.navigationText,
@@ -2587,9 +2588,9 @@ export default function JobDetailsScreen() {
           onPress={() => router.push('/jobs')}
         >
           <View style={{ width: 24, marginRight: 12 }}>
-            <MaterialIcons name="arrow-back" size={20} color="#666666" />
+            <MaterialIcons name="arrow-back" size={20} color={themed.muted} />
           </View>
-          <Text style={{ color: '#666666' }}>Back to Jobs</Text>
+          <Text style={{ color: themed.muted }}>Back to Jobs</Text>
         </TouchableOpacity>
       </View>
 
@@ -3101,15 +3102,15 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   selectedItem: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: themed.active,
   },
   navigationText: {
     marginLeft: 12,
     fontSize: 14,
-    color: '#666666',
+    color: themed.muted,
   },
   selectedText: {
-    color: '#000000',
+    color: themed.text,
     fontWeight: '500',
   },
   headerCard: {
