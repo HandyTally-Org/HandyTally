@@ -12,18 +12,26 @@ the same PR that changed the behaviour.
 
 ## 1. What a customer deployment is
 
-One web bundle, one database, and the hostname selects the organisation.
-There is **no** DNS, hosting, Supabase or edge-function work per customer:
-the Cloudflare Worker serves every `*.handytally.com` host from the same
-build, the browser sends its subdomain to the database on every request, and
-row-level security keeps each organisation's rows to that organisation.
+One database, and the hostname selects the organisation: the browser sends
+its subdomain to the database on every request and row-level security keeps
+each organisation's rows to that organisation. There is **no** DNS, Supabase
+or edge-function work per customer. The decision and the mechanism are
+recorded once, in [architecture.md §4 Multi-tenancy](architecture.md#4-multi-tenancy).
 
-The decision and the mechanism are recorded once, in
-[architecture.md §4 Multi-tenancy](architecture.md#4-multi-tenancy). This
-document only tells you what to do; read §4 if you want to know why.
+The *code* a host runs comes in three tiers ([release-process.md](release-process.md)):
 
-Provisioning a customer therefore means three database rows and a company
-profile:
+| Host | Runs | Served by |
+| --- | --- | --- |
+| `demo.handytally.com` | latest `master` | Worker `handytally-web-demo` (`env.demo` in `web/wrangler.jsonc`) |
+| `prod.handytally.com`, the apex, `www`, and any subdomain that has never been promoted | latest release tag | Worker `handytally-web` (top level; its `*.handytally.com/*` route is the catch-all) |
+| `<customer>.handytally.com`, once promoted | a pinned release tag, never newer than prod | Worker `handytally-web-<customer>` (`env.<customer>`) |
+
+So a brand-new subdomain is live the moment its `organizations` row exists,
+served by prod's build through the catch-all. Giving the customer their own
+Worker (§3.6) is what lets them stay on a version while prod moves on.
+
+Provisioning a customer therefore means three database rows, a company
+profile, and one Wrangler environment:
 
 | Row | Where it is made |
 | --- | --- |
@@ -31,6 +39,11 @@ profile:
 | `organization_memberships` for the owner (`role = admin`, `is_active`) | Admin › Users › Invite on the customer host, or the SQL in §3.3 |
 | `auth.users` + `user_profiles` for the owner | created by the invite |
 | `company` (name, address, tax, logo) | the owner fills Admin › Company on their host |
+| `env.<sub>` block in `web/wrangler.jsonc` + entry in `promote.yml` | a PR, then one *Promote* run (§3.6) |
+
+`prod` and `demo` are organisations too (the template and the sandbox) and
+are reserved subdomains in `create-organization`; never give them to a
+customer.
 
 ## 2. Prerequisites (one-time, already in place)
 
@@ -143,11 +156,35 @@ have an *Import from Excel* button next to *Export* on their list page. Export
 first to get a workbook with the exact column headers, fill it, import it.
 Imports run on the customer host, so every row lands in that organisation.
 
+### 3.6 Give the customer their own Worker and promote the current prod release
+
+Until this step the host is served by prod's catch-all route and will change
+whenever prod does. To pin it:
+
+1. In `web/wrangler.jsonc`, copy the `wgelectricus` block under `env`, rename
+   it to `<sub>`, set `"name": "handytally-web-<sub>"` and the single route
+   `<sub>.handytally.com/*`. **The block must declare its own `routes`**; one
+   without them inherits prod's and takes over the apex.
+2. In `.github/workflows/promote.yml`, add `<sub>` to the `customer` choice
+   list.
+3. PR, merge (that deploys demo only; the new block does nothing until it is
+   used).
+4. Find the tag prod runs: `curl -s https://prod.handytally.com/release.json`.
+5. GitHub › Actions › *Promote release to customer* › Run workflow with
+   `tag = <that tag>`, `customer = <sub>`. The run creates the Worker and its
+   route, deploys the Release asset for the tag, and fails unless
+   `https://<sub>.handytally.com/release.json` reports it.
+6. The footer on `https://<sub>.handytally.com` now reads `<tag> · <sub>`.
+
+From here on the customer only moves when someone runs *Promote* for them
+([release-process.md §3](release-process.md#3-cutting-a-release)).
+
 ## 4. Smoke test
 
 Do this on `https://<sub>.handytally.com` before telling the customer.
 Tick every line; the two email lines need a real mailbox you can read.
 
+- [ ] The sidebar footer shows the expected version and, after §3.6, `· <sub>`; `https://<sub>.handytally.com/release.json` agrees.
 - [ ] `https://<sub>.handytally.com` loads over HTTPS with no certificate warning and shows the sign-in page.
 - [ ] Deep link: `https://<sub>.handytally.com/jobs/123` loads the app — the sign-in page when signed out, *job not found* when signed in. What matters is that it is not a Worker 404.
 - [ ] Sign-in is gated to members: sign in with a user who belongs to a **different** organisation → *You are not a member of `<Customer name>`* and no data is shown.
