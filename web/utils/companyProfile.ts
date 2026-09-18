@@ -38,6 +38,23 @@ export async function fetchCompanyProfile(organizationId: string | null | undefi
   return (data as CompanyProfile | null) ?? null;
 }
 
+// HT-83: Admin > Company used to `window.location.reload()` after a logo
+// change so the sidebar would pick it up, and the reload landed on the
+// Dashboard. Instead the page announces the change and the sidebar re-reads.
+type CompanyProfileListener = () => void;
+const companyProfileListeners = new Set<CompanyProfileListener>();
+
+export function subscribeCompanyProfile(listener: CompanyProfileListener): () => void {
+  companyProfileListeners.add(listener);
+  return () => {
+    companyProfileListeners.delete(listener);
+  };
+}
+
+export function notifyCompanyProfileChanged(): void {
+  companyProfileListeners.forEach(listener => listener());
+}
+
 /** The logo saved on the company row, or the newest logo attachment as a data: URL. */
 export async function fetchCompanyLogoDataUrl(organizationId: string | null | undefined): Promise<string | null> {
   let query = supabase

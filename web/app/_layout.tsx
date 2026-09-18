@@ -13,7 +13,7 @@ import { DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawe
 import { ActivityIndicator } from 'react-native-paper';
 
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
-import { fetchCompanyProfile } from '../utils/companyProfile';
+import { fetchCompanyProfile, subscribeCompanyProfile } from '../utils/companyProfile';
 import { ThemeProvider, useAppTheme } from '../contexts/ThemeContext';
 import { TenantGate } from '../components/TenantGate';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -38,19 +38,24 @@ function CustomDrawerContent(props: any) {
   const { organization } = useAuth();
 
   // HT-88: scoped to the organisation; an unscoped .single() failed for a
-  // superuser who can see every organisation's row.
+  // superuser who can see every organisation's row. HT-83: re-read when
+  // Admin > Company saves a logo, instead of that page reloading the app.
   useEffect(() => {
     let cancelled = false;
-    fetchCompanyProfile(organization?.id)
-      .then(company => {
-        if (!cancelled) setLogoUrl(company?.logo_url ?? null);
-      })
-      .catch(error => console.error('Error fetching logo:', error))
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    const load = () =>
+      fetchCompanyProfile(organization?.id)
+        .then(company => {
+          if (!cancelled) setLogoUrl(company?.logo_url ?? null);
+        })
+        .catch(error => console.error('Error fetching logo:', error))
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    load();
+    const unsubscribe = subscribeCompanyProfile(load);
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, [organization?.id]);
 

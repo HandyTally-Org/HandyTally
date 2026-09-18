@@ -14,7 +14,7 @@ import { st } from '../../../components/settings/ui';
 import { fileToBase64 } from '../../../utils/fileToBase64';
 import { formatEin } from '../../../utils/formatting';
 import { themed } from '../../../constants/Colors';
-import { fetchCompanyProfile } from '../../../utils/companyProfile';
+import { fetchCompanyProfile, notifyCompanyProfileChanged } from '../../../utils/companyProfile';
 
 // HT-47: Admin > Company on the HT-50 two-pane shell. Left: the organisation
 // and its sections; right: the selected one. Info is the former page (logo,
@@ -121,6 +121,7 @@ export default function AdminPage() {
     if (error) throw error;
     if (!data) throw new Error('Failed to save company record');
     setCompany(data);
+    notifyCompanyProfileChanged();
     return data;
   };
 
@@ -164,7 +165,6 @@ export default function AdminPage() {
         logo_url: url,
       });
       setLogoUrl(url);
-      showSnackbar('Logo URL saved successfully!');
     } catch (err) {
       console.error('Error saving logo URL:', err);
       setError('Error saving logo URL');
@@ -252,9 +252,6 @@ export default function AdminPage() {
       await handleLogoSubmit(dataUrl);
 
       showSnackbar('Logo uploaded and saved successfully!');
-
-      // Force reload to update sidebar
-      setTimeout(() => window.location.reload(), 1500); // Give time to see the snackbar before reload
     } catch (error: any) {
       console.error('Error uploading image:', error);
       showSnackbar('Error uploading image: ' + (error.message || 'Unknown error'));
@@ -270,9 +267,6 @@ export default function AdminPage() {
       await handleLogoSubmit(DEFAULT_LOGO_URL);
       setLogoUrl(DEFAULT_LOGO_URL);
       showSnackbar('Default logo set successfully!');
-
-      // Force reload to update sidebar
-      setTimeout(() => window.location.reload(), 1500); // Give time to see the snackbar before reload
     } catch (error: any) {
       console.error('Error setting default logo:', error);
       showSnackbar('Error setting default logo: ' + (error.message || 'Unknown error'));

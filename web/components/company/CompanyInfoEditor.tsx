@@ -1,4 +1,4 @@
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { TextInput } from 'react-native-paper';
 import { FormField, FormRow } from '../FormDialog';
 import { FormActions, FormPanel, FormSection, formLayoutTheme, useOutlinedInputProps } from '../FormLayout';
@@ -40,13 +40,19 @@ export function CompanyInfoEditor({ company, onChange, logoUrl, onChangeLogo, on
     <ScrollView contentContainerStyle={styles.content}>
       <FormPanel title="Logo" subtitle="Shown in the sidebar and at the top of every estimate and invoice.">
         <View style={styles.logoRow}>
-          <View style={styles.logoBox}>
+          <Pressable
+            onPress={onChangeLogo}
+            disabled={logoBusy}
+            accessibilityRole="button"
+            accessibilityLabel="Change company logo"
+            style={({ hovered }: any) => [styles.logoBox, hovered && !logoBusy && styles.logoBoxHover]}
+          >
             {logoUrl ? (
               <Image source={{ uri: logoUrl }} style={styles.logoImage} accessibilityLabel="Company logo" />
             ) : (
               <Text style={styles.logoEmpty}>No logo yet</Text>
             )}
-          </View>
+          </Pressable>
           <View style={styles.logoActions}>
             <View style={styles.logoButtons}>
               <PrimaryButton label={logoBusy ? 'Working…' : 'Change logo'} onPress={onChangeLogo} disabled={logoBusy} />
@@ -142,6 +148,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
+  logoBoxHover: { borderColor: st.faint },
   logoImage: { width: '100%', height: '100%', resizeMode: 'contain' },
   logoEmpty: { color: st.faint, fontSize: 13 },
   logoActions: { flex: 1, minWidth: 220, gap: 10 },
