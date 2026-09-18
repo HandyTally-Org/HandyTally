@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity } from 'react-native';
 import { Text, Button, Searchbar, Card, DataTable, IconButton, Dialog, Portal, Snackbar, List, FAB, ActivityIndicator, TextInput } from 'react-native-paper';
 import { supabase } from '../../lib/api';
@@ -70,33 +70,25 @@ export default function ClientsScreen() {
   const [relatedJobs, setRelatedJobs] = useState<Job[]>([]);
   const [relatedInvoices, setRelatedInvoices] = useState<Invoice[]>([]);
   const [showRelatedItemsDialog, setShowRelatedItemsDialog] = useState(false);
-  const [filteredClients, setFilteredClients] = useState<Client[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [showClientDetails, setShowClientDetails] = useState(false);
   const [activeDetailTab, setActiveDetailTab] = useState('info');
 
   useRefreshOnFocus(fetchClients);
 
-  useEffect(() => {
-    if (clients.length > 0) {
-      filterClients();
-    }
-  }, [searchQuery, clients, selectedTags, sortColumn, sortDirection]);
-
   async function fetchClients() {
     try {
       setLoading(true);
-      
+
       const { data, error } = await supabase
         .from('clients')
         .select('*')
         .order('name');
-      
+
       if (error) throw error;
-      
+
       if (data) {
         setClients(data);
-        setFilteredClients(data);
       }
     } catch (error) {
       console.error('Error fetching clients:', error);
@@ -270,9 +262,11 @@ export default function ClientsScreen() {
         .select();
       
       if (error) throw error;
-      
+
       if (data) {
-        setClients([...clients, data[0]]);
+        // Refetch rather than splicing the insert response locally, so the
+        // row also picks up DB-generated columns (uid, created_at, organization_id).
+        await fetchClients();
         setShowAddForm(false);
         showSnackbar('Client added successfully');
       }
@@ -291,43 +285,6 @@ export default function ClientsScreen() {
       setSortColumn(column);
       setSortDirection('ascending');
     }
-  };
-
-  const getFilteredClients = () => {
-    let filtered = [...clients];
-    
-    if (searchQuery) {
-      filtered = filtered.filter(client => 
-        client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        client.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        client.phone?.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-    
-    filtered.sort((a, b) => {
-      let comparison = 0;
-      
-      switch (sortColumn) {
-        case 'name':
-          comparison = a.name.localeCompare(b.name);
-          break;
-        case 'email':
-          comparison = (a.email || '').localeCompare(b.email || '');
-          break;
-        case 'phone':
-          comparison = (a.phone || '').localeCompare(b.phone || '');
-          break;
-        case 'address':
-          comparison = (a.address || '').localeCompare(b.address || '');
-          break;
-        default:
-          comparison = 0;
-      }
-      
-      return sortDirection === 'ascending' ? comparison : -comparison;
-    });
-    
-    return filtered;
   };
 
   const handleUpdateClient = async (clientUid: string, updates: any) => {
@@ -388,30 +345,50 @@ export default function ClientsScreen() {
   };
 
 
-  const filterClients = () => {
-    let filtered = [...clients];
-    
-    // Apply tag filter (multi-select)
+  // The rows actually rendered: tag filter, search, then sort, in one place
+  // derived from `clients` so add/edit/tag/delete are all reflected immediately.
+  const visibleClients = useMemo(() => {
+    let filtered = clients;
+
     if (selectedTags.length > 0) {
-      filtered = filtered.filter(client => 
+      filtered = filtered.filter(client =>
         selectedTags.includes(client.tag?.toLowerCase() || '')
       );
     }
-    
-    // Apply search filter
+
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(client => 
+      filtered = filtered.filter(client =>
         client.name.toLowerCase().includes(query) ||
-        client.email.toLowerCase().includes(query) ||
-        client.phone.toLowerCase().includes(query) ||
-        client.address.toLowerCase().includes(query)
+        (client.email || '').toLowerCase().includes(query) ||
+        (client.phone || '').toLowerCase().includes(query) ||
+        (client.address || '').toLowerCase().includes(query)
       );
     }
-    
-    // Return filtered and sorted clients
-    return filtered;
-  };
+
+    return [...filtered].sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortColumn) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case 'email':
+          comparison = (a.email || '').localeCompare(b.email || '');
+          break;
+        case 'phone':
+          comparison = (a.phone || '').localeCompare(b.phone || '');
+          break;
+        case 'address':
+          comparison = (a.address || '').localeCompare(b.address || '');
+          break;
+        default:
+          comparison = 0;
+      }
+
+      return sortDirection === 'ascending' ? comparison : -comparison;
+    });
+  }, [clients, searchQuery, selectedTags, sortColumn, sortDirection]);
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
@@ -692,12 +669,12 @@ export default function ClientsScreen() {
             <DataTable.Row style={{ backgroundColor: themed.panel }}>
               <DataTable.Cell>Loading clients...</DataTable.Cell>
             </DataTable.Row>
-          ) : filteredClients.length === 0 ? (
+          ) : visibleClients.length === 0 ? (
             <DataTable.Row style={{ backgroundColor: themed.panel }}>
               <DataTable.Cell>No clients found</DataTable.Cell>
             </DataTable.Row>
           ) : (
-            filteredClients.map(client => (
+            visibleClients.map(client => (
                   <DataTable.Row 
                     key={client.uid} 
                     style={{ backgroundColor: themed.panel }}
