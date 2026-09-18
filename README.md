@@ -188,8 +188,10 @@ Set them with `supabase secrets set KEY=value`. Never commit them; `.env*` is gi
 
 | Secret | Purpose |
 | --- | --- |
-| `CLOUDFLARE_API_TOKEN` | Token from the "Edit Cloudflare Workers" template; used by the `web-deploy` job |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account that owns the `handytally-web` Worker |
+| `CLOUDFLARE_API_TOKEN` | Token from the "Edit Cloudflare Workers" template; used by every deploy job (demo, prod, promote) |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account that owns the `handytally-web*` Workers |
+
+The release workflow also creates GitHub Releases with the built-in `GITHUB_TOKEN` (`permissions: contents: write` on that job); no extra secret is needed.
 
 ## Data model
 
@@ -218,7 +220,11 @@ Core tables (see `supabase/migrations/` for the authoritative definitions):
 
 ## Deployment
 
-- **Web** — every push to `master` runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml): `npm ci` → `npx expo export --platform web` → `wrangler deploy`, which publishes `dist/` as the `handytally-web` Cloudflare Worker described in [`web/wrangler.jsonc`](web/wrangler.jsonc). Pull requests run the build only.
+- **Web** — three hosts, three triggers, one build (HT-41; the process is [`Docs/release-process.md`](Docs/release-process.md)):
+  - `demo.handytally.com` runs the latest `master`. Every push to `master` runs [`ci.yml`](.github/workflows/ci.yml) → [`build-web.yml`](.github/workflows/build-web.yml) (`npm ci` → tests → `npx expo export --platform web` → `dist/release.json`) → `wrangler deploy --env demo`. Pull requests run the build only.
+  - `prod.handytally.com` (plus the apex, `www` and the `*.handytally.com` catch-all) runs the latest release tag. Pushing `vX.Y.Z` runs [`release.yml`](.github/workflows/release.yml): the same build, a GitHub Release with the customer notes and `web-dist-vX.Y.Z.tar.gz` attached, then `wrangler deploy` of the top-level Worker.
+  - Each customer host (`wgelectricus.handytally.com`) runs a pinned tag, never newer than prod. The manual [`promote.yml`](.github/workflows/promote.yml) workflow (`tag`, `customer`) downloads that tag's Release asset and runs `wrangler deploy --env <customer>`; nothing is rebuilt. Running it with an older tag is the rollback.
+  - All Workers are assets-only and defined in [`web/wrangler.jsonc`](web/wrangler.jsonc): the top level is prod, `env.demo` and one `env.<customer>` block per customer, each with its **own** `routes` (an env block without routes inherits prod's and takes over the apex). Every host answers `/release.json` with the version it runs.
 - **Database & functions** — `supabase db push` and `supabase functions deploy` against the linked project. Function secrets are managed with `supabase secrets set`.
 - **Tenant subdomains** — `create-organization` only inserts the row. A wildcard route on the Worker plus a proxied `*.handytally.com` DNS record serve every subdomain from the same bundle (HT-37); nothing is provisioned per tenant. Onboarding a customer is [`Docs/deploy-customer.md`](Docs/deploy-customer.md).
 

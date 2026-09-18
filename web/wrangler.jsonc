@@ -1,21 +1,44 @@
-// Cloudflare Workers configuration for the HandyTally web app (HT-31).
+// Cloudflare Workers configuration for the HandyTally web app (HT-31, HT-41).
 //
 // The app is a static Expo export (`npx expo export --platform web` -> dist/).
-// This is an assets-only Worker: there is no script, Cloudflare just serves dist/
-// from its edge. CI (.github/workflows/ci.yml) builds dist/ and runs
-// `wrangler deploy` from this directory on every push to master.
+// These are assets-only Workers: there is no script, Cloudflare just serves
+// dist/ from its edge. One bundle serves every host; the app works out the
+// organization from the hostname (HT-38) and the release channel from the
+// same hostname (HT-41).
 //
-// Routes: the apex and www (HT-31), plus every first-level subdomain (HT-37).
-// One bundle serves all customers; the app works out the organization from the
-// hostname (HT-38). A customer subdomain therefore needs no DNS record, no
-// deploy and no config of its own: the proxied wildcard `*` A record in
-// Cloudflare DNS plus the wildcard route below cover it. Removing a route is
-// the rollback for that hostname.
+// Release channels (HT-41): one Worker per tier, all from this file.
+//
+//   top level  handytally-web               prod.handytally.com, the apex, www
+//                                           and the `*` catch-all. Deployed by
+//                                           .github/workflows/release.yml when
+//                                           a `vX.Y.Z` tag is pushed.
+//   env.demo   handytally-web-demo          demo.handytally.com. Deployed by
+//                                           ci.yml on every push to master.
+//   env.<customer>                          one block per customer host, e.g.
+//              handytally-web-wgelectricus  wgelectricus.handytally.com.
+//                                           Deployed by promote.yml, by hand,
+//                                           from the GitHub Release asset of
+//                                           the chosen tag.
+//
+// Cloudflare picks the most specific matching route, so a customer's own
+// route beats the `*` catch-all on the prod Worker. Until a customer has been
+// promoted once, their host is still served by the catch-all (prod's build).
+// The proxied wildcard `A *` DNS record (HT-37) covers every host: adding a
+// customer needs no DNS work, only the env block below plus one promote run.
+//
+// GOTCHA -- `routes` is an INHERITABLE key in Wrangler config. An environment
+// that does not declare its own `routes` silently inherits the top-level
+// ones and takes over the apex on its next deploy. Every env block MUST
+// list its routes. `assets` is repeated in each block for the same reason.
+//
+// Rollback for one host: run "Promote release to customer" again with the
+// previous tag, or `wrangler rollback --env <customer>`.
 {
   "name": "handytally-web",
   "compatibility_date": "2026-09-15",
   "workers_dev": true,
   "routes": [
+    { "pattern": "prod.handytally.com/*", "zone_name": "handytally.com" },
     { "pattern": "handytally.com/*", "zone_name": "handytally.com" },
     { "pattern": "www.handytally.com/*", "zone_name": "handytally.com" },
     { "pattern": "*.handytally.com/*", "zone_name": "handytally.com" }
@@ -27,5 +50,35 @@
     // /jobs/123. Fall back to index.html so the router resolves deep links
     // client-side instead of returning a 404.
     "not_found_handling": "single-page-application"
+  },
+  "env": {
+    // Sandbox and sales demo: latest master.
+    "demo": {
+      "name": "handytally-web-demo",
+      "workers_dev": false,
+      // Required in every env block (see GOTCHA above).
+      "routes": [
+        { "pattern": "demo.handytally.com/*", "zone_name": "handytally.com" }
+      ],
+      "assets": {
+        "directory": "./dist",
+        "not_found_handling": "single-page-application"
+      }
+    },
+    // Customer hosts: a pinned release tag, never newer than prod. Add one
+    // block per customer (Docs/deploy-customer.md) and add the name to the
+    // `customer` choice list in .github/workflows/promote.yml.
+    "wgelectricus": {
+      "name": "handytally-web-wgelectricus",
+      "workers_dev": false,
+      // Required in every env block (see GOTCHA above).
+      "routes": [
+        { "pattern": "wgelectricus.handytally.com/*", "zone_name": "handytally.com" }
+      ],
+      "assets": {
+        "directory": "./dist",
+        "not_found_handling": "single-page-application"
+      }
+    }
   }
 }

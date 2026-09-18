@@ -250,8 +250,9 @@ browser ─ https://<sub>.handytally.com ─► Cloudflare wildcard route ─►
 
 | Component | How |
 | --- | --- |
-| Web app | `.github/workflows/ci.yml` on push to `master`: `npm ci` → `npx expo export --platform web` → `wrangler deploy`. `web/wrangler.jsonc` defines an assets-only Cloudflare Worker (`handytally-web`) that serves `dist/` with `not_found_handling: single-page-application`, because Expo emits `jobs/[id].html` for dynamic routes and deep links must fall back to `index.html`. `app.json` sets `web.output = "static"` and Metro as the bundler. |
-| CI | The same workflow runs the export on every PR and uploads `dist/` as an artifact; the deploy job is skipped for PRs. |
+| Web app: build | `.github/workflows/build-web.yml`, a reusable workflow every deploy calls: `npm ci` → unit tests → `npx expo export --platform web` → `node scripts/release-json.mjs`, uploaded as the `web-dist` artifact. The caller passes the version label (a tag, or empty for `master-<sha7>`); it is inlined as `EXPO_PUBLIC_APP_VERSION` / `EXPO_PUBLIC_BUILD_SHA` and written to `dist/release.json`. `app.json` sets `web.output = "static"` and Metro as the bundler. |
+| Web app: release channels (HT-41) | Three tiers, one bundle, one Worker per tier from `web/wrangler.jsonc`. **demo** (`demo.handytally.com`, `env.demo`, Worker `handytally-web-demo`): `ci.yml` deploys every push to `master`. **prod** (`prod.handytally.com`, the apex, `www` and the `*` catch-all; top-level Worker `handytally-web`): `release.yml` deploys a pushed `vX.Y.Z` tag after publishing a GitHub Release with `web-dist-vX.Y.Z.tar.gz`. **customer** (`wgelectricus.handytally.com`, `env.wgelectricus`, Worker `handytally-web-wgelectricus`): `promote.yml` (`workflow_dispatch`: `tag`, `customer`) unpacks that Release asset and runs `wrangler deploy --env <customer>`; it refuses a tag newer than what prod's `/release.json` reports unless `skip_prod_check` is set. Cloudflare routes the most specific pattern, so a customer's own route beats the catch-all; a host that has never been promoted is still served by prod. Every env block declares its own `routes` because the key is inheritable. All Workers are assets-only with `not_found_handling: single-page-application`, because Expo emits `jobs/[id].html` for dynamic routes and deep links must fall back to `index.html`. |
+| CI | `ci.yml` runs the build on every PR; the demo deploy job is skipped for PRs. Each deploy ends by reading `/release.json` on the host and failing if the version is not the one just built (`.github/scripts/verify-release.sh`). |
 | Database | `supabase db push` against the linked self-hosted project. |
 | Edge functions | `supabase functions deploy <name>`; secrets via `supabase secrets set`. |
 | Admin app | No pipeline; run locally with `npx expo start --web`. |
@@ -261,8 +262,9 @@ browser ─ https://<sub>.handytally.com ─► Cloudflare wildcard route ─►
 
 | Where | What |
 | --- | --- |
-| GitHub Actions variables | `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_BASE_DOMAIN` (build) |
-| GitHub Actions secrets | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` (deploy) |
+| GitHub Actions variables | `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_BASE_DOMAIN` (build). Set by CI per build: `EXPO_PUBLIC_APP_VERSION`, `EXPO_PUBLIC_BUILD_SHA` (HT-41) |
+| GitHub Actions secrets | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` (every deploy). `release.yml` creates GitHub Releases with the built-in `GITHUB_TOKEN` |
+| Hosts | `demo.handytally.com` (master), `prod.handytally.com` + apex + `www` + `*` catch-all (latest tag), `<customer>.handytally.com` (pinned tag). One shared Supabase for all three: schema changes must be expand-only per release (CONTRIBUTING.md § Database changes) |
 | Supabase function secrets | `RESEND_API_KEY`, `INVOICE_FROM_ADDRESS`, `INVOICE_REPLY_TO`, `CALENDAR_FROM_ADDRESS`, `BASE_DOMAIN` |
 | Auto-injected into functions | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` |
 | Local | `web/.env`, `admin-app/.env`, `supabase/functions/.env` (templates committed as `.env.example`) |
