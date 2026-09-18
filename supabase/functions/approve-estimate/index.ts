@@ -59,10 +59,26 @@ const formatMoney = (value: unknown) =>
     .format(Number(value) || 0);
 
 const INVOICE_COLUMNS =
-  "uid, invoice_number, status, total, approved_at, created_by, clients:client_id (name)";
+  "uid, invoice_number, status, total, approved_at, created_by, organization_id, clients:client_id (name)";
+
+// HT-88: the service role sees every organisation's company row, so read the
+// estimate's own (newest first, in case an organisation has two).
+const businessNameFor = async (
+  admin: ReturnType<typeof createClient>,
+  invoice: { organization_id: string | null },
+): Promise<string> => {
+  let query = admin.from("company").select("business_name");
+  if (invoice.organization_id) query = query.eq("organization_id", invoice.organization_id);
+  const { data: company } = await query
+    .order("updated_at", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+  return (company as { business_name?: string | null } | null)?.business_name || "HandyTally";
+};
 
 type InvoiceRow = {
   uid: string | number;
+  organization_id: string | null;
   invoice_number: string | number;
   status: string;
   total: number | null;
@@ -163,13 +179,6 @@ serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const { data: company } = await admin
-    .from("company")
-    .select("business_name")
-    .limit(1)
-    .maybeSingle();
-  const businessName = company?.business_name || "HandyTally";
-
   // One conditional update does the work: it only matches while the row is
   // still an estimate, so two clicks on the same link cannot both approve.
   const approvedAt = new Date().toISOString();
@@ -188,6 +197,7 @@ serve(async (req) => {
 
   if (approved) {
     const invoice = approved as unknown as InvoiceRow;
+    const businessName = await businessNameFor(admin, invoice);
     console.log(`Estimate #${invoice.invoice_number} approved`);
     const appOrigin = (APP_URL || req.headers.get("Origin") || "").replace(/\/+$/, "");
     await notifyCreator(admin, invoice, businessName, appOrigin);
@@ -210,6 +220,7 @@ serve(async (req) => {
   }
 
   const invoice = existing as unknown as InvoiceRow;
+  const businessName = await businessNameFor(admin, invoice);
   if (invoice.approved_at) {
     return json({ result: "already_approved", ...summary(invoice, businessName) }, 200);
   }
