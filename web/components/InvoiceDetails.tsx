@@ -53,7 +53,7 @@ export interface InvoiceDetailsProps {
   isEditing?: boolean;
   /** The company logo as a data: URL (HT-88). Falls back to the company row's logo_url. */
   companyLogo?: string | null;
-  /** HT-78: Company > Documents rows marked "On invoices" (label + details; fileName is display-only in v1). */
+  /** HT-78: Company > Documents rows marked "On invoices" (label + details; HT-87 attaches fileName's file when sending). */
   companyDocuments?: { label: string; value: string; fileName: string | null }[];
 }
 
@@ -186,7 +186,10 @@ export function InvoiceDetails({
         // Render exactly what the Print action renders, so the client receives
         // the same document the sender just looked at.
         const html = generateInvoiceHTML(safeInvoice, items, documentCompany, companyDocuments);
+        // HT-87: the function attaches the company documents itself, so the
+        // files never come down to the browser.
         await invokeSendFunction('send-invoice', {
+          invoiceId: safeInvoice.uid,
           to: recipientEmail,
           subject: `${documentLabel} #${safeInvoice.invoice_number} from ${companyInfo?.business_name || 'HandyTally'}`,
           html,
@@ -550,7 +553,7 @@ export function InvoiceDetails({
                   <Text key={i} style={{ fontSize: 14, color: INK, marginBottom: i < companyDocuments.length - 1 ? 4 : 0 }}>
                     <Text style={{ fontWeight: '600' }}>{companyDoc.label}</Text>
                     {companyDoc.value ? ` — ${companyDoc.value}` : ''}
-                    {companyDoc.fileName ? ` (on file: ${companyDoc.fileName})` : ''}
+                    {companyDoc.fileName ? ` (attached: ${companyDoc.fileName})` : ''}
                   </Text>
                 ))}
               </View>

@@ -27,13 +27,61 @@ type SendInvoiceRequest = {
   to: string;
   subject: string;
   html: string;
-  // Not populated yet. When PDF rendering is added, Resend takes
-  // [{ filename, content }] where content is a base64 string.
+  // HT-87: the invoice being sent. Its organisation's Company > Documents
+  // rows marked "On invoices" that carry a file ride along as attachments.
+  invoiceId?: string | number;
+  // Extra [{ filename, content }] (base64) from the caller, e.g. a PDF once
+  // that exists. Company documents are added here, not by the browser.
   attachments?: { filename: string; content: string }[];
 };
 
+type MailAttachment = { filename: string; content: string };
+
+// Resend caps a message at 40 MB and base64 inflates by a third, so keep the
+// documents well under that and leave room for the HTML and the logo.
+const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
+
 const json = (body: unknown, status: number) =>
   new Response(JSON.stringify(body), { status, headers: corsHeaders });
+
+// HT-87: the organisation's documents marked "On invoices" that have a file.
+// Read as the caller (RLS applies, so a user only ever gets rows they can see)
+// and narrowed to the invoice's organisation, because a superuser or a member
+// of several organisations sees more than one organisation's rows. Returns an
+// error message instead of attachments when the files would not fit.
+const loadDocumentAttachments = async (
+  caller: ReturnType<typeof createClient>,
+  organizationId: string | null,
+): Promise<{ attachments: MailAttachment[]; error?: string }> => {
+  let query = caller
+    .from("company_attachments")
+    .select("name, file_size, file_data")
+    .eq("is_logo", false)
+    .eq("include_on_invoices", true)
+    .not("file_data", "is", null)
+    .order("id", { ascending: true });
+  query = organizationId ? query.eq("organization_id", organizationId) : query.is("organization_id", null);
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const attachments: MailAttachment[] = [];
+  let totalBytes = 0;
+  for (const row of (data ?? []) as { name: string | null; file_size: number | null; file_data: string | null }[]) {
+    if (!row.file_data) continue;
+    totalBytes += row.file_size ?? Math.floor((row.file_data.length * 3) / 4);
+    attachments.push({ filename: row.name || "document", content: row.file_data });
+  }
+
+  if (totalBytes > MAX_ATTACHMENT_BYTES) {
+    const mb = (totalBytes / (1024 * 1024)).toFixed(1);
+    return {
+      attachments: [],
+      error: `The company documents marked for invoices total ${mb} MB; the email limit is ${MAX_ATTACHMENT_BYTES / (1024 * 1024)} MB. Untick some under Admin > Company > Documents and send again.`,
+    };
+  }
+  return { attachments };
+};
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -54,11 +102,11 @@ serve(async (req) => {
   // project, and the anon key satisfies that -- it ships in the app bundle and
   // is public. Resolve the token to a user so that anything short of a live
   // session (the bare anon key, an expired or revoked session) is refused.
-  const { data: { user }, error: authError } = await createClient(
-    SUPABASE_URL,
-    SUPABASE_ANON_KEY,
-    { global: { headers: { Authorization: authHeader } } },
-  ).auth.getUser();
+  const caller = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: authHeader } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data: { user }, error: authError } = await caller.auth.getUser();
 
   if (authError || !user) {
     return json({ error: "Unauthorized" }, 401);
@@ -76,9 +124,39 @@ serve(async (req) => {
     return json({ error: "Invalid JSON body" }, 400);
   }
 
-  const { to, subject, html, attachments } = payload ?? {};
+  const { to, subject, html, invoiceId } = payload ?? {};
   if (!to || !subject || !html) {
     return json({ error: "to, subject and html are all required" }, 400);
+  }
+
+  const attachments: MailAttachment[] = [...(payload.attachments ?? [])];
+
+  if (invoiceId) {
+    // The invoice is read as the caller too: if RLS hides it, the caller has
+    // no business attaching that organisation's documents.
+    const { data: invoice, error: invoiceError } = await caller
+      .from("invoices")
+      .select("organization_id")
+      .eq("uid", invoiceId)
+      .maybeSingle();
+    if (invoiceError) {
+      console.error("Could not load the invoice:", invoiceError);
+      return json({ error: "Could not load the invoice" }, 500);
+    }
+    if (!invoice) {
+      return json({ error: "Invoice not found" }, 404);
+    }
+
+    try {
+      const documents = await loadDocumentAttachments(caller, (invoice as { organization_id: string | null }).organization_id);
+      if (documents.error) {
+        return json({ error: documents.error }, 400);
+      }
+      attachments.push(...documents.attachments);
+    } catch (error) {
+      console.error("Could not load the company documents:", error);
+      return json({ error: "Could not load the company documents to attach" }, 500);
+    }
   }
 
   try {
@@ -94,7 +172,7 @@ serve(async (req) => {
         subject,
         html,
         ...(INVOICE_REPLY_TO ? { reply_to: INVOICE_REPLY_TO } : {}),
-        ...(attachments?.length ? { attachments } : {}),
+        ...(attachments.length ? { attachments } : {}),
       }),
     });
 
@@ -112,7 +190,7 @@ serve(async (req) => {
       );
     }
 
-    return json({ id: result?.id ?? null }, 200);
+    return json({ id: result?.id ?? null, attachmentCount: attachments.length }, 200);
   } catch (error) {
     console.error("Error sending invoice email:", error);
     return json({ error: "Failed to send the invoice email" }, 500);

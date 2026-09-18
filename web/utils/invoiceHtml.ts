@@ -35,7 +35,7 @@ const textLines = (values: unknown[]) =>
     .map(line => `<div>${escapeHtml(line)}</div>`)
     .join('');
 
-/** HT-78: a Company > Documents row marked to show on invoices (name + details; fileName is display-only in v1, nothing is attached yet). */
+/** HT-78: a Company > Documents row marked to show on invoices (name + details; HT-87 attaches fileName's file to the sent email). */
 export type InvoiceDocumentSummary = { label: string; value: string; fileName: string | null };
 
 export const generateInvoiceHTML = (invoice: any, items: any[], companyInfo: any, companyDocuments: InvoiceDocumentSummary[] = []) => {
@@ -261,7 +261,7 @@ export const renderInvoiceDocument = (
                 ${companyDocuments.map(companyDoc => `
                   <tr>
                     <td><strong>${companyDoc.label}</strong></td>
-                    <td>${companyDoc.value}${companyDoc.fileName ? ` <em>(on file: ${companyDoc.fileName})</em>` : ''}</td>
+                    <td>${escapeHtml(companyDoc.value)}${companyDoc.fileName ? ` <em>(attached: ${escapeHtml(companyDoc.fileName)})</em>` : ''}</td>
                   </tr>
                 `).join('')}
               </tbody>

@@ -243,8 +243,9 @@ export function CompanyDocumentsEditor({ companyId, ensureCompanyId }: Props) {
       <ScrollView contentContainerStyle={styles.content}>
         <SectionLabel>Documents</SectionLabel>
         <Text style={styles.hint}>
-          Insurance, licences, your EMR and any other paper a client may ask for. Details are free text; attach the
-          certificate or letter itself to have it on hand for estimates and invoices.
+          Insurance, licences, your EMR and any other paper a client may ask for. Details are free text. Tick
+          "On invoices" to print the name and details on estimates and invoices; if the row has a file, it is
+          also attached to the emails you send.
         </Text>
 
         {rows.length === 0 ? (
