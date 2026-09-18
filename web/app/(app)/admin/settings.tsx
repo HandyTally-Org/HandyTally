@@ -187,11 +187,11 @@ export default function SettingsScreen() {
             <Ionicons
               name="reorder-three-outline"
               size={22}
-              color={item.pinned ? '#ccc' : '#666'}
+              color={item.pinned ? st.faint : themed.muted}
               style={styles.handle}
               accessibilityLabel={item.pinned ? undefined : `Drag ${item.label}`}
             />
-            <Ionicons name={item.icon} size={22} color={visible ? '#333' : '#999'} style={styles.rowIcon} />
+            <Ionicons name={item.icon} size={22} color={visible ? themed.text : st.faint} style={styles.rowIcon} />
             <Text style={[styles.rowLabel, !visible && styles.rowLabelHidden]}>{item.label}</Text>
             {item.pinned ? (
               <Text style={styles.pinnedNote}>Always shown</Text>
@@ -360,32 +360,32 @@ const styles = StyleSheet.create({
     borderColor: st.border,
     borderRadius: 10,
     overflow: 'hidden',
-    backgroundColor: '#ffffff',
+    backgroundColor: st.panelBg,
   },
   listContent: { padding: 16 },
   paneTitle: { marginBottom: 4 },
   appearance: { marginTop: 26, paddingTop: 18, borderTopWidth: 1, borderTopColor: st.border },
   appearanceRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10 },
-  appearanceSub: { fontSize: 12, color: '#999' },
-  hint: { color: '#666', marginBottom: 12 },
+  appearanceSub: { fontSize: 12, color: st.faint },
+  hint: { color: st.muted, marginBottom: 12 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    backgroundColor: '#ffffff',
+    borderBottomColor: st.rowBorder,
+    backgroundColor: st.panelBg,
   },
-  rowSelected: { backgroundColor: '#f3f6fb' },
+  rowSelected: { backgroundColor: themed.active },
   rowDragging: { opacity: 0.5 },
   handle: { marginRight: 8 },
   rowIcon: { marginRight: 10 },
-  rowLabel: { flex: 1, fontSize: 15, color: '#333' },
-  rowLabelHidden: { color: '#999', textDecorationLine: 'line-through' },
-  pinnedNote: { color: '#999', fontSize: 12, marginRight: 8 },
+  rowLabel: { flex: 1, fontSize: 15, color: st.text },
+  rowLabelHidden: { color: st.faint, textDecorationLine: 'line-through' },
+  pinnedNote: { color: st.faint, fontSize: 12, marginRight: 8 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16, flexWrap: 'wrap' },
   unsaved: { color: '#b45309' },
   detailRoot: { flex: 1, minHeight: 0 },
-  placeholderHint: { color: '#666', padding: 22 },
+  placeholderHint: { color: st.muted, padding: 22 },
 });
