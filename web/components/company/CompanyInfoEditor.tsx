@@ -3,6 +3,7 @@ import { TextInput } from 'react-native-paper';
 import { FormField, FormRow } from '../FormDialog';
 import { FormActions, FormPanel, FormSection, formLayoutTheme, useOutlinedInputProps } from '../FormLayout';
 import { OutlineButton, PrimaryButton, st } from '../settings/ui';
+import { formatEin } from '../../utils/formatting';
 
 // HT-47: the Info section of Admin > Company: the logo in its own card, then
 // the business information in the HT-60 panel style (FormPanel, uppercase
@@ -108,8 +109,10 @@ export function CompanyInfoEditor({ company, onChange, logoUrl, onChangeLogo, on
           <FormRow>
             <FormField label="EIN">
               <TextInput
-                value={company.ein || ''}
-                onChangeText={text => onChange({ ein: text })}
+                value={formatEin(company.ein)}
+                onChangeText={text => onChange({ ein: formatEin(text) })}
+                keyboardType="number-pad"
+                maxLength={10}
                 placeholder="12-3456789"
                 {...outlinedInputProps}
               />

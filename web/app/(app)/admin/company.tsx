@@ -12,6 +12,7 @@ import { CompanyInfoEditor, type CompanyData } from '../../../components/company
 import { CompanyDocumentsEditor } from '../../../components/company/CompanyDocumentsEditor';
 import { st } from '../../../components/settings/ui';
 import { fileToBase64 } from '../../../utils/fileToBase64';
+import { formatEin } from '../../../utils/formatting';
 import { themed } from '../../../constants/Colors';
 
 // HT-47: Admin > Company on the HT-50 two-pane shell. Left: the organisation
@@ -130,6 +131,7 @@ export default function AdminPage() {
         .from('company')
         .upsert({
           ...company,
+          ein: formatEin(company.ein),
           ...(organization ? { organization_id: organization.id } : {}),
           updated_at: new Date().toISOString()
         })

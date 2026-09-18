@@ -1,4 +1,4 @@
-import { formatClientAddress, formatDateTime } from './formatting';
+import { formatClientAddress, formatDateTime, formatEin } from './formatting';
 
 describe('formatClientAddress', () => {
   it('joins all four parts as "address, city, state zip"', () => {
@@ -45,5 +45,21 @@ describe('formatDateTime', () => {
     expect(formatDateTime(undefined)).toBe('');
     expect(formatDateTime('')).toBe('');
     expect(formatDateTime('not a date')).toBe('');
+  });
+});
+
+describe('formatEin', () => {
+  it('inserts the dash progressively as digits arrive', () => {
+    expect(formatEin('88883848')).toBe('88-883848');
+    expect(formatEin('11111111111')).toBe('11-1111111');
+    expect(formatEin('12-3456789')).toBe('12-3456789');
+    expect(formatEin('1')).toBe('1');
+    expect(formatEin('ab12')).toBe('12');
+  });
+
+  it('is blank for empty input', () => {
+    expect(formatEin(null)).toBe('');
+    expect(formatEin(undefined)).toBe('');
+    expect(formatEin('')).toBe('');
   });
 });
