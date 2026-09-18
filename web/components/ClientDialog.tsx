@@ -7,6 +7,7 @@ import { findLabel, labelText } from '../constants/labels';
 import { normalizeCustomValues, validateCustomValues, type CustomFieldValues } from '../constants/customFields';
 import { FormDialog, FormDialogFooter, FormField, FormRow, inputStyle } from './FormDialog';
 import { themed } from '../constants/Colors';
+import { formatPhone } from '../utils/formatting';
 
 // The add/edit popup for a client on the Clients list, in the same shell as
 // the material and labor dialogs.
@@ -36,7 +37,7 @@ function toValues(client?: ClientLike | null): Values {
   return {
     name: client.name ?? '',
     email: client.email ?? '',
-    phone: client.phone ?? '',
+    phone: formatPhone(client.phone),
     address: client.address ?? '',
     notes: client.notes ?? '',
     tag: client.tag ?? '',
@@ -155,8 +156,10 @@ export function ClientDialog({
             mode="outlined"
             label="Phone"
             value={values.phone}
-            onChangeText={change('phone')}
+            onChangeText={text => change('phone')(formatPhone(text))}
             keyboardType="phone-pad"
+            placeholder="+1 (555) 555-0100"
+            maxLength={17}
             style={inputStyle}
           />
         </FormField>

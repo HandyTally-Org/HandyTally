@@ -4,7 +4,7 @@ import { Text, Button, Card, DataTable, TextInput, ActivityIndicator, IconButton
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../lib/api';
 import { styles as globalStyles } from '../../styles';
-import { formatDate } from '../../utils/formatting';
+import { formatDate, formatPhone } from '../../utils/formatting';
 import { MaterialIcons } from '@expo/vector-icons';
 import { NotesSection } from '../../components/NotesSection';
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
@@ -16,9 +16,11 @@ import { findLabel, labelText } from '../../constants/labels';
 import { FormField, FormRow } from '../../components/FormDialog';
 import { FormActions, FormPanel, FormSection, useOutlinedInputProps } from '../../components/FormLayout';
 import { themed } from '../../constants/Colors';
+import { useFeedback } from '../../contexts/FeedbackContext';
 
 export default function ClientDetailsScreen() {
   const router = useRouter();
+  const { notify } = useFeedback();
   const outlinedInputProps = useOutlinedInputProps();
   const { id } = useLocalSearchParams();
   const [client, setClient] = useState(null);
@@ -116,7 +118,7 @@ export default function ClientDetailsScreen() {
     // anything that is not a number is rejected here instead of by Postgres.
     const zipText = String(editedClient.zip ?? '').trim();
     if (zipText && !/^\d+$/.test(zipText)) {
-      alert('ZIP must contain digits only');
+      notify('ZIP must contain digits only', 'error');
       return;
     }
     const zip = zipText ? Number(zipText) : null;
@@ -143,11 +145,11 @@ export default function ClientDetailsScreen() {
       if (error) throw error;
       
       setClient(editedClient);
-      alert('Client updated successfully');
+      notify('Client updated successfully', 'success');
       
     } catch (error) {
       console.error('Error updating client:', error);
-      alert('Error updating client');
+      notify('Error updating client', 'error');
     } finally {
       setSaving(false);
     }
@@ -381,8 +383,11 @@ export default function ClientDetailsScreen() {
                   </FormField>
                   <FormField label="Phone">
                     <TextInput
-                      value={editedClient?.phone || ''}
-                      onChangeText={(text) => setEditedClient({ ...editedClient, phone: text })}
+                      value={formatPhone(editedClient?.phone)}
+                      onChangeText={(text) => setEditedClient({ ...editedClient, phone: formatPhone(text) })}
+                      keyboardType="phone-pad"
+                      maxLength={17}
+                      placeholder="+1 (555) 555-0100"
                       {...outlinedInputProps}
                     />
                   </FormField>

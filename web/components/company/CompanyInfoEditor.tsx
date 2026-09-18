@@ -1,9 +1,9 @@
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { TextInput } from 'react-native-paper';
 import { FormField, FormRow } from '../FormDialog';
 import { FormActions, FormPanel, FormSection, formLayoutTheme, useOutlinedInputProps } from '../FormLayout';
 import { OutlineButton, PrimaryButton, st } from '../settings/ui';
-import { formatEin } from '../../utils/formatting';
+import { formatEin, formatPhone } from '../../utils/formatting';
 
 // HT-47: the Info section of Admin > Company: the logo in its own card, then
 // the business information in the HT-60 panel style (FormPanel, uppercase
@@ -40,13 +40,19 @@ export function CompanyInfoEditor({ company, onChange, logoUrl, onChangeLogo, on
     <ScrollView contentContainerStyle={styles.content}>
       <FormPanel title="Logo" subtitle="Shown in the sidebar and at the top of every estimate and invoice.">
         <View style={styles.logoRow}>
-          <View style={styles.logoBox}>
+          <Pressable
+            onPress={onChangeLogo}
+            disabled={logoBusy}
+            accessibilityRole="button"
+            accessibilityLabel="Change company logo"
+            style={({ hovered }: any) => [styles.logoBox, hovered && !logoBusy && styles.logoBoxHover]}
+          >
             {logoUrl ? (
               <Image source={{ uri: logoUrl }} style={styles.logoImage} accessibilityLabel="Company logo" />
             ) : (
               <Text style={styles.logoEmpty}>No logo yet</Text>
             )}
-          </View>
+          </Pressable>
           <View style={styles.logoActions}>
             <View style={styles.logoButtons}>
               <PrimaryButton label={logoBusy ? 'Working…' : 'Change logo'} onPress={onChangeLogo} disabled={logoBusy} />
@@ -95,10 +101,11 @@ export function CompanyInfoEditor({ company, onChange, logoUrl, onChangeLogo, on
             </FormField>
             <FormField label="Phone">
               <TextInput
-                value={company.phone || ''}
-                onChangeText={text => onChange({ phone: text })}
+                value={formatPhone(company.phone)}
+                onChangeText={text => onChange({ phone: formatPhone(text) })}
                 keyboardType="phone-pad"
-                placeholder="(555) 555-0100"
+                maxLength={17}
+                placeholder="+1 (555) 555-0100"
                 {...outlinedInputProps}
               />
             </FormField>
@@ -142,6 +149,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
+  logoBoxHover: { borderColor: st.faint },
   logoImage: { width: '100%', height: '100%', resizeMode: 'contain' },
   logoEmpty: { color: st.faint, fontSize: 13 },
   logoActions: { flex: 1, minWidth: 220, gap: 10 },

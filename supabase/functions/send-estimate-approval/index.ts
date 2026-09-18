@@ -18,6 +18,9 @@
 // the service role and never sent to the browser. The origin is APP_URL when
 // set, otherwise the request's Origin header (same rule as invite-user).
 //
+// HT-87: Company > Documents rows marked "On invoices" that carry a file are
+// attached to the email, read here (never posted up from the browser).
+//
 // Recipients: the client's email and the creator's email
 // (invoices.created_by -> auth.users). When the estimate has no creator on
 // record, the user sending it stands in.
@@ -85,6 +88,51 @@ const messageToHtml = (message: string) =>
 // pull any data: URI out of the rendered document and swap it for a cid:
 // reference before sending.
 type InlineImage = { filename: string; content: string; content_id: string };
+type MailAttachment = { filename: string; content: string };
+
+// HT-87: Resend caps a message at 40 MB and base64 inflates by a third, so
+// keep the documents well under that and leave room for the HTML and logo.
+const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
+
+// The organisation's documents marked "On invoices" that have a file. Read as
+// the caller (RLS applies, so a user only ever gets rows they can see) and
+// narrowed to the estimate's organisation, because a superuser or a member of
+// several organisations sees more than one organisation's rows. Returns an
+// error message instead of attachments when the files would not fit. Same
+// code as in send-invoice; the two functions deploy separately.
+const loadDocumentAttachments = async (
+  callerClient: ReturnType<typeof createClient>,
+  organizationId: string | null,
+): Promise<{ attachments: MailAttachment[]; error?: string }> => {
+  let query = callerClient
+    .from("company_attachments")
+    .select("name, file_size, file_data")
+    .eq("is_logo", false)
+    .eq("include_on_invoices", true)
+    .not("file_data", "is", null)
+    .order("id", { ascending: true });
+  query = organizationId ? query.eq("organization_id", organizationId) : query.is("organization_id", null);
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const attachments: MailAttachment[] = [];
+  let totalBytes = 0;
+  for (const row of (data ?? []) as { name: string | null; file_size: number | null; file_data: string | null }[]) {
+    if (!row.file_data) continue;
+    totalBytes += row.file_size ?? Math.floor((row.file_data.length * 3) / 4);
+    attachments.push({ filename: row.name || "document", content: row.file_data });
+  }
+
+  if (totalBytes > MAX_ATTACHMENT_BYTES) {
+    const mb = (totalBytes / (1024 * 1024)).toFixed(1);
+    return {
+      attachments: [],
+      error: `The company documents marked for invoices total ${mb} MB; the email limit is ${MAX_ATTACHMENT_BYTES / (1024 * 1024)} MB. Untick some under Admin > Company > Documents and send again.`,
+    };
+  }
+  return { attachments };
+};
 
 const extractInlineImages = (markup: string): { markup: string; images: InlineImage[] } => {
   const images: InlineImage[] = [];
@@ -158,11 +206,11 @@ serve(async (req) => {
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return json({ error: "Unauthorized" }, 401);
   }
-  const { data: { user: caller }, error: authError } = await createClient(
-    SUPABASE_URL,
-    SUPABASE_ANON_KEY,
-    { auth: { persistSession: false, autoRefreshToken: false } },
-  ).auth.getUser(authHeader.slice("Bearer ".length));
+  const callerClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: authHeader } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data: { user: caller }, error: authError } = await callerClient.auth.getUser();
   if (authError || !caller) {
     return json({ error: "Unauthorized" }, 401);
   }
@@ -199,7 +247,7 @@ serve(async (req) => {
 
   const { data: invoice, error: invoiceError } = await admin
     .from("invoices")
-    .select("uid, invoice_number, status, total, approval_token, created_by, clients:client_id (name, email)")
+    .select("uid, invoice_number, status, total, approval_token, created_by, organization_id, clients:client_id (name, email)")
     .eq("uid", invoiceId)
     .maybeSingle();
 
@@ -237,9 +285,14 @@ serve(async (req) => {
     [clientEmail, creatorEmail].filter((e): e is string => !!e).map((e) => e.toLowerCase()),
   ));
 
-  const { data: company } = await admin
-    .from("company")
-    .select("business_name")
+  // HT-88: the service role sees every organisation's company row, so pick
+  // the estimate's own (newest first, in case an organisation has two).
+  let companyQuery = admin.from("company").select("business_name");
+  if (invoice.organization_id) {
+    companyQuery = companyQuery.eq("organization_id", invoice.organization_id);
+  }
+  const { data: company } = await companyQuery
+    .order("updated_at", { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();
   const businessName = company?.business_name || "HandyTally";
@@ -247,6 +300,20 @@ serve(async (req) => {
   const approveUrl = `${appOrigin}/approve?token=${encodeURIComponent(invoice.approval_token)}`;
 
   const { markup: inlinedMarkup, images: inlineImages } = extractInlineImages(document.markup);
+
+  // HT-87: the organisation's documents marked "On invoices" ride along.
+  let documentAttachments: MailAttachment[];
+  try {
+    const documents = await loadDocumentAttachments(callerClient, invoice.organization_id ?? null);
+    if (documents.error) {
+      return json({ error: documents.error }, 400);
+    }
+    documentAttachments = documents.attachments;
+  } catch (error) {
+    console.error("Could not load the company documents:", error);
+    return json({ error: "Could not load the company documents to attach" }, 500);
+  }
+  const attachments = [...inlineImages, ...documentAttachments];
 
   const html = buildEmailHtml({
     subject: subject.trim(),
@@ -270,7 +337,7 @@ serve(async (req) => {
         subject: subject.trim(),
         html,
         ...(INVOICE_REPLY_TO ? { reply_to: INVOICE_REPLY_TO } : {}),
-        ...(inlineImages.length ? { attachments: inlineImages } : {}),
+        ...(attachments.length ? { attachments } : {}),
       }),
     });
 
@@ -287,7 +354,7 @@ serve(async (req) => {
     }
 
     console.log(`Estimate #${invoice.invoice_number} sent for approval to ${recipients.join(", ")} by ${caller.email}`);
-    return json({ id: result?.id ?? null, sentTo: recipients }, 200);
+    return json({ id: result?.id ?? null, sentTo: recipients, attachmentCount: documentAttachments.length }, 200);
   } catch (error) {
     console.error("Error sending the approval email:", error);
     return json({ error: "Failed to send the approval email" }, 500);

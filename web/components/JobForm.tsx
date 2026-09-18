@@ -23,6 +23,7 @@ import { FormField, FormRow } from './FormDialog';
 import { FormActions, FormPanel, FormSection, formLayoutTheme, useOutlinedInputProps } from './FormLayout';
 import { normalizeCustomValues, validateCustomValues, type CustomFieldValues } from '../constants/customFields';
 import { themed } from '../constants/Colors';
+import { useFeedback } from '../contexts/FeedbackContext';
 
 type Job = {
   uid: number;  // Changed from string to number to match bigint8 in database
@@ -82,6 +83,7 @@ export const JobForm = forwardRef<JobFormHandle, JobFormProps>(function JobForm(
   // HT-35: the Assigned to dropdown lists the active members of the caller's
   // organisation. A user with no organisation sees it disabled.
   const { organization } = useAuth();
+  const { notify } = useFeedback();
   const { members, loading: loadingMembers } = useOrganizationMembers();
   const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
   const assigneeButtonRef = useRef<TouchableOpacity>(null);
@@ -220,12 +222,12 @@ export const JobForm = forwardRef<JobFormHandle, JobFormProps>(function JobForm(
   const submitFormToDatabase = () => {
     try {
     if (!formData.title) {
-        alert('Please enter a job title');
+        notify('Please enter a job title', 'error');
       return;
     }
     
       if (!formData.client_id) {
-        alert('Please select a client');
+        notify('Please select a client', 'error');
         return;
       }
 
@@ -280,7 +282,7 @@ export const JobForm = forwardRef<JobFormHandle, JobFormProps>(function JobForm(
       return true;
     } catch (error) {
       console.error('Error preparing form data:', error);
-      alert(`Error: ${error.message}`);
+      notify(`Error: ${error.message}`, 'error');
     }
   };
 
@@ -299,7 +301,7 @@ export const JobForm = forwardRef<JobFormHandle, JobFormProps>(function JobForm(
     
     if (isNaN(clientId)) {
       console.error('Invalid client ID format:', client.uid);
-      alert('Selected client has an invalid ID');
+      notify('Selected client has an invalid ID', 'error');
       return;
     }
     

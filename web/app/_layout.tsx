@@ -1,6 +1,6 @@
 import { ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { Slot, Stack, usePathname, useRouter } from 'expo-router';
+import { Slot, Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState } from 'react';
@@ -12,7 +12,8 @@ import { Drawer } from 'expo-router/drawer';
 import { DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawer';
 import { ActivityIndicator } from 'react-native-paper';
 
-import { AuthProvider } from '../contexts/AuthContext';
+import { AuthProvider, useAuth } from '../contexts/AuthContext';
+import { fetchCompanyProfile, subscribeCompanyProfile } from '../utils/companyProfile';
 import { ThemeProvider, useAppTheme } from '../contexts/ThemeContext';
 import { TenantGate } from '../components/TenantGate';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -34,29 +35,29 @@ function CustomDrawerContent(props: any) {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-  const pathname = usePathname();
+  const { organization } = useAuth();
 
+  // HT-88: scoped to the organisation; an unscoped .single() failed for a
+  // superuser who can see every organisation's row. HT-83: re-read when
+  // Admin > Company saves a logo, instead of that page reloading the app.
   useEffect(() => {
-    fetchLogo();
-  }, []);
-
-  const fetchLogo = async () => {
-    try {
-      // Try to get logo from company settings
-      const { data, error } = await supabase
-        .from('company')
-        .select('logo_url')
-        .single();
-
-      if (data && data.logo_url) {
-        setLogoUrl(data.logo_url);
-      }
-    } catch (error) {
-      console.error('Error fetching logo:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    let cancelled = false;
+    const load = () =>
+      fetchCompanyProfile(organization?.id)
+        .then(company => {
+          if (!cancelled) setLogoUrl(company?.logo_url ?? null);
+        })
+        .catch(error => console.error('Error fetching logo:', error))
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    load();
+    const unsubscribe = subscribeCompanyProfile(load);
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [organization?.id]);
 
   const handleSignOut = async () => {
     try {

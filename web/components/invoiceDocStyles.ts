@@ -58,15 +58,12 @@ export const doc = StyleSheet.create({
     resizeMode: 'contain',
     marginBottom: 24,
   },
-  logoPlaceholder: {
-    width: 160,
-    height: 84,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#eceef1',
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
+  companyName: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '700',
+    color: INK,
+    marginBottom: 2,
   },
   companyLine: {
     fontSize: 13,

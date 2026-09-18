@@ -14,6 +14,7 @@ import { st } from '../../../components/settings/ui';
 import { fileToBase64 } from '../../../utils/fileToBase64';
 import { formatEin } from '../../../utils/formatting';
 import { themed } from '../../../constants/Colors';
+import { fetchCompanyProfile, notifyCompanyProfileChanged } from '../../../utils/companyProfile';
 
 // HT-47: Admin > Company on the HT-50 two-pane shell. Left: the organisation
 // and its sections; right: the selected one. Info is the former page (logo,
@@ -74,33 +75,15 @@ export default function AdminPage() {
     if (organization) fetchCompanyInfo();
   }, [organization?.id]);
 
-  // The organisation's own company row. On a tenant host RLS already scopes
-  // the table to one organisation, but a superuser on the apex or localhost
-  // can see every organisation's row, and without this filter the page would
-  // read (and then overwrite) whichever row came first. Learned the hard way
-  // on 2026-09-17.
-  const companyQuery = () => {
-    const query = supabase.from('company').select('*');
-    if (!organization) throw new Error('No organisation resolved yet');
-    return query.eq('organization_id', organization.id);
-  };
-
+  // The organisation's own company row (HT-88: fetchCompanyProfile scopes
+  // the read; a superuser on the apex or localhost can see every
+  // organisation's row, and an unscoped read would overwrite whichever came
+  // first. Learned the hard way on 2026-09-17).
   const fetchCompanyInfo = async () => {
     try {
-      const { data, error } = await companyQuery().limit(1).maybeSingle();
-
-      // If no company exists yet, that's okay - just use empty form
-      if (error && error.code === 'PGRST116') {
-        setLoading(false);
-        return; // Keep the default empty state
-      }
-
-      // For other errors, throw
-      if (error) throw error;
-
+      const data = await fetchCompanyProfile(organization?.id);
       if (data) {
-        setCompany(data);
-        // Set the logo URL from company data
+        setCompany({ ...data, business_name: data.business_name ?? '', address: data.address ?? '' });
         if (data.logo_url) {
           setLogoUrl(data.logo_url);
         }
@@ -118,6 +101,30 @@ export default function AdminPage() {
     setSnackbarVisible(true);
   };
 
+  // One company row per organisation. The three save paths used to upsert
+  // without a uid whenever the page had not loaded the row yet, which
+  // inserted a second row and left every reader's .single() failing (HT-88).
+  // Look the row up before writing so a save updates it or inserts the first.
+  const writeCompany = async (values: Partial<CompanyData>): Promise<CompanyData> => {
+    const uid = company.uid ?? (await fetchCompanyProfile(organization?.id))?.uid ?? null;
+    const row = {
+      ...values,
+      ...(organization ? { organization_id: organization.id } : {}),
+      updated_at: new Date().toISOString(),
+    };
+    const { data, error } = await (uid
+      ? supabase.from('company').update(row).eq('uid', uid)
+      : supabase.from('company').insert(row)
+    )
+      .select()
+      .single();
+    if (error) throw error;
+    if (!data) throw new Error('Failed to save company record');
+    setCompany(data);
+    notifyCompanyProfileChanged();
+    return data;
+  };
+
   const handleSubmit = async () => {
     try {
       // Validate required fields
@@ -127,27 +134,16 @@ export default function AdminPage() {
       }
 
       setSaving(true);
-      const { data, error } = await supabase
-        .from('company')
-        .upsert({
-          ...company,
-          ein: formatEin(company.ein),
-          ...(organization ? { organization_id: organization.id } : {}),
-          updated_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Supabase error:', error);
-        throw error;
-      }
-
-      if (data) {
-        setCompany(data);
-        setError(''); // Clear any existing errors
-        showSnackbar('Company information saved successfully!');
-      }
+      await writeCompany({
+        business_name: company.business_name,
+        address: company.address,
+        email: company.email,
+        phone: company.phone,
+        ein: formatEin(company.ein),
+        logo_url: company.logo_url,
+      });
+      setError(''); // Clear any existing errors
+      showSnackbar('Company information saved successfully!');
     } catch (err) {
       console.error('Error saving company:', err);
       setError('Error saving company information. Please try again.');
@@ -160,24 +156,15 @@ export default function AdminPage() {
   // Saves a logo URL on the company row.
   const handleLogoSubmit = async (url: string) => {
     try {
-      const { data, error } = await supabase
-        .from('company')
-        .upsert({
-          ...company,
-          ...(organization ? { organization_id: organization.id } : {}),
-          logo_url: url,
-          updated_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      if (data) {
-        setCompany(data);
-        setLogoUrl(url);
-        showSnackbar('Logo URL saved successfully!');
-      }
+      await writeCompany({
+        business_name: company.business_name || 'My Company',
+        address: company.address || '',
+        email: company.email,
+        phone: company.phone,
+        ein: company.ein,
+        logo_url: url,
+      });
+      setLogoUrl(url);
     } catch (err) {
       console.error('Error saving logo URL:', err);
       setError('Error saving logo URL');
@@ -190,23 +177,12 @@ export default function AdminPage() {
   // did this, and Documents needs the same id.
   const ensureCompanyId = async (): Promise<number> => {
     if (company.uid) return company.uid;
-
-    const { data: newCompany, error: companyError } = await supabase
-      .from('company')
-      .upsert({
-        business_name: company.business_name || 'My Company',
-        address: company.address || '',
-        ...(organization ? { organization_id: organization.id } : {}),
-        updated_at: new Date().toISOString()
-      })
-      .select()
-      .single();
-
-    if (companyError) throw companyError;
-    if (!newCompany) throw new Error('Failed to create company record');
-
-    setCompany(newCompany);
-    return newCompany.uid;
+    const saved = await writeCompany({
+      business_name: company.business_name || 'My Company',
+      address: company.address || '',
+    });
+    if (!saved.uid) throw new Error('Failed to create company record');
+    return saved.uid;
   };
 
   // Picks an image and saves it to company_attachments as the logo.
@@ -276,9 +252,6 @@ export default function AdminPage() {
       await handleLogoSubmit(dataUrl);
 
       showSnackbar('Logo uploaded and saved successfully!');
-
-      // Force reload to update sidebar
-      setTimeout(() => window.location.reload(), 1500); // Give time to see the snackbar before reload
     } catch (error: any) {
       console.error('Error uploading image:', error);
       showSnackbar('Error uploading image: ' + (error.message || 'Unknown error'));
@@ -294,9 +267,6 @@ export default function AdminPage() {
       await handleLogoSubmit(DEFAULT_LOGO_URL);
       setLogoUrl(DEFAULT_LOGO_URL);
       showSnackbar('Default logo set successfully!');
-
-      // Force reload to update sidebar
-      setTimeout(() => window.location.reload(), 1500); // Give time to see the snackbar before reload
     } catch (error: any) {
       console.error('Error setting default logo:', error);
       showSnackbar('Error setting default logo: ' + (error.message || 'Unknown error'));

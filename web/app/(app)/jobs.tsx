@@ -15,6 +15,7 @@ import { useLabels } from '../../hooks/useLabels';
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 import { formatClientAddress, formatDateTime } from '../../utils/formatting';
 import { themed } from '../../constants/Colors';
+import { useFeedback } from '../../contexts/FeedbackContext';
 
 type Job = {
   uid: number;
@@ -52,21 +53,18 @@ export default function JobsScreen() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
-  // The job the Delete dialog is asking about. Kept separate from any "open
-  // job" state so pressing the trash icon never navigates away from the list.
-  const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
   // uid of the job whose calendar invite is being sent, for the row spinner
   const [sendingInviteFor, setSendingInviteFor] = useState<number | null>(null);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [editingJob, setEditingJob] = useState<Job | null>(null);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [sortColumn, setSortColumn] = useState<string>('name');
   const [sortDirection, setSortDirection] = useState<'ascending' | 'descending'>('ascending');
   const [showClientDropdown, setShowClientDropdown] = useState(false);
   const router = useRouter();
+  const { notify, confirm } = useFeedback();
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -159,9 +157,7 @@ export default function JobsScreen() {
     }
   };
 
-  const handleDeleteJob = async () => {
-    if (!jobToDelete) return;
-
+  const deleteJob = async (jobToDelete: Job) => {
     try {
       const { error } = await supabase
         .from('jobs')
@@ -183,10 +179,17 @@ export default function JobsScreen() {
     } catch (error: any) {
       console.error('Error deleting job:', error);
       showSnackbar(`Failed to delete job: ${error.message}`);
-    } finally {
-      setShowDeleteDialog(false);
-      setJobToDelete(null);
     }
+  };
+
+  const handleDeleteJob = async (job: Job) => {
+    const ok = await confirm({
+      title: 'Delete job',
+      message: `Delete "${job.title}"? Its cost lines and attachments go with it. This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (ok) await deleteJob(job);
   };
 
   const handleEditJob = (job) => {
@@ -251,7 +254,7 @@ export default function JobsScreen() {
       
       if (error) {
         console.error('Error updating job:', error);
-        alert(`Error: ${error.message}`);
+        notify(`Error: ${error.message}`, 'error');
         return;
       }
       
@@ -276,7 +279,7 @@ export default function JobsScreen() {
       showSnackbar('Job updated successfully');
     } catch (error) {
       console.error('Error in handleUpdateJob:', error);
-      alert(`Error: ${error.message || 'Failed to update job'}`);
+      notify(`Error: ${error.message || 'Failed to update job'}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -330,7 +333,7 @@ export default function JobsScreen() {
       
       if (error) {
         console.error('Error adding job:', error);
-        alert(`Error: ${error.message}`);
+        notify(`Error: ${error.message}`, 'error');
         return;
       }
       
@@ -352,7 +355,7 @@ export default function JobsScreen() {
       showSnackbar('Job added successfully');
     } catch (error) {
       console.error('Error in handleAddJob:', error);
-      alert(`Error: ${error.message || 'Failed to add job'}`);
+      notify(`Error: ${error.message || 'Failed to add job'}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -1052,10 +1055,7 @@ export default function JobsScreen() {
                     <IconButton
                       icon="delete"
                       size={20}
-                      onPress={() => {
-                        setJobToDelete(job);
-                        setShowDeleteDialog(true);
-                      }}
+                      onPress={() => handleDeleteJob(job)}
                       iconColor="red"
                     />
                   </View>
@@ -1067,21 +1067,6 @@ export default function JobsScreen() {
       </Card>
       </ScrollView>
 
-      {/* Delete Job Dialog */}
-      <Portal>
-        <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)}>
-          <Dialog.Title>Delete Job</Dialog.Title>
-          <Dialog.Content>
-            <Text>Are you sure you want to delete the job "{jobToDelete?.title}"?</Text>
-            <Text>This action cannot be undone.</Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setShowDeleteDialog(false)}>Cancel</Button>
-            <Button onPress={handleDeleteJob} textColor="red">Delete</Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
-      
       {/* Edit Job Dialog */}
       <Portal>
         <Dialog visible={showEditDialog} onDismiss={() => setShowEditDialog(false)} style={styles.editDialog}>

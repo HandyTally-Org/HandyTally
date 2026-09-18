@@ -4,10 +4,12 @@ import { Text, ActivityIndicator, Button } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 import { InvoiceForm } from '../../../components/InvoiceForm';
+import { useFeedback } from '../../../contexts/FeedbackContext';
 
 export default function InvoiceFormScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
+  const { notify } = useFeedback();
   const [invoice, setInvoice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -119,7 +121,7 @@ export default function InvoiceFormScreen() {
                 if (insertError) throw insertError;
               }
               
-              alert('Invoice updated successfully');
+              notify('Invoice updated successfully', 'success');
             } else {
               // Create new invoice
               const { data: newInvoice, error: invoiceError } = await supabase
@@ -164,7 +166,7 @@ export default function InvoiceFormScreen() {
                 if (insertError) throw insertError;
               }
               
-              alert('Invoice created successfully');
+              notify('Invoice created successfully', 'success');
             }
             
             // Navigate back to invoices page
@@ -172,7 +174,7 @@ export default function InvoiceFormScreen() {
             
           } catch (error) {
             console.error('Error saving invoice:', error);
-            alert(`Error saving invoice: ${error.message}`);
+            notify(`Error saving invoice: ${error.message}`, 'error');
           }
         }}
         onCancel={() => router.back()}

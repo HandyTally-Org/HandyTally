@@ -203,7 +203,7 @@ export default function JobDetailsScreen() {
   // HT-53: this organisation's custom fields for Jobs.
   const jobCustomFields = useCustomFields('jobs');
   const router = useRouter();
-  const { confirm: confirmAction } = useFeedback();
+  const { notify, confirm } = useFeedback();
   // HT-35: turns jobs.assigned_to into a name on the Info tab.
   const { members, loading: membersLoading } = useOrganizationMembers();
   const [selectedTab, setSelectedTab] = useState('info');
@@ -418,7 +418,7 @@ export default function JobDetailsScreen() {
       
       if (jobError) {
         console.error('Error fetching job:', jobError);
-        alert('Error loading job details');
+        notify('Error loading job details', 'error');
         return;
       }
 
@@ -452,7 +452,7 @@ export default function JobDetailsScreen() {
       
     } catch (error) {
       console.error('Error in fetchJobDetails:', error);
-      alert('Error loading job details');
+      notify('Error loading job details', 'error');
     } finally {
       setLoading(false);
     }
@@ -496,17 +496,17 @@ export default function JobDetailsScreen() {
     try {
       // Validate inputs
       if (!newCost.description.trim()) {
-        alert('Please enter a description');
+        notify('Please enter a description', 'error');
         return;
       }
       
       if (isNaN(parseFloat(newCost.price)) || parseFloat(newCost.price) < 0) {
-        alert('Please enter a valid price');
+        notify('Please enter a valid price', 'error');
         return;
       }
       
       if (isNaN(parseFloat(newCost.quantity)) || parseFloat(newCost.quantity) <= 0) {
-        alert('Please enter a valid quantity');
+        notify('Please enter a valid quantity', 'error');
         return;
       }
       
@@ -541,13 +541,13 @@ export default function JobDetailsScreen() {
       
     } catch (error) {
       console.error('Error adding job cost:', error);
-      alert(`Error adding cost: ${error.message}`);
+      notify(`Error adding cost: ${error.message}`, 'error');
     }
   };
 
   const handleAddEvent = async () => {
     if (!newEvent.title.trim() || !newEvent.date.trim()) {
-      alert('Please enter a title and date');
+      notify('Please enter a title and date', 'error');
       return;
     }
     
@@ -875,7 +875,7 @@ export default function JobDetailsScreen() {
       setTotalOtherCost(otherCosts);
     } catch (error) {
       console.error('Error fetching job costs:', error);
-      alert('Error loading job costs');
+      notify('Error loading job costs', 'error');
     }
   };
 
@@ -923,7 +923,7 @@ export default function JobDetailsScreen() {
   };
 
   const handleDeleteCostItem = async (uid: string, description?: string | null) => {
-    const ok = await confirmAction({
+    const ok = await confirm({
       title: 'Remove cost line',
       message: `Remove "${description || 'this line'}" from the job's costs? This cannot be undone.`,
       confirmLabel: 'Remove',
@@ -1012,7 +1012,7 @@ export default function JobDetailsScreen() {
       
       if (error) {
         console.error('Error updating job:', error);
-        alert(`Error updating job: ${error.message}`);
+        notify(`Error updating job: ${error.message}`, 'error');
         return false;
       }
       
@@ -1038,7 +1038,7 @@ export default function JobDetailsScreen() {
       return true;
     } catch (err) {
       console.error('Error in handleUpdateJob:', err);
-      alert(`Error: ${err.message || 'Failed to update job'}`);
+      notify(`Error: ${err.message || 'Failed to update job'}`, 'error');
       return false;
     } finally {
       setSubmitting(false);
@@ -1342,11 +1342,11 @@ export default function JobDetailsScreen() {
       await fetchInvoices();
       
       // Show success message
-      alert('Invoice updated successfully');
+      notify('Invoice updated successfully', 'success');
       
     } catch (error) {
       console.error('Error updating invoice:', error);
-      alert(`Error updating invoice: ${error.message}`);
+      notify(`Error updating invoice: ${error.message}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -1365,12 +1365,16 @@ export default function JobDetailsScreen() {
     router.push('/invoices');
   };
 
-  const handleDeleteInvoice = (invoice) => {
-    // Show a confirmation dialog before deleting
-    if (confirm(`Are you sure you want to delete invoice #${invoice.invoice_number}?`)) {
-      // Navigate to invoices page with delete parameter
-      router.push(`/invoices?delete=${invoice.uid}`);
-    }
+  const handleDeleteInvoice = async (invoice) => {
+    const ok = await confirm({
+      title: 'Delete invoice',
+      message: `Delete invoice #${invoice.invoice_number}? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    // Navigate to invoices page with delete parameter
+    router.push(`/invoices?delete=${invoice.uid}`);
   };
 
   // Add this function to fetch the invoice data directly when needed
@@ -1409,7 +1413,7 @@ export default function JobDetailsScreen() {
       
     } catch (error) {
       console.error('Error fetching invoice for editing:', error);
-      alert('Error loading invoice: ' + error.message);
+      notify('Error loading invoice: ' + error.message, 'error');
     } finally {
       setLoading(false);
     }

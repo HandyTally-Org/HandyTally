@@ -14,6 +14,8 @@ import { useLabels } from '../hooks/useLabels';
 import { useCustomFields } from '../hooks/useCustomFields';
 import { CustomFieldsView } from './CustomFields';
 import { useFeedback } from '../contexts/FeedbackContext';
+import { useAuth } from '../contexts/AuthContext';
+import { fetchCompanyProfile, type CompanyProfile } from '../utils/companyProfile';
 
 // Documents that can be emailed to a client: the ones that have not yet turned
 // into money owed. The payment states are excluded because there is no reason
@@ -49,8 +51,9 @@ export interface InvoiceDetailsProps {
   onSent?: () => void;
   isEditable?: boolean;
   isEditing?: boolean;
+  /** The company logo as a data: URL (HT-88). Falls back to the company row's logo_url. */
   companyLogo?: string | null;
-  /** HT-78: Company > Documents rows marked "On invoices" (label + details; fileName is display-only in v1). */
+  /** HT-78: Company > Documents rows marked "On invoices" (label + details; HT-87 attaches fileName's file when sending). */
   companyDocuments?: { label: string; value: string; fileName: string | null }[];
 }
 
@@ -69,8 +72,9 @@ export function InvoiceDetails({
   const invoiceStatuses = useLabels('invoice_status');
   const invoiceCustomFields = useCustomFields('invoices');
   const { notify } = useFeedback();
+  const { organization } = useAuth();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [companyInfo, setCompanyInfo] = useState(null);
+  const [companyInfo, setCompanyInfo] = useState<CompanyProfile | null>(null);
   const [printLoading, setPrintLoading] = useState(false);
   const [sendLoading, setSendLoading] = useState(false);
   const [showSendDialog, setShowSendDialog] = useState(false);
@@ -86,25 +90,14 @@ export function InvoiceDetails({
   };
   
   useEffect(() => {
-    console.log('Invoice object in component:', safeInvoice);
-    console.log('Job information:', safeInvoice.job);
-    fetchCompanyInfo();
-  }, [safeInvoice.id]);
+    fetchCompanyProfile(organization?.id)
+      .then(setCompanyInfo)
+      .catch(error => console.error('Error fetching company info:', error));
+  }, [organization?.id]);
 
-  async function fetchCompanyInfo() {
-    try {
-      const { data, error } = await supabase
-        .from('company')
-        .select('*')
-        .single();
-      
-      if (!error && data) {
-        setCompanyInfo(data);
-      }
-    } catch (error) {
-      console.error('Error fetching company info:', error);
-    }
-  }
+  const logoUri = companyLogo || companyInfo?.logo_url || null;
+  // What Print, PDF and both emails put in the header.
+  const documentCompany = { ...(companyInfo ?? {}), logo_url: logoUri };
 
   const handleDelete = () => {
     if (onDelete) {
@@ -184,7 +177,7 @@ export function InvoiceDetails({
           invoiceId: safeInvoice.uid,
           subject,
           message: approvalMessage,
-          document: renderInvoiceDocument(safeInvoice, items, companyInfo, companyDocuments),
+          document: renderInvoiceDocument(safeInvoice, items, documentCompany, companyDocuments),
         });
         if (Array.isArray(data?.sentTo) && data.sentTo.length > 0) {
           sentTo = data.sentTo.join(' and ');
@@ -192,8 +185,11 @@ export function InvoiceDetails({
       } else {
         // Render exactly what the Print action renders, so the client receives
         // the same document the sender just looked at.
-        const html = generateInvoiceHTML(safeInvoice, items, companyInfo, companyDocuments);
+        const html = generateInvoiceHTML(safeInvoice, items, documentCompany, companyDocuments);
+        // HT-87: the function attaches the company documents itself, so the
+        // files never come down to the browser.
         await invokeSendFunction('send-invoice', {
+          invoiceId: safeInvoice.uid,
           to: recipientEmail,
           subject: `${documentLabel} #${safeInvoice.invoice_number} from ${companyInfo?.business_name || 'HandyTally'}`,
           html,
@@ -234,7 +230,7 @@ export function InvoiceDetails({
       setPrintLoading(true);
       
       // Generate HTML for the invoice
-      const html = generateInvoiceHTML(safeInvoice, items, companyInfo, companyDocuments);
+      const html = generateInvoiceHTML(safeInvoice, items, documentCompany, companyDocuments);
       
       // For web, create a new window with just the invoice HTML
       if (Platform.OS === 'web') {
@@ -377,16 +373,15 @@ export function InvoiceDetails({
           {/* ── Header: company block on the left, document meta on the right ── */}
           <View style={doc.headerRow}>
             <View style={doc.headerLeft}>
-              {companyLogo ? (
+              {logoUri ? (
                 <Image
-                  source={{ uri: `data:image/png;base64,${companyLogo}` }}
+                  source={{ uri: logoUri }}
                   style={doc.logo}
                 />
-              ) : (
-                <View style={doc.logoPlaceholder}>
-                  <Text style={{ color: '#b0b6bd', fontSize: 12 }}>Company logo</Text>
-                </View>
-              )}
+              ) : null}
+              {companyInfo?.business_name ? (
+                <Text style={doc.companyName}>{companyInfo.business_name}</Text>
+              ) : null}
 
               {companyInfo?.address ? (
                 String(companyInfo.address)
@@ -558,7 +553,7 @@ export function InvoiceDetails({
                   <Text key={i} style={{ fontSize: 14, color: INK, marginBottom: i < companyDocuments.length - 1 ? 4 : 0 }}>
                     <Text style={{ fontWeight: '600' }}>{companyDoc.label}</Text>
                     {companyDoc.value ? ` — ${companyDoc.value}` : ''}
-                    {companyDoc.fileName ? ` (on file: ${companyDoc.fileName})` : ''}
+                    {companyDoc.fileName ? ` (attached: ${companyDoc.fileName})` : ''}
                   </Text>
                 ))}
               </View>

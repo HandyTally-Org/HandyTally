@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import { feedback } from '../contexts/FeedbackContext';
 
 // Excel import and export shared by the Clients, Jobs, Invoices, Labor and
 // Inventory screens. Files are always .xlsx. In the browser an export is a
@@ -115,9 +116,9 @@ export function hasColumn(rows: object[], column: string): boolean {
   return Object.keys(first).some((key) => key.toLowerCase() === column.toLowerCase());
 }
 
-/** A yes/no prompt that works in the browser and on a phone. */
+/** A yes/no prompt: the in-app dialog in the browser (HT-85), the native sheet on a phone. */
 export function confirmAction(message: string, confirmLabel = 'Continue'): Promise<boolean> {
-  if (Platform.OS === 'web') return Promise.resolve(window.confirm(message));
+  if (Platform.OS === 'web') return feedback.confirm({ title: 'Please confirm', message, confirmLabel });
   return new Promise((resolve) => {
     Alert.alert(
       'Please confirm',

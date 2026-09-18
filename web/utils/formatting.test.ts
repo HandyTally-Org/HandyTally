@@ -1,4 +1,4 @@
-import { formatClientAddress, formatDateTime, formatEin } from './formatting';
+import { formatClientAddress, formatDateTime, formatEin, formatPhone } from './formatting';
 
 describe('formatClientAddress', () => {
   it('joins all four parts as "address, city, state zip"', () => {
@@ -61,5 +61,36 @@ describe('formatEin', () => {
     expect(formatEin(null)).toBe('');
     expect(formatEin(undefined)).toBe('');
     expect(formatEin('')).toBe('');
+  });
+});
+
+describe('formatPhone (HT-82)', () => {
+  it('masks progressively as digits arrive', () => {
+    expect(formatPhone('8')).toBe('+1 (8');
+    expect(formatPhone('837')).toBe('+1 (837');
+    expect(formatPhone('8374')).toBe('+1 (837) 4');
+    expect(formatPhone('837484')).toBe('+1 (837) 484');
+    expect(formatPhone('8374847')).toBe('+1 (837) 484-7');
+    expect(formatPhone('8374847512')).toBe('+1 (837) 484-7512');
+  });
+
+  it('shrinks when a digit is removed, including through the punctuation', () => {
+    expect(formatPhone('+1 (837) 484-')).toBe('+1 (837) 484');
+    expect(formatPhone('+1 (837) ')).toBe('+1 (837');
+    expect(formatPhone('+1 (')).toBe('');
+  });
+
+  it('folds a typed or pasted country code into the fixed +1 and caps at 10 digits', () => {
+    expect(formatPhone('18374847512')).toBe('+1 (837) 484-7512');
+    expect(formatPhone('+1 837-484-7512')).toBe('+1 (837) 484-7512');
+    expect(formatPhone('(837) 484-7512 ext 9')).toBe('+1 (837) 484-7512');
+    expect(formatPhone('1837484751299')).toBe('+1 (837) 484-7512');
+  });
+
+  it('is blank for empty input', () => {
+    expect(formatPhone(null)).toBe('');
+    expect(formatPhone(undefined)).toBe('');
+    expect(formatPhone('')).toBe('');
+    expect(formatPhone('abc')).toBe('');
   });
 });

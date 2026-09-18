@@ -13,7 +13,29 @@ import { invoiceDocumentLabel } from '../constants/invoiceStatus';
 
 export type InvoiceDocumentParts = { css: string; markup: string };
 
-/** HT-78: a Company > Documents row marked to show on invoices (name + details; fileName is display-only in v1, nothing is attached yet). */
+export const escapeHtml = (value: unknown) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const escapeAttribute = escapeHtml;
+
+// HT-88: one <div> per non-empty value, a multi-line address becoming one
+// line per row. Nothing is printed for a missing value: the document used to
+// fill the gaps with "Your Company" / "Client Address" and the like, which
+// then went out to clients as if it were real.
+const textLines = (values: unknown[]) =>
+  values
+    .flatMap(value => String(value ?? '').split('\n'))
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+    .map(line => `<div>${escapeHtml(line)}</div>`)
+    .join('');
+
+/** HT-78: a Company > Documents row marked to show on invoices (name + details; HT-87 attaches fileName's file to the sent email). */
 export type InvoiceDocumentSummary = { label: string; value: string; fileName: string | null };
 
 export const generateInvoiceHTML = (invoice: any, items: any[], companyInfo: any, companyDocuments: InvoiceDocumentSummary[] = []) => {
@@ -178,24 +200,18 @@ export const renderInvoiceDocument = (
 
               <div class="client-info">
                 <h3>Bill To:</h3>
-                <div>${invoice.client?.name || 'Client Name'}</div>
-                <div>${invoice.client?.address || 'Client Address'}</div>
-                <div>${invoice.client?.email || 'client@example.com'}</div>
+                ${textLines([invoice.client?.name, invoice.client?.address, invoice.client?.email])}
               </div>
             </td>
 
             <td class="company-column">
+              ${companyInfo?.logo_url ? `
               <div class="logo">
-                ${companyInfo?.logo_url ?
-                  `<img src="${companyInfo.logo_url}" alt="${companyInfo.business_name || 'Company'} Logo">` :
-                  `<div class="logo-text">${companyInfo?.business_name || 'COMPANY LOGO'}</div>`
-                }
-              </div>
+                <img src="${escapeAttribute(companyInfo.logo_url)}" alt="${escapeAttribute(companyInfo.business_name || 'Company')} logo">
+              </div>` : ''}
               <div class="company-info">
-                <div><strong>${companyInfo?.business_name || 'Your Company'}</strong></div>
-                <div>${companyInfo?.address || 'Company Address'}</div>
-                <div>${companyInfo?.email || 'company@example.com'}</div>
-                <div>${companyInfo?.phone || '(123) 456-7890'}</div>
+                ${companyInfo?.business_name ? `<div><strong>${escapeHtml(companyInfo.business_name)}</strong></div>` : ''}
+                ${textLines([companyInfo?.address, companyInfo?.email, companyInfo?.phone])}
               </div>
             </td>
           </tr>
@@ -245,7 +261,7 @@ export const renderInvoiceDocument = (
                 ${companyDocuments.map(companyDoc => `
                   <tr>
                     <td><strong>${companyDoc.label}</strong></td>
-                    <td>${companyDoc.value}${companyDoc.fileName ? ` <em>(on file: ${companyDoc.fileName})</em>` : ''}</td>
+                    <td>${escapeHtml(companyDoc.value)}${companyDoc.fileName ? ` <em>(attached: ${escapeHtml(companyDoc.fileName)})</em>` : ''}</td>
                   </tr>
                 `).join('')}
               </tbody>
