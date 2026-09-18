@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, ScrollView, StyleSheet } from 'react-native';
 import { Text, Button, Searchbar, Snackbar, Card, IconButton, DataTable, ActivityIndicator, Dialog, Portal } from 'react-native-paper';
 import { supabase } from '../../lib/supabase';
 import { ServiceDialog, ServiceDraft } from '../../components/ServiceDialog';
@@ -583,8 +583,8 @@ export default function ServicesScreen() {
         
       </View>
       
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
       <Card style={{
-        flex: 1,
         marginBottom: 16,
         backgroundColor: themed.panel,
         borderRadius: 8,
@@ -668,7 +668,8 @@ export default function ServicesScreen() {
           )}
         </DataTable>
       </Card>
-      
+      </ScrollView>
+
       <ServiceDialog
         visible={showAddForm}
         title="Add labor code"

@@ -952,6 +952,7 @@ export default function JobsScreen() {
         ))}
       </LabelPillRow>
       
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
       <Card style={styles.tableCard}>
         <DataTable style={{ backgroundColor: themed.panel }}>
           <DataTable.Header style={{ backgroundColor: themed.panel }}>
@@ -1081,7 +1082,8 @@ export default function JobsScreen() {
           )}
         </DataTable>
       </Card>
-      
+      </ScrollView>
+
       {/* Delete Job Dialog */}
       <Portal>
         <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)}>
@@ -1402,7 +1404,6 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   tableCard: {
-    flex: 1,
     backgroundColor: themed.panel,
     borderRadius: 8,
     elevation: 2,
