@@ -13,6 +13,7 @@ import { labelText } from '../constants/labels';
 import { useLabels } from '../hooks/useLabels';
 import { useCustomFields } from '../hooks/useCustomFields';
 import { CustomFieldsView } from './CustomFields';
+import { useFeedback } from '../contexts/FeedbackContext';
 
 // Documents that can be emailed to a client: the ones that have not yet turned
 // into money owed. The payment states are excluded because there is no reason
@@ -67,6 +68,7 @@ export function InvoiceDetails({
 }: InvoiceDetailsProps) {
   const invoiceStatuses = useLabels('invoice_status');
   const invoiceCustomFields = useCustomFields('invoices');
+  const { notify } = useFeedback();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [companyInfo, setCompanyInfo] = useState(null);
   const [printLoading, setPrintLoading] = useState(false);
@@ -212,16 +214,16 @@ export function InvoiceDetails({
         // The client has the email; failing to record that is not worth
         // presenting as a failed send, but it must not pass silently either.
         console.error('Document was emailed but sent_at could not be saved:', stampError);
-        alert(`${documentLabel} sent to ${sentTo}, but recording the send failed. It may still show as unsent.`);
+        notify(`${documentLabel} sent to ${sentTo}, but recording the send failed. It may still show as unsent.`, 'error');
       } else {
         setSentAt(sentTimestamp);
-        alert(`${documentLabel} sent to ${sentTo}.`);
+        notify(`${documentLabel} sent to ${sentTo}.`, 'success');
       }
 
       onSent?.();
     } catch (error) {
       console.error('Error sending document:', error);
-      alert(`Failed to send the ${documentLabel.toLowerCase()}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      notify(`Failed to send the ${documentLabel.toLowerCase()}: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
     } finally {
       setSendLoading(false);
     }
@@ -258,7 +260,7 @@ export function InvoiceDetails({
       }
     } catch (error) {
       console.error('Error printing invoice:', error);
-      alert('Failed to generate PDF. Please try again.');
+      notify('Failed to generate PDF. Please try again.', 'error');
     } finally {
       setPrintLoading(false);
     }
@@ -300,11 +302,7 @@ export function InvoiceDetails({
           {onDelete && isEditable && !isEditing && (
             <Button
               mode="text"
-              onPress={() => {
-                if (confirm('Are you sure you want to delete this invoice?')) {
-                  handleDelete();
-                }
-              }}
+              onPress={() => setShowDeleteDialog(true)}
               textColor="#dc2626"
               icon="delete"
               style={{ borderRadius: 4 }}

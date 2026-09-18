@@ -16,6 +16,7 @@ import { AuthProvider } from '../contexts/AuthContext';
 import { ThemeProvider, useAppTheme } from '../contexts/ThemeContext';
 import { TenantGate } from '../components/TenantGate';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { FeedbackProvider } from '../contexts/FeedbackContext';
 import { themed } from '../constants/Colors';
 import { navigationThemeFor, paperThemeFor } from '../constants/paperTheme';
 import '../styles/theme.css';
@@ -242,7 +243,12 @@ export default function RootLayout() {
     <ErrorBoundary>
       <AuthProvider>
         <ThemeProvider>
-          <ThemedApp isServer={isServer} />
+          {/* HT-75: above PaperProvider (created inside ThemedApp) so the
+              context reaches content react-native-paper renders through its
+              own Portal.Host, not just this tree's direct descendants. */}
+          <FeedbackProvider>
+            <ThemedApp isServer={isServer} />
+          </FeedbackProvider>
         </ThemeProvider>
       </AuthProvider>
     </ErrorBoundary>
