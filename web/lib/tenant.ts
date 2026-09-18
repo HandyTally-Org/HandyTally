@@ -65,3 +65,35 @@ export const tenantSubdomain: string | null = parseTenantSubdomain(currentHostna
 
 /** True when this page is the product apex rather than a customer host. */
 export const apexHost: boolean = isApexHost(currentHostname());
+
+// HT-41: release channels. The same bundle runs on every host; what differs
+// is how the host is updated, and that follows from the hostname:
+//
+//   demo      demo.<base>        latest master, deployed on every merge
+//   prod      prod.<base>        latest release tag
+//   customer  <anything>.<base>  a pinned release tag, promoted by hand
+//   none      apex, www, localhost, workers.dev
+export type ReleaseChannel = 'demo' | 'prod' | 'customer' | 'none';
+
+export function releaseChannel(hostname: string | null | undefined, baseDomain: string = BASE_DOMAIN): ReleaseChannel {
+  const subdomain = parseTenantSubdomain(hostname, baseDomain);
+  if (subdomain === 'demo') return 'demo';
+  if (subdomain === 'prod') return 'prod';
+  if (subdomain) return 'customer';
+  return 'none';
+}
+
+/**
+ * What the footer prints after the version: the channel name for demo and
+ * prod, the customer's subdomain for a customer host, nothing otherwise.
+ */
+export function releaseChannelLabel(hostname: string | null | undefined, baseDomain: string = BASE_DOMAIN): string | null {
+  const channel = releaseChannel(hostname, baseDomain);
+  if (channel === 'customer') return parseTenantSubdomain(hostname, baseDomain);
+  if (channel === 'none') return null;
+  return channel;
+}
+
+/** Resolved once at module load, like tenantSubdomain. */
+export const currentReleaseChannel: ReleaseChannel = releaseChannel(currentHostname());
+export const currentReleaseChannelLabel: string | null = releaseChannelLabel(currentHostname());

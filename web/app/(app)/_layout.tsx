@@ -8,6 +8,8 @@ import {supabase} from "@/lib/supabase";
 import { useAuth } from '../../contexts/AuthContext';
 import { useAppTheme } from '../../contexts/ThemeContext';
 import { FeedbackHost } from '../../contexts/FeedbackContext';
+import { UpdateToast } from '../../components/UpdateToast';
+import { VersionBadge } from '../../components/VersionBadge';
 import { themed } from '../../constants/Colors';
 import { NAV_ITEMS } from '../../constants/navigation';
 import { applyNavSettings } from '../../constants/organizationSettings';
@@ -166,7 +168,8 @@ function CustomDrawerContent(props: any) {
                 <Text style={styles.termsText}>Privacy</Text>
               </View>
               <Text style={styles.copyrightText}>© HandyTally</Text>
-              <Text style={styles.versionText}>v1.0</Text>
+              {/* HT-41: version and channel of this host, links to /whats-new */}
+              <VersionBadge />
                 {/* Sign Out button at the very bottom */}
                 <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
                     <Ionicons name="log-out-outline" size={20} color={themed.text} />
@@ -255,6 +258,8 @@ export default function AppLayout() {
       {/* HT-75: the notify()/confirm() UI. FeedbackProvider itself lives in
           the root layout, above PaperProvider -- see contexts/FeedbackContext.tsx. */}
       <FeedbackHost />
+      {/* HT-41: one-time "Updated to vX.Y.Z" after a promote */}
+      <UpdateToast />
     </>
   );
 }

@@ -67,7 +67,12 @@ jobs:
         # Pure-function tests only (tenant hostname parsing, HT-38; label merging,
         # HT-49; nav order rules, HT-50; custom field rules, HT-52); no native or
         # rendering setup is involved.
-        run: npx jest --ci --watchAll=false lib/tenant.test.ts constants/labels.test.ts constants/organizationSettings.test.ts constants/customFields.test.ts
+        run: npx jest --ci --watchAll=false lib/tenant.test.ts constants/labels.test.ts constants/organizationSettings.test.ts constants/customFields.test.ts constants/release.test.ts
+
+      - name: Release notes are up to date
+        # constants/releaseNotes.generated.ts (what /whats-new shows) must match
+        # RELEASE_NOTES.md; `npm run release-notes` regenerates it (HT-41).
+        run: node scripts/release-notes.mjs --check
 
       - name: Export static web bundle
         # The same bundle the deploy jobs ship, so a PR that breaks the export
