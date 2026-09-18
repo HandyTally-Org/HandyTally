@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, type ReactNode } from 'react';
 import { View, TouchableOpacity, Platform, Modal, ScrollView, Image } from 'react-native';
 import { TextInput, Button, Text, IconButton } from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
@@ -62,6 +62,43 @@ function safeParseNumber(value: any): number {
   if (value === undefined || value === null) return 0;
   const num = Number(value);
   return isNaN(num) ? 0 : num;
+}
+
+// HT-74: a foldable group in the Item List picker (Services, Materials), so
+// a full catalogue doesn't force scrolling past one group to reach the other.
+function PickerSection({
+  title,
+  count,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <View>
+      <TouchableOpacity
+        style={doc.pickerSectionHeader}
+        onPress={onToggle}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+      >
+        <IconButton
+          icon={open ? 'chevron-down' : 'chevron-right'}
+          size={16}
+          style={{ margin: 0 }}
+        />
+        <Text style={doc.pickerGroupLabel}>
+          {title} ({count})
+        </Text>
+      </TouchableOpacity>
+      {open && children}
+    </View>
+  );
 }
 
 export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCancel, initialInvoice, initialItems = [], isEditing = false, hideTitle = false, forceInvoiceNumber = null, companyLogo }: InvoiceFormProps) {
@@ -142,6 +179,10 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
   const [clientModalVisible, setClientModalVisible] = useState(false);
   const [itemListModalVisible, setItemListModalVisible] = useState(false);
   const [itemListTargetIndex, setItemListTargetIndex] = useState<number | null>(null);
+  // HT-74: both groups open by default so today's behaviour is unchanged.
+  const [servicesOpen, setServicesOpen] = useState(true);
+  const [materialsOpen, setMaterialsOpen] = useState(true);
+  const [itemListSearch, setItemListSearch] = useState('');
   const [itemDescriptionModalVisible, setItemDescriptionModalVisible] = useState(false);
   const [editingItemDescription, setEditingItemDescription] = useState('');
 
@@ -368,8 +409,23 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
 
   const openItemList = (index: number) => {
     setItemListTargetIndex(index);
+    setItemListSearch('');
     setItemListModalVisible(true);
   };
+
+  // HT-74: filters both catalogues by name; a section with zero matches
+  // collapses itself while the search is active, independent of the toggle.
+  const itemListQuery = itemListSearch.trim().toLowerCase();
+  const filteredServices = useMemo(
+    () => (itemListQuery ? (services || []).filter((s: any) => s.name?.toLowerCase().includes(itemListQuery)) : services || []),
+    [services, itemListQuery],
+  );
+  const filteredMaterials = useMemo(
+    () => (itemListQuery ? (materials || []).filter((m: any) => m.name?.toLowerCase().includes(itemListQuery)) : materials || []),
+    [materials, itemListQuery],
+  );
+  const servicesEffectivelyOpen = servicesOpen && (!itemListQuery || filteredServices.length > 0);
+  const materialsEffectivelyOpen = materialsOpen && (!itemListQuery || filteredMaterials.length > 0);
 
   const handleAddLineItem = () => {
     const newItem: Omit<InvoiceItem, 'id' | 'invoice_id'> = {
@@ -1120,50 +1176,60 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
         <View style={doc.modalBackdrop}>
           <View style={doc.modalCard}>
             <Text style={doc.modalTitle}>Item List</Text>
+            <TextInput
+              mode="outlined"
+              dense
+              placeholder="Search services and materials..."
+              value={itemListSearch}
+              onChangeText={setItemListSearch}
+              style={doc.pickerSearch}
+            />
             <ScrollView style={{ maxHeight: 380 }}>
-              <Text style={doc.pickerGroupLabel}>SERVICES</Text>
-              {(services || []).length === 0 ? (
-                <Text style={{ color: LABEL, padding: 8 }}>No services found.</Text>
-              ) : (
-                (services || []).map((service: any) => (
-                  <TouchableOpacity
-                    key={`service-${service.id || service.uid}`}
-                    style={doc.pickerRow}
-                    onPress={() => {
-                      if (itemListTargetIndex !== null) {
-                        applyServiceToItem(itemListTargetIndex, service);
-                      }
-                      setItemListModalVisible(false);
-                    }}
-                  >
-                    <Text style={{ color: INK }}>
-                      {service.name} - {formatCurrency(service.rate)}/{service.unit}
-                    </Text>
-                  </TouchableOpacity>
-                ))
-              )}
+              <PickerSection title="SERVICES" count={filteredServices.length} open={servicesEffectivelyOpen} onToggle={() => setServicesOpen(o => !o)}>
+                {filteredServices.length === 0 ? (
+                  <Text style={{ color: LABEL, padding: 8 }}>No services found.</Text>
+                ) : (
+                  filteredServices.map((service: any) => (
+                    <TouchableOpacity
+                      key={`service-${service.id || service.uid}`}
+                      style={doc.pickerRow}
+                      onPress={() => {
+                        if (itemListTargetIndex !== null) {
+                          applyServiceToItem(itemListTargetIndex, service);
+                        }
+                        setItemListModalVisible(false);
+                      }}
+                    >
+                      <Text style={{ color: INK }}>
+                        {service.name} - {formatCurrency(service.rate)}/{service.unit}
+                      </Text>
+                    </TouchableOpacity>
+                  ))
+                )}
+              </PickerSection>
 
-              <Text style={doc.pickerGroupLabel}>MATERIALS</Text>
-              {(materials || []).length === 0 ? (
-                <Text style={{ color: LABEL, padding: 8 }}>No materials found.</Text>
-              ) : (
-                (materials || []).map((material: any) => (
-                  <TouchableOpacity
-                    key={`material-${material.id || material.uid}`}
-                    style={doc.pickerRow}
-                    onPress={() => {
-                      if (itemListTargetIndex !== null) {
-                        applyMaterialToItem(itemListTargetIndex, material);
-                      }
-                      setItemListModalVisible(false);
-                    }}
-                  >
-                    <Text style={{ color: INK }}>
-                      {material.name} - {formatCurrency(material.cost)}/{material.unit}
-                    </Text>
-                  </TouchableOpacity>
-                ))
-              )}
+              <PickerSection title="MATERIALS" count={filteredMaterials.length} open={materialsEffectivelyOpen} onToggle={() => setMaterialsOpen(o => !o)}>
+                {filteredMaterials.length === 0 ? (
+                  <Text style={{ color: LABEL, padding: 8 }}>No materials found.</Text>
+                ) : (
+                  filteredMaterials.map((material: any) => (
+                    <TouchableOpacity
+                      key={`material-${material.id || material.uid}`}
+                      style={doc.pickerRow}
+                      onPress={() => {
+                        if (itemListTargetIndex !== null) {
+                          applyMaterialToItem(itemListTargetIndex, material);
+                        }
+                        setItemListModalVisible(false);
+                      }}
+                    >
+                      <Text style={{ color: INK }}>
+                        {material.name} - {formatCurrency(material.cost)}/{material.unit}
+                      </Text>
+                    </TouchableOpacity>
+                  ))
+                )}
+              </PickerSection>
             </ScrollView>
             <View style={doc.modalActions}>
               <Button mode="outlined" onPress={() => setItemListModalVisible(false)}>

@@ -412,4 +412,11 @@ export const doc = StyleSheet.create({
     marginTop: 12,
     marginBottom: 4,
   },
+  pickerSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  pickerSearch: {
+    marginBottom: 8,
+  },
 });
