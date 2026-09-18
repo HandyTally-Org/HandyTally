@@ -8,7 +8,7 @@ import { ClientDialog } from '../../components/ClientDialog';
 import { useRouter } from 'expo-router';
 import { exportWorkbook, pickWorkbook, sheetRows, confirmAction } from '../../utils/excel';
 import { ImportExportButtons } from '../../components/ImportExportButtons';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useLabels } from '../../hooks/useLabels';
 import { labelColor, labelText, labelTextColor } from '../../constants/labels';
 import { LabelPill, LabelPillRow } from '../../components/LabelPill';
@@ -56,7 +56,7 @@ export default function ClientsScreen() {
   const jobStatuses = useLabels('job_status');
   const invoiceStatuses = useLabels('invoice_status');
   const router = useRouter();
-  const { notify } = useFeedback();
+  const { notify, confirm } = useFeedback();
   console.log('Router object:', router);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,7 +66,6 @@ export default function ClientsScreen() {
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [editingClient, setEditingClient] = useState<Client | null>(null);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [sortColumn, setSortColumn] = useState<string>('name');
   const [sortDirection, setSortDirection] = useState<'ascending' | 'descending'>('ascending');
   const [relatedJobs, setRelatedJobs] = useState<Job[]>([]);
@@ -154,44 +153,49 @@ export default function ClientsScreen() {
     }
   };
 
-  const handleDeleteClient = async () => {
-    if (!selectedClient) return;
-    
+  // HT-89: the shared confirm dialog (HT-84) instead of a page-local Paper
+  // Dialog; the related-items check and the delete itself are unchanged.
+  const handleDeleteClient = async (client: Client) => {
+    const ok = await confirm({
+      title: 'Delete client',
+      message: `Delete "${client.name}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+
     try {
       setLoading(true);
-      
+
       // First check if the client has any related records and show them
-      const hasRelatedItems = await fetchRelatedItems(selectedClient.uid);
-      
+      const hasRelatedItems = await fetchRelatedItems(client.uid);
+
       if (hasRelatedItems) {
         // The related items dialog will be shown, so we'll exit here
         return;
       }
-      
+
       // If no related items, proceed with deletion
-      console.log('Proceeding with client deletion, UID:', selectedClient.uid);
+      console.log('Proceeding with client deletion, UID:', client.uid);
       const { error: deleteError } = await supabase
         .from('clients')
         .delete()
-        .eq('uid', selectedClient.uid);
-      
+        .eq('uid', client.uid);
+
       if (deleteError) {
         console.error('Error deleting client:', deleteError);
         throw new Error(`Database error: ${deleteError.message}`);
       }
-      
+
       // Update local state
-      setClients(clients.filter(client => client.uid !== selectedClient.uid));
+      setClients(clients.filter(c => c.uid !== client.uid));
       showSnackbar('Client deleted successfully');
-      setShowDeleteDialog(false);
-      setSelectedClient(null);
     } catch (error) {
       console.error('Error in delete operation:', error);
       // Show a more specific error message
       showSnackbar(error instanceof Error ? error.message : 'Error deleting client');
     } finally {
       setLoading(false);
-      setShowDeleteDialog(false); // Always close the delete dialog, even on error
     }
   };
 
@@ -730,10 +734,7 @@ export default function ClientsScreen() {
                       icon="delete"
                       mode="text"
                       compact
-                      onPress={() => {
-                        setSelectedClient(client);
-                        setShowDeleteDialog(true);
-                      }}
+                      onPress={() => handleDeleteClient(client)}
                       style={styles.actionButton}
                       labelStyle={styles.actionButtonLabel}
                       textColor="red"
@@ -768,29 +769,21 @@ export default function ClientsScreen() {
         }}
       />
       
-      {/* Delete Client Dialog */}
+      {/* Related Items Dialog. Informational (a list of what still points at
+          the client), so it can't be a confirm(); HT-89 dresses it in the
+          same badge / centred title / single filled button as FeedbackHost. */}
       <Portal>
-        <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)}>
-          <Dialog.Title>Delete Client</Dialog.Title>
-          <Dialog.Content>
-            <Text>Are you sure you want to delete the client "{selectedClient?.name}"?</Text>
-            <Text>This action cannot be undone.</Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setShowDeleteDialog(false)}>Cancel</Button>
-            <Button onPress={handleDeleteClient} textColor="red">Delete</Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
-      
-      {/* Related Items Dialog */}
-      <Portal>
-        <Dialog 
-          visible={showRelatedItemsDialog} 
+        <Dialog
+          visible={showRelatedItemsDialog}
           onDismiss={() => setShowRelatedItemsDialog(false)}
           style={styles.relatedItemsDialog}
         >
-          <Dialog.Title>Cannot Delete Client</Dialog.Title>
+          <View style={styles.relatedItemsHeader}>
+            <View style={styles.relatedItemsBadge}>
+              <MaterialCommunityIcons name="alert-circle-outline" size={28} color="#dc2626" />
+            </View>
+            <Text variant="titleLarge" style={styles.relatedItemsTitle}>Cannot delete client</Text>
+          </View>
           <Dialog.ScrollArea style={styles.dialogScrollArea}>
             <ScrollView>
               {relatedJobs.length > 0 && (
@@ -849,8 +842,10 @@ export default function ClientsScreen() {
               </Text>
             </ScrollView>
           </Dialog.ScrollArea>
-          <Dialog.Actions>
-            <Button onPress={() => setShowRelatedItemsDialog(false)}>Close</Button>
+          <Dialog.Actions style={styles.relatedItemsActions}>
+            <Button mode="contained" onPress={() => setShowRelatedItemsDialog(false)} style={styles.relatedItemsButton}>
+              OK
+            </Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -1200,8 +1195,37 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   relatedItemsDialog: {
-    maxWidth: 500,
+    borderRadius: 16,
+    minWidth: 320,
+    maxWidth: 420,
     alignSelf: 'center',
+  },
+  relatedItemsHeader: {
+    alignItems: 'center',
+    paddingTop: 28,
+    paddingBottom: 12,
+    paddingHorizontal: 24,
+  },
+  relatedItemsBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    backgroundColor: 'rgba(220, 38, 38, 0.12)',
+  },
+  relatedItemsTitle: {
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  relatedItemsActions: {
+    paddingHorizontal: 24,
+    paddingBottom: 20,
+  },
+  relatedItemsButton: {
+    flex: 1,
+    borderRadius: 8,
   },
   dialogScrollArea: {
     maxHeight: 400,

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
-import { Text, Button, IconButton, ActivityIndicator, Portal, Dialog, Snackbar, TextInput } from 'react-native-paper';
+import { Text, Button, IconButton, ActivityIndicator, Snackbar, TextInput } from 'react-native-paper';
 import { supabase } from '../lib/supabase';
 import { FormDialog, FormDialogFooter, FormField, formTheme, inputStyle } from './FormDialog';
 import { themed } from '../constants/Colors';
+import { useFeedback } from '../contexts/FeedbackContext';
 
 // The Notes entry under DOCUMENTATION on a client or a job: a list of titled
 // notes, an Add note button that opens a compact popup, and edit/delete on
@@ -36,8 +37,8 @@ export function NotesSection({ clientId, jobId }: NotesSectionProps) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialog, setDialog] = useState<DialogState>(null);
-  const [noteToDelete, setNoteToDelete] = useState<Note | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const { confirm } = useFeedback();
   const [message, setMessage] = useState('');
 
   const parentColumn = clientId != null ? 'client_id' : 'job_id';
@@ -94,8 +95,15 @@ export function NotesSection({ clientId, jobId }: NotesSectionProps) {
     }
   };
 
-  const deleteNote = async () => {
-    if (!noteToDelete) return;
+  // HT-89: asks through the shared confirm dialog (HT-84).
+  const deleteNote = async (noteToDelete: Note) => {
+    const ok = await confirm({
+      title: 'Delete note',
+      message: `Delete "${noteToDelete.title}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       setSubmitting(true);
       const { error } = await supabase.from('notes').delete().eq('id', noteToDelete.id);
@@ -107,7 +115,6 @@ export function NotesSection({ clientId, jobId }: NotesSectionProps) {
       setMessage(`Could not delete note: ${error.message}`);
     } finally {
       setSubmitting(false);
-      setNoteToDelete(null);
     }
   };
 
@@ -150,7 +157,7 @@ export function NotesSection({ clientId, jobId }: NotesSectionProps) {
             </View>
             <View style={styles.noteActions}>
               <IconButton icon="pencil" size={18} onPress={() => setDialog({ mode: 'edit', note })} accessibilityLabel="Edit note" />
-              <IconButton icon="delete" size={18} iconColor="#DC2626" onPress={() => setNoteToDelete(note)} accessibilityLabel="Delete note" />
+              <IconButton icon="delete" size={18} iconColor="#DC2626" onPress={() => deleteNote(note)} accessibilityLabel="Delete note" />
             </View>
           </Pressable>
         ))
@@ -163,21 +170,6 @@ export function NotesSection({ clientId, jobId }: NotesSectionProps) {
         onDismiss={() => setDialog(null)}
         onSubmit={saveNote}
       />
-
-      <Portal>
-        <Dialog visible={noteToDelete !== null} onDismiss={() => setNoteToDelete(null)} style={styles.confirm}>
-          <Dialog.Title>Delete note</Dialog.Title>
-          <Dialog.Content>
-            <Text>Delete "{noteToDelete?.title}"? This cannot be undone.</Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setNoteToDelete(null)} disabled={submitting}>Cancel</Button>
-            <Button onPress={deleteNote} textColor="#DC2626" loading={submitting} disabled={submitting}>
-              Delete
-            </Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
 
       <Snackbar visible={message !== ''} onDismiss={() => setMessage('')} duration={3000}>
         {message}
@@ -340,12 +332,6 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     marginTop: -8,
     marginRight: -8,
-  },
-  confirm: {
-    maxWidth: 420,
-    alignSelf: 'center',
-    borderRadius: 14,
-    backgroundColor: formTheme.background,
   },
   bodyInput: {
     minHeight: 160,

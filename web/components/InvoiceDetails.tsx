@@ -71,9 +71,8 @@ export function InvoiceDetails({
 }: InvoiceDetailsProps) {
   const invoiceStatuses = useLabels('invoice_status');
   const invoiceCustomFields = useCustomFields('invoices');
-  const { notify } = useFeedback();
+  const { notify, confirm } = useFeedback();
   const { organization } = useAuth();
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [companyInfo, setCompanyInfo] = useState<CompanyProfile | null>(null);
   const [printLoading, setPrintLoading] = useState(false);
   const [sendLoading, setSendLoading] = useState(false);
@@ -99,12 +98,21 @@ export function InvoiceDetails({
   // What Print, PDF and both emails put in the header.
   const documentCompany = { ...(companyInfo ?? {}), logo_url: logoUri };
 
-  const handleDelete = () => {
-    if (onDelete) {
-      console.log('Deleting invoice with ID:', safeInvoice.uid);
-      onDelete(safeInvoice.uid);
-    }
-    setShowDeleteDialog(false);
+  // HT-89: asks through the shared confirm dialog (HT-84). Note that no
+  // caller passes onDelete today, so the Delete button never renders; if it
+  // is wired up inside invoices.tsx's RN Modal, FeedbackHost's dialog will
+  // sit under that modal's layer (see the Portal.Host note there).
+  const handleDelete = async () => {
+    if (!onDelete) return;
+    const ok = await confirm({
+      title: 'Delete invoice',
+      message: `Delete invoice #${safeInvoice.invoice_number}? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    console.log('Deleting invoice with ID:', safeInvoice.uid);
+    onDelete(safeInvoice.uid);
   };
 
   // Anything already paid or overdue is left alone so sending can never walk
@@ -298,7 +306,7 @@ export function InvoiceDetails({
           {onDelete && isEditable && !isEditing && (
             <Button
               mode="text"
-              onPress={() => setShowDeleteDialog(true)}
+              onPress={handleDelete}
               textColor="#dc2626"
               icon="delete"
               style={{ borderRadius: 4 }}
@@ -573,17 +581,6 @@ export function InvoiceDetails({
       </View>
 
       <Portal>
-        <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)}>
-          <Dialog.Title>Delete Invoice</Dialog.Title>
-          <Dialog.Content>
-            <Text>Are you sure you want to delete Invoice #{safeInvoice.invoice_number}? This action cannot be undone.</Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setShowDeleteDialog(false)}>Cancel</Button>
-            <Button onPress={handleDelete}>Delete</Button>
-          </Dialog.Actions>
-        </Dialog>
-
         {isEstimate ? (
           // HT-10: the approval email. Subject and message are the user's to
           // change; the rendered estimate, the total and the Approve button
