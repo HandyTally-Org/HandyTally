@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { TextInput, Button, Card, Text, ActivityIndicator } from 'react-native-paper';
+import { formatPhone } from '../../utils/formatting';
 
 type Client = {
   uid: string;
@@ -33,7 +34,7 @@ export function ClientForm({ client, onSubmit, onCancel, submitting = false }: C
       setFormData({
         name: client.name || '',
         email: client.email || '',
-        phone: client.phone || '',
+        phone: formatPhone(client.phone),
         address: client.address || '',
         notes: client.notes || '',
       });
@@ -107,8 +108,10 @@ export function ClientForm({ client, onSubmit, onCancel, submitting = false }: C
         <TextInput
           label="Phone"
           value={formData.phone}
-          onChangeText={(value) => handleChange('phone', value)}
+          onChangeText={(value) => handleChange('phone', formatPhone(value))}
           keyboardType="phone-pad"
+          maxLength={17}
+          placeholder="+1 (555) 555-0100"
           style={styles.input}
           disabled={submitting}
         />

@@ -4,7 +4,7 @@ import { Text, Button, Card, DataTable, TextInput, ActivityIndicator, IconButton
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../lib/api';
 import { styles as globalStyles } from '../../styles';
-import { formatDate } from '../../utils/formatting';
+import { formatDate, formatPhone } from '../../utils/formatting';
 import { MaterialIcons } from '@expo/vector-icons';
 import { NotesSection } from '../../components/NotesSection';
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
@@ -381,8 +381,11 @@ export default function ClientDetailsScreen() {
                   </FormField>
                   <FormField label="Phone">
                     <TextInput
-                      value={editedClient?.phone || ''}
-                      onChangeText={(text) => setEditedClient({ ...editedClient, phone: text })}
+                      value={formatPhone(editedClient?.phone)}
+                      onChangeText={(text) => setEditedClient({ ...editedClient, phone: formatPhone(text) })}
+                      keyboardType="phone-pad"
+                      maxLength={17}
+                      placeholder="+1 (555) 555-0100"
                       {...outlinedInputProps}
                     />
                   </FormField>

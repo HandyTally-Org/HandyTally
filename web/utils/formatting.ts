@@ -57,23 +57,31 @@ export function formatEin(value: string | null | undefined): string {
 }
 
 /**
- * Format a phone number
- * @param phone Phone number to format
- * @returns Formatted phone number
+ * HT-82: mask a North American phone number as `+1 (XXX) XXX-XXXX`
+ * progressively as it is typed, so it can drive a controlled input the way
+ * formatEin does. A leading country code 1 on an 11-digit number is folded
+ * into the fixed `+1`; anything past 10 national digits is dropped.
+ *
+ * Closing punctuation only appears once the digit after it exists, so
+ * backspacing over ")" or "-" removes a digit instead of getting stuck.
+ * @param value Raw, pasted or partially-typed phone text
+ * @returns Masked number, or '' when empty
  */
-export function formatPhone(phone: string | null | undefined): string {
-  if (!phone) return '';
-  
-  // Remove all non-numeric characters
-  const cleaned = phone.replace(/\D/g, '');
-  
-  // Format as (XXX) XXX-XXXX
-  if (cleaned.length === 10) {
-    return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
-  }
-  
-  // Return original if not 10 digits
-  return phone;
+export function formatPhone(value: string | null | undefined): string {
+  if (!value) return '';
+  // The mask's own "+1 " prefix (or a pasted "+1") is not a national digit.
+  const national = value.trim().startsWith('+1') ? value.trim().slice(2) : value;
+  let digits = national.replace(/\D/g, '');
+  if (!value.trim().startsWith('+1') && digits.length >= 11 && digits.startsWith('1')) digits = digits.slice(1);
+  digits = digits.slice(0, 10);
+  if (digits.length === 0) return '';
+
+  const area = digits.slice(0, 3);
+  const exchange = digits.slice(3, 6);
+  const line = digits.slice(6, 10);
+  if (digits.length <= 3) return `+1 (${area}`;
+  if (digits.length <= 6) return `+1 (${area}) ${exchange}`;
+  return `+1 (${area}) ${exchange}-${line}`;
 }
 
 /**
