@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { IconButton, Text } from 'react-native-paper';
+import { themed } from '../constants/Colors';
 
 // HT-50: master-detail layout — a list on the left, the selected item's
 // content on the right, as part of the page rather than an overlay. Built
@@ -89,10 +90,10 @@ const styles = StyleSheet.create({
   wide: { flexDirection: 'row' },
   list: {
     borderRightWidth: 1,
-    borderRightColor: '#e0e0e0',
-    backgroundColor: '#ffffff',
+    borderRightColor: themed.line,
+    backgroundColor: themed.panel,
   },
-  detail: { flex: 1, backgroundColor: '#ffffff', minWidth: 0 },
+  detail: { flex: 1, backgroundColor: themed.panel, minWidth: 0 },
   detailHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -100,19 +101,19 @@ const styles = StyleSheet.create({
     paddingRight: 8,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: themed.line,
   },
   detailHeaderText: { flex: 1 },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#111827' },
-  headerSubtitle: { fontSize: 12.5, color: '#6b7280', marginTop: 1 },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: themed.text },
+  headerSubtitle: { fontSize: 12.5, color: themed.muted, marginTop: 1 },
   detailBody: { flex: 1, minHeight: 0 },
-  placeholder: { color: '#666', padding: 24 },
-  narrowList: { flex: 1, backgroundColor: '#ffffff' },
+  placeholder: { color: themed.muted, padding: 24 },
+  narrowList: { flex: 1, backgroundColor: themed.panel },
   sheet: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
     borderLeftWidth: 1,
-    borderLeftColor: '#e0e0e0',
+    borderLeftColor: themed.line,
   },
   sheetHeader: {
     flexDirection: 'row',
@@ -120,7 +121,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingLeft: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: themed.line,
   },
   sheetTitle: { flex: 1 },
   sheetBody: { flex: 1, minHeight: 0 },

@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: st.border,
     borderRadius: 10,
-    backgroundColor: '#fafafa',
+    backgroundColor: st.softBg,
   },
   footer: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 20, flexWrap: 'wrap' },
   unsaved: { color: '#b45309', fontSize: 13 },
