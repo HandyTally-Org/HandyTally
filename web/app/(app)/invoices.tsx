@@ -128,6 +128,9 @@ export default function InvoicesScreen() {
   const [showInvoiceList, setShowInvoiceList] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [companyLogo, setCompanyLogo] = useState<string | null>(null);
+  // HT-78: Company > Documents rows marked "On invoices"; label + details
+  // only (never file_data), rendered as the "Licences & Insurance" block.
+  const [companyDocuments, setCompanyDocuments] = useState<{ label: string; value: string; fileName: string | null }[]>([]);
   const router = useRouter();
 
   useRefreshOnFocus(() => {
@@ -150,6 +153,7 @@ export default function InvoicesScreen() {
         fetchJobs();
         fetchClients();
         fetchCompanyLogo();
+        fetchCompanyDocuments();
       })
       .catch(error => {
         console.error("Error in database checks:", error);
@@ -1643,6 +1647,35 @@ export default function InvoicesScreen() {
     }
   }
 
+  // HT-78: the documents an admin marked to show on invoices. Never selects
+  // file_data -- the browser has no reason to hold a document's file just to
+  // list it, and it is not attached to the sent email in this first slice.
+  async function fetchCompanyDocuments() {
+    try {
+      const { data, error } = await supabase
+        .from('company_attachments')
+        .select('label, value, name')
+        .eq('is_logo', false)
+        .eq('include_on_invoices', true)
+        .order('id', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching company documents:', error);
+        return;
+      }
+
+      setCompanyDocuments(
+        (data || []).map((row: any) => ({
+          label: row.label || '',
+          value: row.value || '',
+          fileName: row.name || null,
+        })),
+      );
+    } catch (error) {
+      console.error('Error in fetchCompanyDocuments:', error);
+    }
+  }
+
   return (
     <View style={styles.container}>
       <PageHeader title="Invoices" />
@@ -2029,6 +2062,7 @@ export default function InvoicesScreen() {
                   }}
                   items={invoiceItems || []}
                   companyLogo={companyLogo}
+                  companyDocuments={companyDocuments}
                   onSent={() => fetchInvoices()}
                 />
               </ScrollView>

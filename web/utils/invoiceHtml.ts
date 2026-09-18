@@ -13,8 +13,11 @@ import { invoiceDocumentLabel } from '../constants/invoiceStatus';
 
 export type InvoiceDocumentParts = { css: string; markup: string };
 
-export const generateInvoiceHTML = (invoice: any, items: any[], companyInfo: any) => {
-  const { css, markup } = renderInvoiceDocument(invoice, items, companyInfo);
+/** HT-78: a Company > Documents row marked to show on invoices (name + details; fileName is display-only in v1, nothing is attached yet). */
+export type InvoiceDocumentSummary = { label: string; value: string; fileName: string | null };
+
+export const generateInvoiceHTML = (invoice: any, items: any[], companyInfo: any, companyDocuments: InvoiceDocumentSummary[] = []) => {
+  const { css, markup } = renderInvoiceDocument(invoice, items, companyInfo, companyDocuments);
   return `
     <!DOCTYPE html>
     <html>
@@ -32,7 +35,12 @@ export const generateInvoiceHTML = (invoice: any, items: any[], companyInfo: any
   `;
 };
 
-export const renderInvoiceDocument = (invoice: any, items: any[], companyInfo: any): InvoiceDocumentParts => {
+export const renderInvoiceDocument = (
+  invoice: any,
+  items: any[],
+  companyInfo: any,
+  companyDocuments: InvoiceDocumentSummary[] = [],
+): InvoiceDocumentParts => {
   // Determine the job name to display
   const jobName = invoice.job?.name ||
                  invoice.job?.title ||
@@ -139,6 +147,19 @@ export const renderInvoiceDocument = (invoice: any, items: any[], companyInfo: a
             padding: 5px;
             background-color: #f9f9f9;
           }
+          .ht-doc .documents {
+            margin-top: 10px;
+            padding: 5px;
+          }
+          .ht-doc .documents h3 {
+            margin: 0 0 5px 0;
+          }
+          .ht-doc .documents table {
+            margin-top: 0;
+          }
+          .ht-doc .documents td {
+            border-bottom: 1px solid #eee;
+          }
   `;
 
   const markup = `
@@ -215,6 +236,22 @@ export const renderInvoiceDocument = (invoice: any, items: any[], companyInfo: a
             <div>$${invoice.total.toFixed(2)}</div>
           </div>
         </div>
+
+        ${companyDocuments.length > 0 ? `
+          <div class="documents">
+            <h3>Licences &amp; Insurance</h3>
+            <table>
+              <tbody>
+                ${companyDocuments.map(companyDoc => `
+                  <tr>
+                    <td><strong>${companyDoc.label}</strong></td>
+                    <td>${companyDoc.value}${companyDoc.fileName ? ` <em>(on file: ${companyDoc.fileName})</em>` : ''}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : ''}
 
         ${invoice.notes ? `
           <div class="notes">

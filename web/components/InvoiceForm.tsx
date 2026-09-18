@@ -130,6 +130,9 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
   const [services, setServices] = useState<Service[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [companyInfo, setCompanyInfo] = useState<any>(null);
+  // HT-78: Company > Documents rows marked "On invoices"; label + details
+  // only (never file_data), previewed here the same way the sent document renders them.
+  const [companyDocuments, setCompanyDocuments] = useState<{ label: string; value: string; fileName: string | null }[]>([]);
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
   const [notesModalVisible, setNotesModalVisible] = useState(false);
   const [tempNotes, setTempNotes] = useState('');
@@ -146,6 +149,7 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
     fetchServices();
     fetchMaterials();
     fetchCompanyInfo();
+    fetchCompanyDocuments();
   }, []);
 
   useEffect(() => {
@@ -244,6 +248,31 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
       }
     } catch (error) {
       console.error('Error fetching company info:', error);
+    }
+  };
+
+  // HT-78: never selects file_data -- the browser has no reason to hold a
+  // document's file just to preview its name and details here.
+  const fetchCompanyDocuments = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('company_attachments')
+        .select('label, value, name')
+        .eq('is_logo', false)
+        .eq('include_on_invoices', true)
+        .order('id', { ascending: true });
+
+      if (!error) {
+        setCompanyDocuments(
+          (data || []).map((row: any) => ({
+            label: row.label || '',
+            value: row.value || '',
+            fileName: row.name || null,
+          })),
+        );
+      }
+    } catch (error) {
+      console.error('Error fetching company documents:', error);
     }
   };
 
@@ -1013,6 +1042,24 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
               />
             </View>
           </View>
+
+          {/* ── Company documents (HT-78): read-only preview of what the
+              "Licences & Insurance" block will show on the sent document;
+              per-invoice override is a separate follow-up. ── */}
+          {companyDocuments.length > 0 && (
+            <View style={doc.notesSection}>
+              <Text style={doc.sectionLabel}>Licences &amp; Insurance</Text>
+              <Text style={{ fontSize: 13, color: LABEL, marginBottom: 6 }}>
+                Shown on the sent document, from Admin &gt; Company &gt; Documents:
+              </Text>
+              {companyDocuments.map((companyDoc, i) => (
+                <Text key={i} style={{ fontSize: 14, color: INK, marginBottom: 2 }}>
+                  {companyDoc.label}
+                  {companyDoc.value ? ` — ${companyDoc.value}` : ''}
+                </Text>
+              ))}
+            </View>
+          )}
 
           {/* ── Custom fields ── */}
           <CustomFieldInputs
