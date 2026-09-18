@@ -23,6 +23,8 @@ export type CompanyDocumentRow = {
   pendingFileData: string | null;
   /** True once the attachment was replaced or removed since the last save. */
   fileChanged: boolean;
+  /** HT-78: shows this document's name and details on invoices, estimates and the approval email. */
+  includeOnInvoices: boolean;
 };
 
 /** The columns the list query reads; file_data stays on the server until it is opened. */
@@ -33,6 +35,7 @@ export type CompanyDocumentRecord = {
   name: string | null;
   file_type: string | null;
   file_size: number | null;
+  include_on_invoices?: boolean | null;
 };
 
 export function recordToRow(record: CompanyDocumentRecord): CompanyDocumentRow {
@@ -46,6 +49,7 @@ export function recordToRow(record: CompanyDocumentRecord): CompanyDocumentRow {
     fileSize: record.file_size,
     pendingFileData: null,
     fileChanged: false,
+    includeOnInvoices: record.include_on_invoices ?? false,
   };
 }
 
@@ -62,6 +66,7 @@ export function newDocumentRow(label: string, value: string): CompanyDocumentRow
     fileSize: null,
     pendingFileData: null,
     fileChanged: false,
+    includeOnInvoices: false,
   };
 }
 
@@ -125,7 +130,12 @@ export function diffDocumentRows(saved: readonly CompanyDocumentRow[], draft: re
       updates.push(row);
       continue;
     }
-    if (row.fileChanged || row.label.trim() !== before.label.trim() || row.value.trim() !== before.value.trim()) {
+    if (
+      row.fileChanged ||
+      row.label.trim() !== before.label.trim() ||
+      row.value.trim() !== before.value.trim() ||
+      row.includeOnInvoices !== before.includeOnInvoices
+    ) {
       updates.push(row);
     }
   }

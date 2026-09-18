@@ -78,4 +78,25 @@ describe('diffDocumentRows', () => {
     const padded = { ...before[0], value: '  GL-1 ' };
     expect(diffDocumentRows(before, [padded, before[1]]).updates).toEqual([]);
   });
+
+  it('detects an include-on-invoices toggle with nothing else changed', () => {
+    const toggled = { ...before[0], includeOnInvoices: true };
+    expect(diffDocumentRows(before, [toggled, before[1]]).updates.map(row => row.id)).toEqual([1]);
+  });
+});
+
+describe('recordToRow', () => {
+  it('defaults includeOnInvoices to false when the column is missing or null', () => {
+    expect(recordToRow({ id: 1, label: 'Insurance', value: '', name: null, file_type: null, file_size: null }).includeOnInvoices).toBe(false);
+    expect(
+      recordToRow({ id: 1, label: 'Insurance', value: '', name: null, file_type: null, file_size: null, include_on_invoices: null }).includeOnInvoices,
+    ).toBe(false);
+    expect(
+      recordToRow({ id: 1, label: 'Insurance', value: '', name: null, file_type: null, file_size: null, include_on_invoices: true }).includeOnInvoices,
+    ).toBe(true);
+  });
+
+  it('newDocumentRow starts unchecked', () => {
+    expect(newDocumentRow('EMR', '').includeOnInvoices).toBe(false);
+  });
 });

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { ActivityIndicator, Snackbar } from 'react-native-paper';
+import { ActivityIndicator, Checkbox, Snackbar } from 'react-native-paper';
 import * as DocumentPicker from 'expo-document-picker';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -28,7 +28,7 @@ import { AddPanel, FieldCaption, LinkButton, OutlineButton, PrimaryButton, Secti
 // record with is_logo = false; the file is base64 in file_data like the
 // logo, and is only read back when the admin opens it.
 
-const LIST_COLUMNS = 'id, label, value, name, file_type, file_size';
+const LIST_COLUMNS = 'id, label, value, name, file_type, file_size, include_on_invoices';
 const PENDING_PILL = { color: '#fef3c7', textColor: '#92400e' };
 
 type Props = {
@@ -187,6 +187,7 @@ export function CompanyDocumentsEditor({ companyId, ensureCompanyId }: Props) {
             is_logo: false,
             label: row.label.trim(),
             value: row.value.trim(),
+            include_on_invoices: row.includeOnInvoices,
             name: row.fileName,
             file_type: row.fileType,
             file_size: row.fileSize,
@@ -204,6 +205,7 @@ export function CompanyDocumentsEditor({ companyId, ensureCompanyId }: Props) {
           .update({
             label: row.label.trim(),
             value: row.value.trim(),
+            include_on_invoices: row.includeOnInvoices,
             updated_by: userId,
             ...(row.fileChanged
               ? { name: row.fileName, file_type: row.fileType, file_size: row.fileSize, file_data: row.pendingFileData }
@@ -253,6 +255,7 @@ export function CompanyDocumentsEditor({ companyId, ensureCompanyId }: Props) {
               <Text style={[tbl.th, styles.colLabel]}>Document</Text>
               <Text style={[tbl.th, styles.colValue]}>Details</Text>
               <Text style={[tbl.th, styles.colFile]}>Attachment</Text>
+              <Text style={[tbl.th, styles.colInvoices]}>On invoices</Text>
               <View style={styles.colRemove} />
             </View>
             {rows.map(row => {
@@ -291,6 +294,12 @@ export function CompanyDocumentsEditor({ companyId, ensureCompanyId }: Props) {
                       {hasFile ? <QuietLink label="Open" onPress={() => open(row)} accessibilityLabel={`Open the file of ${row.label || 'document'}`} /> : null}
                       {hasFile ? <LinkButton label="Remove file" onPress={() => removeFile(row)} accessibilityLabel={`Remove the file of ${row.label || 'document'}`} /> : null}
                     </View>
+                  </View>
+                  <View style={[tbl.cell, styles.colInvoices]}>
+                    <Checkbox
+                      status={row.includeOnInvoices ? 'checked' : 'unchecked'}
+                      onPress={() => update(row.key, { includeOnInvoices: !row.includeOnInvoices })}
+                    />
                   </View>
                   <View style={[tbl.cell, styles.colRemove, styles.right]}>
                     <LinkButton
@@ -345,6 +354,7 @@ const styles = StyleSheet.create({
   colLabel: { flex: 2.4, minWidth: 170 },
   colValue: { flex: 3, minWidth: 190 },
   colFile: { flex: 3, minWidth: 220 },
+  colInvoices: { width: 100, alignItems: 'center' },
   colRemove: { width: 84 },
   right: { alignItems: 'flex-end' },
   fileLine: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 6 },

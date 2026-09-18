@@ -49,6 +49,8 @@ export interface InvoiceDetailsProps {
   isEditable?: boolean;
   isEditing?: boolean;
   companyLogo?: string | null;
+  /** HT-78: Company > Documents rows marked "On invoices" (label + details; fileName is display-only in v1). */
+  companyDocuments?: { label: string; value: string; fileName: string | null }[];
 }
 
 export function InvoiceDetails({ 
@@ -60,7 +62,8 @@ export function InvoiceDetails({
   onSent,
   isEditable = true,
   isEditing = false,
-  companyLogo
+  companyLogo,
+  companyDocuments = []
 }: InvoiceDetailsProps) {
   const invoiceStatuses = useLabels('invoice_status');
   const invoiceCustomFields = useCustomFields('invoices');
@@ -179,7 +182,7 @@ export function InvoiceDetails({
           invoiceId: safeInvoice.uid,
           subject,
           message: approvalMessage,
-          document: renderInvoiceDocument(safeInvoice, items, companyInfo),
+          document: renderInvoiceDocument(safeInvoice, items, companyInfo, companyDocuments),
         });
         if (Array.isArray(data?.sentTo) && data.sentTo.length > 0) {
           sentTo = data.sentTo.join(' and ');
@@ -187,7 +190,7 @@ export function InvoiceDetails({
       } else {
         // Render exactly what the Print action renders, so the client receives
         // the same document the sender just looked at.
-        const html = generateInvoiceHTML(safeInvoice, items, companyInfo);
+        const html = generateInvoiceHTML(safeInvoice, items, companyInfo, companyDocuments);
         await invokeSendFunction('send-invoice', {
           to: recipientEmail,
           subject: `${documentLabel} #${safeInvoice.invoice_number} from ${companyInfo?.business_name || 'HandyTally'}`,
@@ -229,7 +232,7 @@ export function InvoiceDetails({
       setPrintLoading(true);
       
       // Generate HTML for the invoice
-      const html = generateInvoiceHTML(safeInvoice, items, companyInfo);
+      const html = generateInvoiceHTML(safeInvoice, items, companyInfo, companyDocuments);
       
       // For web, create a new window with just the invoice HTML
       if (Platform.OS === 'web') {
@@ -547,6 +550,22 @@ export function InvoiceDetails({
               </View>
             </View>
           </View>
+
+          {/* ── Licences & Insurance (HT-78) ── */}
+          {companyDocuments.length > 0 && (
+            <View style={doc.notesSection}>
+              <Text style={doc.sectionLabel}>Licences &amp; Insurance</Text>
+              <View style={styles.notesBox}>
+                {companyDocuments.map((companyDoc, i) => (
+                  <Text key={i} style={{ fontSize: 14, color: INK, marginBottom: i < companyDocuments.length - 1 ? 4 : 0 }}>
+                    <Text style={{ fontWeight: '600' }}>{companyDoc.label}</Text>
+                    {companyDoc.value ? ` — ${companyDoc.value}` : ''}
+                    {companyDoc.fileName ? ` (on file: ${companyDoc.fileName})` : ''}
+                  </Text>
+                ))}
+              </View>
+            </View>
+          )}
 
           {/* ── Notes ── */}
           <View style={doc.notesSection}>
