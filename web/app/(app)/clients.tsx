@@ -14,6 +14,7 @@ import { labelColor, labelText, labelTextColor } from '../../constants/labels';
 import { LabelPill, LabelPillRow } from '../../components/LabelPill';
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 import { themed } from '../../constants/Colors';
+import { useFeedback } from '../../contexts/FeedbackContext';
 
 type Client = {
   uid: string;
@@ -55,6 +56,7 @@ export default function ClientsScreen() {
   const jobStatuses = useLabels('job_status');
   const invoiceStatuses = useLabels('invoice_status');
   const router = useRouter();
+  const { notify } = useFeedback();
   console.log('Router object:', router);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -438,10 +440,10 @@ export default function ClientsScreen() {
         { name: 'clients', rows: exportData, columnWidths: [36, 25, 30, 15, 30, 15, 10, 10, 15, 40, 10] },
       ]);
       
-      alert('Clients exported successfully. This file can be used for import.\n\nTo delete a client, change the "delete" column value to "y".');
+      notify('Clients exported. Set the "delete" column to "y" in the file to delete a client on import.', 'success');
     } catch (error) {
       console.error('Error exporting clients:', error);
-      alert('Failed to export clients. Please try again.');
+      notify('Failed to export clients. Please try again.', 'error');
     }
   };
 

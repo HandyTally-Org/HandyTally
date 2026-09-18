@@ -5,10 +5,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../../../lib/supabase';
 import { InvoiceForm } from '../../../../components/InvoiceForm';
 import { themed } from '../../../../constants/Colors';
+import { useFeedback } from '../../../../contexts/FeedbackContext';
 
 export default function EditInvoiceScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
+  const { notify } = useFeedback();
   const [invoice, setInvoice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -122,11 +124,11 @@ export default function EditInvoiceScreen() {
               router.push('/invoices');
               
               // Show success message
-              alert('Invoice updated successfully');
-              
+              notify('Invoice updated successfully', 'success');
+
             } catch (error) {
               console.error('Error updating invoice:', error);
-              alert('Error updating invoice');
+              notify('Error updating invoice', 'error');
             }
           }}
           onCancel={() => router.back()}
