@@ -66,10 +66,11 @@ on conflict (id) do nothing;
 -- ---------------------------------------------------------------------------
 -- 3. Retire user_profiles.organization_id
 -- ---------------------------------------------------------------------------
--- auto_set_organization_id (HT-38, 20260917120000) is re-created verbatim
--- minus its last-resort read of the column: a user with no active membership
--- and no hostname tenant simply gets no organization_id, and the tenant
--- policies (HT-55) refuse the write, which is the correct answer.
+-- auto_set_organization_id is re-created from its newest definition
+-- (20260917150000_tenant_header_hardening.sql) minus its last-resort read of
+-- the column: a user with no active membership and no hostname tenant simply
+-- gets no organization_id, and the tenant policies (HT-55) refuse the write,
+-- which is the correct answer.
 create or replace function public.auto_set_organization_id()
  returns trigger
  language plpgsql
@@ -87,9 +88,7 @@ begin
     where id = auth.uid() and role = 'superuser' and is_active = true
   );
 
-  -- 1. A value already on the row wins when the caller may use it. Covers
-  --    updates (the row keeps its organization) and explicit stamping by
-  --    superusers or by members of that organization.
+  -- 1. A value already on the row wins when the caller may use it.
   if new.organization_id is not null then
     if caller_is_superuser or exists (
       select 1 from organization_memberships
@@ -99,11 +98,9 @@ begin
     ) then
       return new;
     end if;
-    -- A member of another organization put a foreign id on the row: ignore
-    -- it and derive the organization below, as the old trigger did.
   end if;
 
-  -- 2. The tenant the browser is on.
+  -- 2. The tenant the browser is on (x-tenant-subdomain header, HT-38).
   tenant_subdomain := public.request_tenant_subdomain();
   if tenant_subdomain is not null then
     select o.id into tenant_org_id
@@ -129,13 +126,9 @@ begin
       using errcode = '42501';
   end if;
 
-  -- 3. No tenant on the request. Superusers keep an explicit NULL; everyone
-  --    else gets their best active membership. (HT-65 removed the fallback to
-  --    the legacy user_profiles.organization_id column.)
-  if caller_is_superuser then
-    return new;
-  end if;
-
+  -- 3. No tenant on the request: best active membership, for superusers too.
+  --    (HT-65 removed the fallback to the legacy user_profiles.organization_id
+  --    column that followed this for non-superusers.)
   select om.organization_id into user_org_id
   from organization_memberships om
   where om.user_id = auth.uid() and om.is_active = true
