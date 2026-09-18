@@ -1647,7 +1647,7 @@ export default function JobDetailsScreen() {
             <DataTable.Title>Description</DataTable.Title>
             <DataTable.Title>Client</DataTable.Title>
             <DataTable.Title>Assigned to</DataTable.Title>
-            <DataTable.Title>Status</DataTable.Title>
+            <DataTable.Title style={{ justifyContent: 'center' }}>Status</DataTable.Title>
             <DataTable.Title>Start</DataTable.Title>
             <DataTable.Title>Finish</DataTable.Title>
           </DataTable.Header>
@@ -1659,9 +1659,10 @@ export default function JobDetailsScreen() {
             <DataTable.Cell>
               {membersLoading && job?.assigned_to ? '…' : assigneeLabel(job?.assigned_to, members)}
             </DataTable.Cell>
-            <DataTable.Cell>
+            <DataTable.Cell style={{ justifyContent: 'center' }}>
               <LabelPill
                 size="sm"
+                style={{ alignSelf: 'center' }}
                 label={labelText(jobStatuses, job?.status) || 'Unknown'}
                 color={labelColor(jobStatuses, job?.status)}
                 textColor={labelTextColor(jobStatuses, job?.status)}

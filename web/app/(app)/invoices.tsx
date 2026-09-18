@@ -1751,8 +1751,8 @@ export default function InvoicesScreen() {
                 >
                   Total
                 </DataTable.Title>
-                <DataTable.Title 
-                  style={{ backgroundColor: '#ffffff' }}
+                <DataTable.Title
+                  style={{ backgroundColor: '#ffffff', justifyContent: 'center' }}
                   sortDirection={sortColumn === 'status' ? sortDirection : undefined}
                   onPress={() => handleSort('status')}
                 >
@@ -1780,12 +1780,13 @@ export default function InvoicesScreen() {
                     <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(invoice.issue_date)}</DataTable.Cell>
                     <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(invoice.due_date)}</DataTable.Cell>
                     <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>${invoice.total.toFixed(2)}</DataTable.Cell>
-                    <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
+                    <DataTable.Cell style={{ backgroundColor: '#ffffff', justifyContent: 'center' }}>
                       {/* HT-10: read-only. An estimate becomes a work order
                           when the client approves it from the email; other
                           changes are made from the details view. */}
                       <LabelPill
                         size="sm"
+                        style={{ alignSelf: 'center' }}
                         label={labelText(invoiceStatuses, invoice.status)}
                         color={labelColor(invoiceStatuses, invoice.status)}
                         textColor={labelTextColor(invoiceStatuses, invoice.status)}
