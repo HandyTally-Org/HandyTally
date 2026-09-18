@@ -45,6 +45,18 @@ export function formatDate(dateString: string | null | undefined): string {
 }
 
 /**
+ * HT-77: mask a company EIN as NN-NNNNNNN progressively as it's typed,
+ * capping at 9 digits so it can't grow past a real EIN's length.
+ * @param value Raw or partially-typed EIN text
+ * @returns Masked EIN, or '' when empty
+ */
+export function formatEin(value: string | null | undefined): string {
+  if (!value) return '';
+  const digits = value.replace(/\D/g, '').slice(0, 9);
+  return digits.length <= 2 ? digits : `${digits.slice(0, 2)}-${digits.slice(2)}`;
+}
+
+/**
  * Format a phone number
  * @param phone Phone number to format
  * @returns Formatted phone number
