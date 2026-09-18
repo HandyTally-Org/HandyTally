@@ -462,23 +462,6 @@ export default function JobsScreen() {
     }
   };
 
-  // Add this new function to format date input
-  const formatDateInput = (text: string): string => {
-    // Remove any non-digit characters
-    const digitsOnly = text.replace(/\D/g, '');
-    
-    // If it's 8 digits (MMDDYYYY), format as MM/DD/YYYY
-    if (digitsOnly.length === 8) {
-      const month = digitsOnly.substring(0, 2);
-      const day = digitsOnly.substring(2, 4);
-      const year = digitsOnly.substring(4, 8);
-      return `${month}/${day}/${year}`;
-    }
-    
-    // If it's less than 8 digits, just return what they typed
-    return text;
-  };
-
   // Export functionality
   const handleExport = async () => {
     try {

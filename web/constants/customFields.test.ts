@@ -61,11 +61,19 @@ describe('validateCustomValues', () => {
     expect(validateCustomValues(DEFS, { po: ' ', qty: 'abc', due: '3/4/26', ok: true })).toEqual({
       po: 'PO number is required',
       qty: 'Enter a number',
-      due: 'Use YYYY-MM-DD',
+      due: 'Use MM/DD/YYYY',
     });
     expect(validateCustomValues(DEFS, { po: '44', ok: false })).toEqual({});
     // A yes/no that was never touched is not "no".
     expect(validateCustomValues(DEFS, { po: '44' })).toEqual({ ok: 'Approved is required' });
+  });
+
+  it('accepts both MM/DD/YYYY and legacy YYYY-MM-DD dates', () => {
+    expect(validateCustomValues(DEFS, { po: '44', due: '03/04/2026', ok: false })).toEqual({});
+    expect(validateCustomValues(DEFS, { po: '44', due: '2026-03-04', ok: false })).toEqual({});
+    expect(validateCustomValues(DEFS, { po: '44', due: '02/30/2026', ok: false })).toEqual({
+      due: 'Use MM/DD/YYYY',
+    });
   });
 });
 
@@ -78,6 +86,11 @@ describe('normalizeCustomValues', () => {
       old_field: 'kept',
     });
   });
+
+  it('stores a date as ISO regardless of which format it was typed in', () => {
+    expect(normalizeCustomValues(DEFS, { due: '03/04/2026' })).toEqual({ due: '2026-03-04' });
+    expect(normalizeCustomValues(DEFS, { due: '2026-03-04' })).toEqual({ due: '2026-03-04' });
+  });
 });
 
 describe('formatCustomValue', () => {
@@ -86,5 +99,9 @@ describe('formatCustomValue', () => {
     expect(formatCustomValue(DEFS[3], false)).toBe('No');
     expect(formatCustomValue(DEFS[0], undefined)).toBe('');
     expect(formatCustomValue(DEFS[1], 3)).toBe('3');
+  });
+
+  it('shows a stored ISO date in US format', () => {
+    expect(formatCustomValue(DEFS[2], '2026-03-04')).toBe('03/04/2026');
   });
 });

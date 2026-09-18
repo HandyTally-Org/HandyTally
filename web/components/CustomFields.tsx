@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Button, Menu, Switch, Text, TextInput } from 'react-native-paper';
 import { FormField, formTheme, inputStyle } from './FormDialog';
 import { formatCustomValue, hasCustomValue, type CustomFieldDef, type CustomFieldValues } from '../constants/customFields';
+import { formatUsDate, maskDateInput, parseUsDate } from '../utils/date';
 import { themed } from '../constants/Colors';
 
 // HT-52: the custom-fields block every form and detail page shares. Inputs
@@ -70,17 +71,7 @@ function CustomFieldInput({
         />
       );
     case 'date':
-      return (
-        <TextInput
-          mode="outlined"
-          label={labelFor(def)}
-          value={typeof value === 'string' ? value : ''}
-          onChangeText={onChange}
-          placeholder="YYYY-MM-DD"
-          error={error}
-          style={inputStyle}
-        />
-      );
+      return <DateFieldInput def={def} value={typeof value === 'string' ? value : ''} error={error} onChange={onChange} />;
     case 'long_text':
       return (
         <TextInput
@@ -106,6 +97,54 @@ function CustomFieldInput({
         />
       );
   }
+}
+
+// HT-76: masks free typing into MM/DD/YYYY as the user goes, and only
+// commits to the parent's ISO-stored value on blur (parseUsDate fails
+// closed to null for anything incomplete or not a real calendar date, in
+// which case the raw text is kept so validateCustomValues can flag it).
+function DateFieldInput({
+  def,
+  value,
+  error,
+  onChange,
+}: {
+  def: CustomFieldDef;
+  value: string;
+  error: boolean;
+  onChange: (value: unknown) => void;
+}) {
+  const [text, setText] = useState(() => formatUsDate(value) || value);
+
+  // Pick up an external value change (switching records) without clobbering
+  // what the user is mid-typing on this one.
+  useEffect(() => {
+    setText(formatUsDate(value) || value);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  // Every keystroke commits the masked text upward too (not just on blur):
+  // a save button click can otherwise fire before a blur event reaches this
+  // field, silently dropping the edit. normalizeCustomValues() converts
+  // whatever lands here to ISO at save time regardless.
+  const update = (next: string) => {
+    const masked = maskDateInput(next);
+    setText(masked);
+    onChange(masked);
+  };
+
+  return (
+    <TextInput
+      mode="outlined"
+      label={labelFor(def)}
+      value={text}
+      onChangeText={update}
+      onBlur={() => onChange(parseUsDate(text) ?? text)}
+      placeholder="MM/DD/YYYY"
+      error={error}
+      style={inputStyle}
+    />
+  );
 }
 
 // A Paper Menu behind an outlined button, so it works on web and native
