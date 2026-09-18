@@ -265,7 +265,7 @@ export function DateTimePickerDialog({ visible, title, value, fallback, onDismis
               style={pickerStyles.timeInput}
               outlineColor={themeColors.line}
               activeOutlineColor={calendarTheme.accent}
-              left={<TextInput.Icon icon="clock-outline" color={calendarTheme.mutedText} />}
+              left={<TextInput.Icon icon="clock-outline" color={themeColors.muted} />}
             />
             <View style={pickerStyles.segment}>
               {(['AM', 'PM'] as Meridiem[]).map((option) => {
