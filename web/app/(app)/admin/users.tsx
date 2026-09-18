@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, Button, TextInput, Card, DataTable, IconButton, Snackbar, Menu, SegmentedButtons } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { Text, Button, TextInput, Card, DataTable, IconButton, Icon, Snackbar, Menu, SegmentedButtons } from 'react-native-paper';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useRequireAdmin } from '../../../hooks/useRequireAdmin';
 import {
@@ -28,7 +28,6 @@ import { exportWorkbook, pickWorkbook, sheetRows, hasColumn } from '../../../uti
 import { ImportExportButtons } from '../../../components/ImportExportButtons';
 import { useRefreshOnFocus } from '../../../hooks/useRefreshOnFocus';
 import { FormDialog, FormDialogFooter, FormField, FormRow, formTheme, inputStyle } from '../../../components/FormDialog';
-import { LabelPill } from '../../../components/LabelPill';
 
 // HT-12: the organisation's members. Admins invite people by email with a
 // role, change roles and deactivate. The account is created server-side and
@@ -52,17 +51,18 @@ const INVITABLE_ROLES: { value: InvitableRole; label: string; hint: string }[] =
   { value: 'technician', label: 'Technician', hint: 'Same as member for now' },
 ];
 
-// Fixed colours for the role and status pills: these are not tenant labels,
-// so nothing in Settings recolours them.
-const ROLE_PILL: Record<string, { color: string; textColor: string }> = {
-  admin: { color: '#111827', textColor: '#ffffff' },
-  user: { color: '#E5E7EB', textColor: '#111827' },
-  technician: { color: '#DBEAFE', textColor: '#1E3A8A' },
-  superuser: { color: '#FDE68A', textColor: '#78350F' },
+// Role and status are plain text, not pills: a quiet colour per role and a
+// small dot for the status. These are not tenant labels, so nothing in
+// Settings recolours them.
+const ROLE_TEXT: Record<string, string> = {
+  admin: '#111827',
+  user: '#374151',
+  technician: '#1E3A8A',
+  superuser: '#92400E',
 };
-const STATUS_PILL = {
-  active: { color: '#DCFCE7', textColor: '#166534' },
-  inactive: { color: '#F3F4F6', textColor: '#6B7280' },
+const STATUS_DOT = {
+  active: '#16A34A',
+  inactive: '#9CA3AF',
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -416,8 +416,8 @@ export default function UsersScreen() {
                   <DataTable.Header style={white}>
                     <DataTable.Title style={white}>Name</DataTable.Title>
                     <DataTable.Title style={white}>Email</DataTable.Title>
-                    <DataTable.Title style={white}>Role</DataTable.Title>
-                    <DataTable.Title style={white}>Status</DataTable.Title>
+                    <DataTable.Title style={[white, styles.centered]}>Role</DataTable.Title>
+                    <DataTable.Title style={[white, styles.centered]}>Status</DataTable.Title>
                     <DataTable.Title style={white}>Joined</DataTable.Title>
                     <DataTable.Title style={white}>Last sign in</DataTable.Title>
                     <DataTable.Title style={[white, { flex: 1.4 }]}>Actions</DataTable.Title>
@@ -442,29 +442,33 @@ export default function UsersScreen() {
                       const busy = busyUserId === member.user_id;
                       const canEditRole = !isSelf && !isSuperuser && !busy;
                       const canAct = !isSelf && !isSuperuser && !busy;
-                      const rolePill = ROLE_PILL[member.role] ?? ROLE_PILL.user;
-                      const statusPill = member.is_active ? STATUS_PILL.active : STATUS_PILL.inactive;
+                      const roleColor = ROLE_TEXT[member.role] ?? ROLE_TEXT.user;
+                      const roleLabel = ROLE_LABELS[member.role] ?? member.role;
                       return (
                         <DataTable.Row key={member.user_id} style={white}>
                           <DataTable.Cell style={white}>
                             {displayName(member)}{isSelf ? ' (you)' : ''}
                           </DataTable.Cell>
                           <DataTable.Cell style={white}>{member.email}</DataTable.Cell>
-                          <DataTable.Cell style={white}>
+                          <DataTable.Cell style={[white, styles.centered]}>
                             {canEditRole ? (
                               <Menu
                                 visible={roleMenuFor === member.user_id}
                                 onDismiss={() => setRoleMenuFor(null)}
                                 anchor={
-                                  <LabelPill
-                                    size="sm"
-                                    label={ROLE_LABELS[member.role] ?? member.role}
-                                    color={rolePill.color}
-                                    textColor={rolePill.textColor}
-                                    selected
+                                  <Pressable
                                     onPress={() => setRoleMenuFor(member.user_id)}
+                                    accessibilityRole="button"
                                     accessibilityLabel={`Change role for ${displayName(member)}`}
-                                  />
+                                    style={(state) => [
+                                      styles.roleTrigger,
+                                      // hovered is a react-native-web extra the RN types leave out
+                                      (state as { hovered?: boolean }).hovered && styles.roleTriggerHover,
+                                    ]}
+                                  >
+                                    <Text style={[styles.roleText, { color: roleColor }]}>{roleLabel}</Text>
+                                    <Icon source="chevron-down" size={16} color={formTheme.mutedText} />
+                                  </Pressable>
                                 }
                               >
                                 {INVITABLE_ROLES.map(r => (
@@ -480,21 +484,16 @@ export default function UsersScreen() {
                                 ))}
                               </Menu>
                             ) : (
-                              <LabelPill
-                                size="sm"
-                                label={ROLE_LABELS[member.role] ?? member.role}
-                                color={rolePill.color}
-                                textColor={rolePill.textColor}
-                              />
+                              <Text style={[styles.roleText, { color: roleColor }]}>{roleLabel}</Text>
                             )}
                           </DataTable.Cell>
-                          <DataTable.Cell style={white}>
-                            <LabelPill
-                              size="sm"
-                              label={member.is_active ? 'Active' : 'Inactive'}
-                              color={statusPill.color}
-                              textColor={statusPill.textColor}
-                            />
+                          <DataTable.Cell style={[white, styles.centered]}>
+                            <View style={styles.status}>
+                              <View style={[styles.statusDot, { backgroundColor: member.is_active ? STATUS_DOT.active : STATUS_DOT.inactive }]} />
+                              <Text style={[styles.statusText, !member.is_active && { color: formTheme.mutedText }]}>
+                                {member.is_active ? 'Active' : 'Inactive'}
+                              </Text>
+                            </View>
                           </DataTable.Cell>
                           <DataTable.Cell style={white}>{formatDate(member.joined_at)}</DataTable.Cell>
                           <DataTable.Cell style={white}>{formatDate(member.last_sign_in_at)}</DataTable.Cell>
@@ -740,6 +739,39 @@ const styles = StyleSheet.create({
   platformHint: {
     fontSize: 12,
     color: formTheme.mutedText,
+  },
+  centered: {
+    justifyContent: 'center',
+  },
+  roleTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    marginHorizontal: -8,
+    borderRadius: 6,
+  },
+  roleTriggerHover: {
+    backgroundColor: '#F3F4F6',
+  },
+  roleText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  status: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusText: {
+    fontSize: 14,
+    color: formTheme.text,
   },
   confirmText: {
     fontSize: 14,
