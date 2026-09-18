@@ -3,6 +3,8 @@
 // (`<table>.custom_fields`, keyed by the definition's key) and are rendered
 // by components/CustomFields.tsx.
 
+import { formatUsDate, parseUsDate } from '../utils/date';
+
 /** The record sections that can carry custom fields. Jobs and invoices arrive with HT-53. */
 export type CustomFieldSection = 'clients' | 'materials' | 'services' | 'jobs' | 'invoices';
 
@@ -129,7 +131,7 @@ export function validateCustomValues(defs: readonly CustomFieldDef[], values: Cu
     }
     if (!hasCustomValue(def, value)) continue;
     if (def.type === 'number' && !Number.isFinite(Number(value))) errors[def.key] = 'Enter a number';
-    if (def.type === 'date' && typeof value === 'string' && !/^\d{4}-\d{2}-\d{2}$/.test(value)) errors[def.key] = 'Use YYYY-MM-DD';
+    if (def.type === 'date' && typeof value === 'string' && !parseUsDate(value)) errors[def.key] = 'Use MM/DD/YYYY';
   }
   return errors;
 }
@@ -148,6 +150,7 @@ export function normalizeCustomValues(defs: readonly CustomFieldDef[], values: C
     }
     if (def.type === 'number') out[def.key] = Number(value);
     else if (def.type === 'boolean') out[def.key] = value === true;
+    else if (def.type === 'date' && typeof value === 'string') out[def.key] = parseUsDate(value) ?? value.trim();
     else if (typeof value === 'string') out[def.key] = value.trim();
   }
   return out;
@@ -157,5 +160,6 @@ export function normalizeCustomValues(defs: readonly CustomFieldDef[], values: C
 export function formatCustomValue(def: CustomFieldDef, value: unknown): string {
   if (!hasCustomValue(def, value)) return '';
   if (def.type === 'boolean') return value === true ? 'Yes' : 'No';
+  if (def.type === 'date') return formatUsDate(typeof value === 'string' ? value : String(value));
   return String(value);
 }

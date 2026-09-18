@@ -12,7 +12,6 @@ type Client = {
   // other client fields...
 };
 import { JobStatusSelector } from './JobStatusSelector';
-import { formatDateInput, isValidDate } from '../utils/date';
 import { MaterialIcons } from '@expo/vector-icons';
 import { DateTimePickerDialog, formatDateTimeLabel } from './DateTimePickerDialog';
 import { useAuth } from '../contexts/AuthContext';
@@ -311,31 +310,6 @@ export const JobForm = forwardRef<JobFormHandle, JobFormProps>(function JobForm(
       client_id: clientId // Store as number, not string
     });
     setShowClientMenu(false);
-  };
-
-  const handleDateInput = (field: 'start_date' | 'end_date', value: string) => {
-    // Basic format validation (MM-DD-YYYY)
-    const formattedValue = formatDateInput(value);
-    
-    setFormData({
-      ...formData,
-      [field]: formattedValue
-    });
-    
-    // Check for validation errors
-    if (formattedValue.length === 10 && !isValidDate(formattedValue)) {
-      setErrors({
-        ...errors,
-        [field]: 'Invalid date format (MM-DD-YYYY)'
-      });
-    } else {
-      // Clear error if it exists
-      const updatedErrors = { ...errors };
-      delete updatedErrors[field];
-      setErrors(updatedErrors);
-    }
-    
-    if (onChange) onChange();
   };
 
   const handleTimeInput = (field: 'start_time' | 'end_time', value: string) => {
