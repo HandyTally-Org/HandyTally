@@ -66,16 +66,26 @@ export default function AdminPage() {
   // Wide screens open on Info; a narrow one shows the section list first, as Settings does.
   const [selected, setSelected] = useState<Section | null>(() => (width < TWO_PANE_BREAKPOINT ? null : 'info'));
 
+  // Wait for the organisation: on the first focus it is still resolving, and
+  // an unscoped read would pick up another tenant's row (see companyQuery).
   useRefreshOnFocus(() => {
-    fetchCompanyInfo();
-  });
+    if (organization) fetchCompanyInfo();
+  }, [organization?.id]);
+
+  // The organisation's own company row. On a tenant host RLS already scopes
+  // the table to one organisation, but a superuser on the apex or localhost
+  // can see every organisation's row, and without this filter the page would
+  // read (and then overwrite) whichever row came first. Learned the hard way
+  // on 2026-09-17.
+  const companyQuery = () => {
+    const query = supabase.from('company').select('*');
+    if (!organization) throw new Error('No organisation resolved yet');
+    return query.eq('organization_id', organization.id);
+  };
 
   const fetchCompanyInfo = async () => {
     try {
-      const { data, error } = await supabase
-        .from('company')
-        .select('*')
-        .single();
+      const { data, error } = await companyQuery().limit(1).maybeSingle();
 
       // If no company exists yet, that's okay - just use empty form
       if (error && error.code === 'PGRST116') {
@@ -119,6 +129,7 @@ export default function AdminPage() {
         .from('company')
         .upsert({
           ...company,
+          ...(organization ? { organization_id: organization.id } : {}),
           updated_at: new Date().toISOString()
         })
         .select()
@@ -150,6 +161,7 @@ export default function AdminPage() {
         .from('company')
         .upsert({
           ...company,
+          ...(organization ? { organization_id: organization.id } : {}),
           logo_url: url,
           updated_at: new Date().toISOString()
         })
@@ -181,6 +193,7 @@ export default function AdminPage() {
       .upsert({
         business_name: company.business_name || 'My Company',
         address: company.address || '',
+        ...(organization ? { organization_id: organization.id } : {}),
         updated_at: new Date().toISOString()
       })
       .select()
