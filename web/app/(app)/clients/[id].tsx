@@ -6,6 +6,7 @@ import { supabase } from '../../../lib/api';
 import { styles as globalStyles } from '../../../styles';
 import { formatDate, formatCurrency } from '../../../utils/formatting';
 import { useRefreshOnFocus } from '../../../hooks/useRefreshOnFocus';
+import { themed } from '../../../constants/Colors';
 
 type Client = {
   uid: string;
@@ -236,14 +237,14 @@ export default function ClientDetailScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <View style={{ flexDirection: 'row', padding: 16, backgroundColor: '#ffffff', alignItems: 'center' }}>
+      <View style={{ flexDirection: 'row', padding: 16, backgroundColor: themed.panel, alignItems: 'center' }}>
         <IconButton icon="arrow-left" onPress={() => router.push('/clients')} />
         <Text style={{ fontSize: 24, fontWeight: 'bold' }}>{client.name}</Text>
       </View>
       
       <View style={{ flexDirection: 'row', height: '100%' }}>
         {/* Side Navigation */}
-        <View style={{ width: 200, backgroundColor: '#ffffff', padding: 16 }}>
+        <View style={{ width: 200, backgroundColor: themed.panel, padding: 16 }}>
           <Button 
             mode={activeTab === 0 ? 'contained' : 'outlined'} 
             onPress={() => setActiveTab(0)}

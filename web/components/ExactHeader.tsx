@@ -1,5 +1,6 @@
 import React from 'react';
 import { Text, StyleSheet } from 'react-native';
+import { themed } from '../constants/Colors';
 
 type ExactHeaderProps = {
   title: string;
@@ -17,6 +18,6 @@ const styles = StyleSheet.create({
     fontWeight: 'normal',
     marginBottom: 16,
     fontFamily: 'System',
-    color: '#333333',
+    color: themed.text,
   },
 }); 

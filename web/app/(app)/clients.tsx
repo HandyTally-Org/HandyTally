@@ -13,6 +13,7 @@ import { useLabels } from '../../hooks/useLabels';
 import { labelColor, labelText, labelTextColor } from '../../constants/labels';
 import { LabelPill, LabelPillRow } from '../../components/LabelPill';
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
+import { themed } from '../../constants/Colors';
 
 type Client = {
   uid: string;
@@ -597,7 +598,7 @@ export default function ClientsScreen() {
         fontSize: 26,
         fontWeight: '600',
         marginBottom: 16,
-        color: '#333333',
+        color: themed.text,
       }}>Clients</Text>
       
       <View style={styles.searchAndAddContainer}>
@@ -605,7 +606,7 @@ export default function ClientsScreen() {
           placeholder="Search clients..."
           onChangeText={setSearchQuery}
           value={searchQuery}
-          style={[styles.searchBar, { backgroundColor: '#f5f5f5' }]}
+          style={[styles.searchBar, { backgroundColor: themed.soft }]}
         />
         
         <View style={{ 
@@ -650,7 +651,7 @@ export default function ClientsScreen() {
             elevation: 0
           }}>
             <DataTable style={{ 
-              backgroundColor: '#ffffff', 
+              backgroundColor: themed.panel, 
               borderWidth: 0,
               borderColor: 'transparent',
               margin: 0,
@@ -658,7 +659,7 @@ export default function ClientsScreen() {
               shadowOpacity: 0,
               elevation: 0
             }}>
-              <DataTable.Header style={{ backgroundColor: '#f5f5f5', borderBottomWidth: 1, borderBottomColor: '#e0e0e0' }}>
+              <DataTable.Header style={{ backgroundColor: themed.soft, borderBottomWidth: 1, borderBottomColor: themed.line }}>
             <DataTable.Title 
               sortDirection={sortColumn === 'name' ? sortDirection : undefined}
                   onPress={() => handleSort('name')}
@@ -688,18 +689,18 @@ export default function ClientsScreen() {
           </DataTable.Header>
           
           {loading ? (
-            <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
+            <DataTable.Row style={{ backgroundColor: themed.panel }}>
               <DataTable.Cell>Loading clients...</DataTable.Cell>
             </DataTable.Row>
           ) : filteredClients.length === 0 ? (
-            <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
+            <DataTable.Row style={{ backgroundColor: themed.panel }}>
               <DataTable.Cell>No clients found</DataTable.Cell>
             </DataTable.Row>
           ) : (
             filteredClients.map(client => (
                   <DataTable.Row 
                     key={client.uid} 
-                    style={{ backgroundColor: '#ffffff' }}
+                    style={{ backgroundColor: themed.panel }}
                     onPress={() => router.push(`/client-details?id=${client.uid}`)}
                   >
                 <DataTable.Cell>{client.name}</DataTable.Cell>
@@ -715,9 +716,9 @@ export default function ClientsScreen() {
                     style={{
                       padding: 8,
                       borderRadius: 4,
-                      borderColor: '#ccc',
-                      backgroundColor: '#ffffff',
-                      color: '#000000',
+                      borderColor: themed.line,
+                      backgroundColor: themed.panel,
+                      color: themed.text,
                       fontWeight: 'bold'
                     }}
                   >
@@ -880,14 +881,14 @@ export default function ClientsScreen() {
       </Snackbar>
         </>
       ) : (
-        <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
-          <View style={{ flexDirection: 'row', padding: 16, backgroundColor: '#f5f5f5', alignItems: 'center' }}>
+        <View style={{ flex: 1, backgroundColor: themed.panel }}>
+          <View style={{ flexDirection: 'row', padding: 16, backgroundColor: themed.soft, alignItems: 'center' }}>
             <Text style={{ fontSize: 14, fontWeight: 'normal' }}>Client Details</Text>
           </View>
           
           <View style={{ flexDirection: 'row', flex: 1 }}>
             {/* Left sidebar with icons */}
-            <View style={{ width: 60, backgroundColor: '#f5f5f5', borderRightWidth: 1, borderRightColor: '#e0e0e0' }}>
+            <View style={{ width: 60, backgroundColor: themed.soft, borderRightWidth: 1, borderRightColor: themed.line }}>
               <TouchableOpacity 
                 style={{ alignItems: 'center', marginTop: 16 }}
                 onPress={() => setShowClientDetails(false)}
@@ -932,7 +933,7 @@ export default function ClientsScreen() {
             </View>
             
             {/* Right sidebar with navigation options */}
-            <View style={{ width: 200, backgroundColor: '#f5f5f5', borderRightWidth: 1, borderRightColor: '#e0e0e0' }}>
+            <View style={{ width: 200, backgroundColor: themed.soft, borderRightWidth: 1, borderRightColor: themed.line }}>
               {/* Info section */}
               <TouchableOpacity 
                 style={{ 
@@ -946,7 +947,7 @@ export default function ClientsScreen() {
                 <View style={{ width: 24, marginRight: 12 }}>
                   <MaterialIcons name="grid-view" size={20} color="#333" />
                 </View>
-                <Text style={{ color: '#333' }}>Info</Text>
+                <Text style={{ color: themed.text }}>Info</Text>
               </TouchableOpacity>
               
               {/* Invoices section */}
@@ -962,7 +963,7 @@ export default function ClientsScreen() {
                 <View style={{ width: 24, marginRight: 12 }}>
                   <MaterialIcons name="description" size={20} color="#333" />
                 </View>
-                <Text style={{ color: '#333' }}>Invoices</Text>
+                <Text style={{ color: themed.text }}>Invoices</Text>
               </TouchableOpacity>
               
               {/* Costs section */}
@@ -978,7 +979,7 @@ export default function ClientsScreen() {
                 <View style={{ width: 24, marginRight: 12 }}>
                   <MaterialIcons name="attach-money" size={20} color="#333" />
                 </View>
-                <Text style={{ color: '#333' }}>Costs</Text>
+                <Text style={{ color: themed.text }}>Costs</Text>
               </TouchableOpacity>
               
               {/* Calendar section */}
@@ -994,12 +995,12 @@ export default function ClientsScreen() {
                 <View style={{ width: 24, marginRight: 12 }}>
                   <MaterialIcons name="calendar-today" size={20} color="#333" />
                 </View>
-                <Text style={{ color: '#333' }}>Calendar</Text>
+                <Text style={{ color: themed.text }}>Calendar</Text>
               </TouchableOpacity>
               
               {/* Documentation header */}
               <View style={{ padding: 16, paddingBottom: 8 }}>
-                <Text style={{ color: '#666', fontWeight: 'bold', fontSize: 12 }}>DOCUMENTATION</Text>
+                <Text style={{ color: themed.muted, fontWeight: 'bold', fontSize: 12 }}>DOCUMENTATION</Text>
               </View>
               
               {/* Attachments section */}
@@ -1015,7 +1016,7 @@ export default function ClientsScreen() {
                 <View style={{ width: 24, marginRight: 12 }}>
                   <MaterialIcons name="attach-file" size={20} color="#333" />
                 </View>
-                <Text style={{ color: '#333' }}>Attachments</Text>
+                <Text style={{ color: themed.text }}>Attachments</Text>
               </TouchableOpacity>
               
               {/* Logs section */}
@@ -1031,12 +1032,12 @@ export default function ClientsScreen() {
                 <View style={{ width: 24, marginRight: 12 }}>
                   <MaterialIcons name="list-alt" size={20} color="#333" />
                 </View>
-                <Text style={{ color: '#333' }}>Logs</Text>
+                <Text style={{ color: themed.text }}>Logs</Text>
               </TouchableOpacity>
             </View>
             
             {/* Content area */}
-            <ScrollView style={{ flex: 1, padding: 16, backgroundColor: '#ffffff' }}>
+            <ScrollView style={{ flex: 1, padding: 16, backgroundColor: themed.panel }}>
               {activeDetailTab === 'info' && (
                 <ClientForm
                   client={editingClient}
@@ -1185,7 +1186,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   searchAndAddContainer: {
     flexDirection: 'row',
@@ -1202,7 +1203,7 @@ const styles = StyleSheet.create({
   tableCard: {
     flex: 1,
     marginBottom: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   actionButtons: {
     flexDirection: 'row',
@@ -1245,7 +1246,7 @@ const styles = StyleSheet.create({
   },
   relatedItemDate: {
     fontSize: 12,
-    color: '#666',
+    color: themed.muted,
   },
   relatedItemAmount: {
     fontSize: 13,

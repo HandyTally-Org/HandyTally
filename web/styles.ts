@@ -1,4 +1,5 @@
 import { StyleSheet } from 'react-native';
+import { themed } from './constants/Colors';
 
 export const styles = StyleSheet.create({
   container: {
@@ -61,7 +62,7 @@ export const styles = StyleSheet.create({
   },
   pickerContainer: {
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: themed.line,
     borderRadius: 4,
     marginBottom: 8,
   },
@@ -77,7 +78,7 @@ export const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     marginTop: 4,
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: themed.line,
     borderRadius: 4,
     padding: 10,
   },
@@ -86,9 +87,9 @@ export const styles = StyleSheet.create({
     top: '100%',
     left: 0,
     right: 0,
-    backgroundColor: 'white',
+    backgroundColor: themed.panel,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: themed.line,
     borderRadius: 4,
     maxHeight: 200,
     zIndex: 9999,
@@ -101,17 +102,17 @@ export const styles = StyleSheet.create({
   dropdownItem: {
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    backgroundColor: 'white',
+    borderBottomColor: themed.line,
+    backgroundColor: themed.panel,
   },
   dropdownItemText: {
     fontSize: 16,
   },
   dropdownItemActive: {
-    backgroundColor: '#e0e0e0',
+    backgroundColor: themed.active,
   },
   dropdownItemSelected: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: themed.soft,
   },
   dateTimeContainer: {
     flexDirection: 'row',

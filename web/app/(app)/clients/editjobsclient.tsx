@@ -4,6 +4,7 @@ import { Text, Button, ActivityIndicator, Snackbar } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 import { JobForm } from '../../../components/JobForm';
+import { themed } from '../../../constants/Colors';
 
 export default function EditJobClientScreen() {
   const { id: jobId, client_id: clientId } = useLocalSearchParams();
@@ -109,7 +110,7 @@ export default function EditJobClientScreen() {
   };
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: '#fff' }}>
+    <ScrollView style={{ flex: 1, backgroundColor: themed.panel }}>
       {loading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
           <ActivityIndicator size="large" />
@@ -124,7 +125,7 @@ export default function EditJobClientScreen() {
         </View>
       ) : job ? (
         <View style={{ padding: 16 }}>
-          <View style={{ backgroundColor: '#ffffff', padding: 16, marginBottom: 16 }}>
+          <View style={{ backgroundColor: themed.panel, padding: 16, marginBottom: 16 }}>
             <Text style={{ fontSize: 18, fontWeight: 'bold' }}>
               Editing Job: {job.title}
             </Text>

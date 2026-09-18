@@ -7,6 +7,7 @@ import { ImportExportButtons } from '../../components/ImportExportButtons';
 import { styles as globalStyles } from '../../styles';
 import { exportWorkbook, pickWorkbook, sheetRows, hasColumn, confirmAction } from '../../utils/excel';
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
+import { themed } from '../../constants/Colors';
 
 export type Material = {
   uid: string;
@@ -444,23 +445,23 @@ export default function MaterialsScreen() {
   return (
     <View style={{
       flex: 1,
-      backgroundColor: '#ffffff',
+      backgroundColor: themed.panel,
     }}>
       <View style={{
-        backgroundColor: '#ffffff',
+        backgroundColor: themed.panel,
         width: '100%',
         height: '100%',
       }}>
         <View style={{
           padding: 16,
-          backgroundColor: '#ffffff',
+          backgroundColor: themed.panel,
         }}>
           <Text style={{
             fontFamily: 'System',
             fontSize: 26,
             fontWeight: '600',
             marginBottom: 16,
-            color: '#333333',
+            color: themed.text,
           }}>Inventory</Text>
           
           <View style={{
@@ -475,7 +476,7 @@ export default function MaterialsScreen() {
               style={[{
                 flex: 1,
                 marginRight: 16,
-                backgroundColor: '#f5f5f5'
+                backgroundColor: themed.soft
               }]}
             />
             
@@ -500,10 +501,10 @@ export default function MaterialsScreen() {
             flex: 1,
             margin: 16,
             marginTop: 0,
-            backgroundColor: '#ffffff',
+            backgroundColor: themed.panel,
           }}>
             <Card style={{
-              backgroundColor: '#ffffff',
+              backgroundColor: themed.panel,
               borderRadius: 8,
               elevation: 2,
               shadowColor: 'rgba(0,0,0,0.1)',
@@ -511,114 +512,114 @@ export default function MaterialsScreen() {
               shadowOpacity: 0.8,
               shadowRadius: 1,
             }}>
-              <Card.Content style={{ backgroundColor: '#ffffff', padding: 0 }}>
-                <DataTable style={{ backgroundColor: '#ffffff' }}>
-                  <DataTable.Header style={{ backgroundColor: '#ffffff' }}>
+              <Card.Content style={{ backgroundColor: themed.panel, padding: 0 }}>
+                <DataTable style={{ backgroundColor: themed.panel }}>
+                  <DataTable.Header style={{ backgroundColor: themed.panel }}>
                     <DataTable.Title
-                      style={{ backgroundColor: '#ffffff' }}
+                      style={{ backgroundColor: themed.panel }}
                       sortDirection={sortColumn === 'sku' ? sortDirection : undefined}
                       onPress={() => handleSort('sku')}
                     >
-                      <Text style={{ backgroundColor: '#ffffff' }}>SKU</Text>
+                      <Text style={{ backgroundColor: themed.panel }}>SKU</Text>
                     </DataTable.Title>
                     <DataTable.Title
-                      style={{ backgroundColor: '#ffffff' }}
+                      style={{ backgroundColor: themed.panel }}
                       sortDirection={sortColumn === 'name' ? sortDirection : undefined}
                       onPress={() => handleSort('name')}
                     >
-                      <Text style={{ backgroundColor: '#ffffff' }}>Name</Text>
+                      <Text style={{ backgroundColor: themed.panel }}>Name</Text>
                     </DataTable.Title>
                     <DataTable.Title 
-                      style={{ backgroundColor: '#ffffff' }}
+                      style={{ backgroundColor: themed.panel }}
                       sortDirection={sortColumn === 'description' ? sortDirection : undefined}
                       onPress={() => handleSort('description')}
                     >
-                      <Text style={{ backgroundColor: '#ffffff' }}>Description</Text>
+                      <Text style={{ backgroundColor: themed.panel }}>Description</Text>
                     </DataTable.Title>
                     <DataTable.Title
-                      style={{ backgroundColor: '#ffffff' }}
+                      style={{ backgroundColor: themed.panel }}
                       sortDirection={sortColumn === 'quantity' ? sortDirection : undefined}
                       onPress={() => handleSort('quantity')}
                     >
-                      <Text style={{ backgroundColor: '#ffffff' }}>Quantity</Text>
+                      <Text style={{ backgroundColor: themed.panel }}>Quantity</Text>
                     </DataTable.Title>
                     <DataTable.Title
-                      style={{ backgroundColor: '#ffffff' }}
+                      style={{ backgroundColor: themed.panel }}
                       sortDirection={sortColumn === 'cost' ? sortDirection : undefined}
                       onPress={() => handleSort('cost')}
                     >
-                      <Text style={{ backgroundColor: '#ffffff' }}>Unit Cost</Text>
+                      <Text style={{ backgroundColor: themed.panel }}>Unit Cost</Text>
                     </DataTable.Title>
                     <DataTable.Title 
-                      style={{ backgroundColor: '#ffffff' }}
+                      style={{ backgroundColor: themed.panel }}
                       sortDirection={sortColumn === 'supplier' ? sortDirection : undefined}
                       onPress={() => handleSort('supplier')}
                     >
-                      <Text style={{ backgroundColor: '#ffffff' }}>Supplier</Text>
+                      <Text style={{ backgroundColor: themed.panel }}>Supplier</Text>
                     </DataTable.Title>
                     <DataTable.Title 
-                      style={{ backgroundColor: '#ffffff' }}
+                      style={{ backgroundColor: themed.panel }}
                       sortDirection={sortColumn === 'category' ? sortDirection : undefined}
                       onPress={() => handleSort('category')}
                     >
-                      <Text style={{ backgroundColor: '#ffffff' }}>Category</Text>
+                      <Text style={{ backgroundColor: themed.panel }}>Category</Text>
                     </DataTable.Title>
-                    <DataTable.Title style={{ backgroundColor: '#ffffff' }}>
-                      <Text style={{ backgroundColor: '#ffffff' }}>Actions</Text>
+                    <DataTable.Title style={{ backgroundColor: themed.panel }}>
+                      <Text style={{ backgroundColor: themed.panel }}>Actions</Text>
                     </DataTable.Title>
                   </DataTable.Header>
 
                   {loading ? (
-                    <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
-                      <DataTable.Cell style={{ flex: 8, backgroundColor: '#ffffff' }}>
+                    <DataTable.Row style={{ backgroundColor: themed.panel }}>
+                      <DataTable.Cell style={{ flex: 8, backgroundColor: themed.panel }}>
                         <ActivityIndicator size="small" style={{ marginRight: 8 }} />
-                        <Text style={{ backgroundColor: '#ffffff' }}>Loading materials...</Text>
+                        <Text style={{ backgroundColor: themed.panel }}>Loading materials...</Text>
                       </DataTable.Cell>
                     </DataTable.Row>
                   ) : getFilteredMaterials().length === 0 ? (
-                    <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
-                      <DataTable.Cell style={{ flex: 8, backgroundColor: '#ffffff' }}>
-                        <Text style={{ backgroundColor: '#ffffff' }}>No materials found</Text>
+                    <DataTable.Row style={{ backgroundColor: themed.panel }}>
+                      <DataTable.Cell style={{ flex: 8, backgroundColor: themed.panel }}>
+                        <Text style={{ backgroundColor: themed.panel }}>No materials found</Text>
                       </DataTable.Cell>
                     </DataTable.Row>
                   ) : (
                     getFilteredMaterials().map(material => (
-                      <DataTable.Row key={material.uid} style={{ backgroundColor: '#ffffff' }}>
-                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
-                          <Text style={{ backgroundColor: '#ffffff' }}>{material.sku || ''}</Text>
+                      <DataTable.Row key={material.uid} style={{ backgroundColor: themed.panel }}>
+                        <DataTable.Cell style={{ backgroundColor: themed.panel }}>
+                          <Text style={{ backgroundColor: themed.panel }}>{material.sku || ''}</Text>
                         </DataTable.Cell>
-                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
-                          <Text style={{ backgroundColor: '#ffffff' }}>{material.name}</Text>
+                        <DataTable.Cell style={{ backgroundColor: themed.panel }}>
+                          <Text style={{ backgroundColor: themed.panel }}>{material.name}</Text>
                         </DataTable.Cell>
-                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
-                          <Text style={{ backgroundColor: '#ffffff' }}>{material.description}</Text>
+                        <DataTable.Cell style={{ backgroundColor: themed.panel }}>
+                          <Text style={{ backgroundColor: themed.panel }}>{material.description}</Text>
                         </DataTable.Cell>
-                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
-                          <Text style={{ backgroundColor: '#ffffff' }}>{material.quantity ?? 0}</Text>
+                        <DataTable.Cell style={{ backgroundColor: themed.panel }}>
+                          <Text style={{ backgroundColor: themed.panel }}>{material.quantity ?? 0}</Text>
                         </DataTable.Cell>
-                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
-                          <Text style={{ backgroundColor: '#ffffff' }}>${(material.cost ?? 0).toFixed(2)}</Text>
+                        <DataTable.Cell style={{ backgroundColor: themed.panel }}>
+                          <Text style={{ backgroundColor: themed.panel }}>${(material.cost ?? 0).toFixed(2)}</Text>
                         </DataTable.Cell>
-                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
-                          <Text style={{ backgroundColor: '#ffffff' }}>{material.supplier}</Text>
+                        <DataTable.Cell style={{ backgroundColor: themed.panel }}>
+                          <Text style={{ backgroundColor: themed.panel }}>{material.supplier}</Text>
                         </DataTable.Cell>
-                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
-                          <Text style={{ backgroundColor: '#ffffff' }}>{material.category}</Text>
+                        <DataTable.Cell style={{ backgroundColor: themed.panel }}>
+                          <Text style={{ backgroundColor: themed.panel }}>{material.category}</Text>
                         </DataTable.Cell>
-                        <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
-                          <View style={{ flexDirection: 'row', backgroundColor: '#ffffff' }}>
+                        <DataTable.Cell style={{ backgroundColor: themed.panel }}>
+                          <View style={{ flexDirection: 'row', backgroundColor: themed.panel }}>
                             <IconButton
                               icon="pencil"
                               size={20}
                               onPress={() => setEditingMaterial(material)}
-                              style={{ backgroundColor: '#ffffff' }}
+                              style={{ backgroundColor: themed.panel }}
                             />
                             <IconButton
                               icon="delete"
                               size={20}
                               iconColor="red"
                               onPress={() => handleDeleteMaterial(material.uid)}
-                              style={{ backgroundColor: '#ffffff' }}
+                              style={{ backgroundColor: themed.panel }}
                             />
                           </View>
                         </DataTable.Cell>
@@ -654,13 +655,13 @@ export default function MaterialsScreen() {
         
         {/* Delete Material Dialog */}
         <Portal>
-          <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)} style={{ backgroundColor: '#ffffff' }}>
-            <Dialog.Title style={{ backgroundColor: '#ffffff' }}>Delete Material</Dialog.Title>
-            <Dialog.Content style={{ backgroundColor: '#ffffff' }}>
-              <Text style={{ backgroundColor: '#ffffff' }}>Are you sure you want to delete {editingMaterial?.name}?</Text>
-              <Text style={{ backgroundColor: '#ffffff' }}>This action cannot be undone.</Text>
+          <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)} style={{ backgroundColor: themed.panel }}>
+            <Dialog.Title style={{ backgroundColor: themed.panel }}>Delete Material</Dialog.Title>
+            <Dialog.Content style={{ backgroundColor: themed.panel }}>
+              <Text style={{ backgroundColor: themed.panel }}>Are you sure you want to delete {editingMaterial?.name}?</Text>
+              <Text style={{ backgroundColor: themed.panel }}>This action cannot be undone.</Text>
             </Dialog.Content>
-            <Dialog.Actions style={{ backgroundColor: '#ffffff' }}>
+            <Dialog.Actions style={{ backgroundColor: themed.panel }}>
               <Button onPress={() => setShowDeleteDialog(false)}>Cancel</Button>
               <Button onPress={() => handleDeleteMaterial(editingMaterial?.uid || '')} textColor="red">Delete</Button>
             </Dialog.Actions>
@@ -683,7 +684,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   searchAndAddContainer: {
     flexDirection: 'row',
@@ -702,13 +703,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   tableHeader: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: themed.soft,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: themed.line,
   },
   tableRow: {
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: themed.line,
   },
   columnName: {
     flex: 2,

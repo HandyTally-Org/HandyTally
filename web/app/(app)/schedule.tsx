@@ -16,6 +16,7 @@ import {
   EventDialog,
   colorsForStatus,
 } from '../../components/calendar/Calendar';
+import { themed } from '../../constants/Colors';
 
 type JobRow = {
   uid: number;
@@ -207,6 +208,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
 });

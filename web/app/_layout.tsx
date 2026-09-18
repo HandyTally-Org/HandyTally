@@ -133,14 +133,18 @@ function ThemedApp({ isServer }: { isServer: boolean }) {
           <View style={{ flex: 1, backgroundColor: themed.bg }}>
             {/* HT-38: unknown customer subdomains stop here. */}
             <TenantGate>
+        {/* HT-68: the navigation theme must wrap the Stack, not sit inside
+            it — expo-router ignores non-Screen children of a layout route,
+            so a provider placed there never reached the nested Drawer and
+            its scene container kept React Navigation's light default. */}
+        <NavigationThemeProvider value={navigationTheme}>
+          <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
             <Stack
               screenOptions={{
                 headerShown: false,
                 contentStyle: { backgroundColor: themed.bg },
               }}
             >
-        <NavigationThemeProvider value={navigationTheme}>
-          <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
                 {!isServer && (
                   <Drawer
                     drawerContent={(props) => <CustomDrawerContent {...props} />}
@@ -201,8 +205,8 @@ function ThemedApp({ isServer }: { isServer: boolean }) {
                   </Drawer>
                 )}
           {isServer && <Slot />}
-        </NavigationThemeProvider>
             </Stack>
+        </NavigationThemeProvider>
             </TenantGate>
           </View>
         </SafeAreaProvider>

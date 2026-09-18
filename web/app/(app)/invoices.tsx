@@ -17,6 +17,7 @@ import { labelColor, labelText, labelTextColor } from '../../constants/labels';
 import { useLabels } from '../../hooks/useLabels';
 import { LabelPill, LabelPillRow } from '../../components/LabelPill';
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
+import { themed } from '../../constants/Colors';
 
 export type Invoice = {
   uid: string;
@@ -1653,7 +1654,7 @@ export default function InvoicesScreen() {
         placeholder="Search invoices..."
         onChangeText={setSearchQuery}
         value={searchQuery}
-              style={[styles.searchBar, { backgroundColor: '#f5f5f5' }]}
+              style={[styles.searchBar, { backgroundColor: themed.soft }]}
             />
             
         <Button
@@ -1706,7 +1707,7 @@ export default function InvoicesScreen() {
           <Card style={{
             flex: 1,
             marginBottom: 16,
-            backgroundColor: '#ffffff',
+            backgroundColor: themed.panel,
             borderRadius: 8,
             elevation: 2,
             shadowColor: 'rgba(0,0,0,0.1)',
@@ -1714,73 +1715,73 @@ export default function InvoicesScreen() {
             shadowOpacity: 0.8,
             shadowRadius: 1,
           }}>
-            <DataTable style={{ backgroundColor: '#ffffff' }}>
-              <DataTable.Header style={{ backgroundColor: '#ffffff' }}>
+            <DataTable style={{ backgroundColor: themed.panel }}>
+              <DataTable.Header style={{ backgroundColor: themed.panel }}>
                 <DataTable.Title 
-                  style={{ backgroundColor: '#ffffff' }}
+                  style={{ backgroundColor: themed.panel }}
                   sortDirection={sortColumn === 'invoice_number' ? sortDirection : undefined}
                   onPress={() => handleSort('invoice_number')}
                 >
                   Invoice #
                 </DataTable.Title>
                 <DataTable.Title 
-                  style={{ backgroundColor: '#ffffff' }}
+                  style={{ backgroundColor: themed.panel }}
                   sortDirection={sortColumn === 'client_name' ? sortDirection : undefined}
                   onPress={() => handleSort('client_name')}
                 >
                   Client
                 </DataTable.Title>
                 <DataTable.Title 
-                  style={{ backgroundColor: '#ffffff' }}
+                  style={{ backgroundColor: themed.panel }}
                   sortDirection={sortColumn === 'issue_date' ? sortDirection : undefined}
                   onPress={() => handleSort('issue_date')}
                 >
                   Issue Date
                 </DataTable.Title>
                 <DataTable.Title 
-                  style={{ backgroundColor: '#ffffff' }}
+                  style={{ backgroundColor: themed.panel }}
                   sortDirection={sortColumn === 'due_date' ? sortDirection : undefined}
                   onPress={() => handleSort('due_date')}
                 >
                   Due Date
                 </DataTable.Title>
                 <DataTable.Title 
-                  style={{ backgroundColor: '#ffffff' }}
+                  style={{ backgroundColor: themed.panel }}
                   sortDirection={sortColumn === 'total' ? sortDirection : undefined}
                   onPress={() => handleSort('total')}
                 >
                   Total
                 </DataTable.Title>
                 <DataTable.Title
-                  style={{ backgroundColor: '#ffffff', justifyContent: 'center' }}
+                  style={{ backgroundColor: themed.panel, justifyContent: 'center' }}
                   sortDirection={sortColumn === 'status' ? sortDirection : undefined}
                   onPress={() => handleSort('status')}
                 >
                   Status
                 </DataTable.Title>
-                <DataTable.Title style={{ backgroundColor: '#ffffff' }}>Actions</DataTable.Title>
+                <DataTable.Title style={{ backgroundColor: themed.panel }}>Actions</DataTable.Title>
               </DataTable.Header>
               
               {loading ? (
-                <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
-                  <DataTable.Cell style={{ flex: 7, backgroundColor: '#ffffff' }}>
+                <DataTable.Row style={{ backgroundColor: themed.panel }}>
+                  <DataTable.Cell style={{ flex: 7, backgroundColor: themed.panel }}>
                     <ActivityIndicator size="small" style={{ marginRight: 8 }} />
                     Loading invoices...
                   </DataTable.Cell>
                 </DataTable.Row>
               ) : getFilteredInvoices().length === 0 ? (
-                <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
-                  <DataTable.Cell style={{ flex: 7, backgroundColor: '#ffffff' }}>No invoices found</DataTable.Cell>
+                <DataTable.Row style={{ backgroundColor: themed.panel }}>
+                  <DataTable.Cell style={{ flex: 7, backgroundColor: themed.panel }}>No invoices found</DataTable.Cell>
                 </DataTable.Row>
               ) : (
                 getFilteredInvoices().map(invoice => (
-                  <DataTable.Row key={invoice.uid} style={{ backgroundColor: '#ffffff' }}>
-                    <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{invoice.invoice_number}</DataTable.Cell>
-                    <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{invoice.client_name || 'Unknown Client'}</DataTable.Cell>
-                    <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(invoice.issue_date)}</DataTable.Cell>
-                    <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{formatDate(invoice.due_date)}</DataTable.Cell>
-                    <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>${invoice.total.toFixed(2)}</DataTable.Cell>
-                    <DataTable.Cell style={{ backgroundColor: '#ffffff', justifyContent: 'center' }}>
+                  <DataTable.Row key={invoice.uid} style={{ backgroundColor: themed.panel }}>
+                    <DataTable.Cell style={{ backgroundColor: themed.panel }}>{invoice.invoice_number}</DataTable.Cell>
+                    <DataTable.Cell style={{ backgroundColor: themed.panel }}>{invoice.client_name || 'Unknown Client'}</DataTable.Cell>
+                    <DataTable.Cell style={{ backgroundColor: themed.panel }}>{formatDate(invoice.issue_date)}</DataTable.Cell>
+                    <DataTable.Cell style={{ backgroundColor: themed.panel }}>{formatDate(invoice.due_date)}</DataTable.Cell>
+                    <DataTable.Cell style={{ backgroundColor: themed.panel }}>${invoice.total.toFixed(2)}</DataTable.Cell>
+                    <DataTable.Cell style={{ backgroundColor: themed.panel, justifyContent: 'center' }}>
                       {/* HT-10: read-only. An estimate becomes a work order
                           when the client approves it from the email; other
                           changes are made from the details view. */}
@@ -1792,7 +1793,7 @@ export default function InvoicesScreen() {
                         textColor={labelTextColor(invoiceStatuses, invoice.status)}
                       />
                     </DataTable.Cell>
-                    <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
+                    <DataTable.Cell style={{ backgroundColor: themed.panel }}>
                       <View style={{ flexDirection: 'row' }}>
                         <IconButton
                           icon="eye"
@@ -2051,17 +2052,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   searchContainer: {
     flexDirection: 'row',
     marginBottom: 12,
     alignItems: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   searchBar: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: themed.soft,
   },
   addButton: {
     marginLeft: 16,
@@ -2070,10 +2071,10 @@ const styles = StyleSheet.create({
   filtersContainer: {
     paddingHorizontal: 16,
     paddingBottom: 8,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   tableHeader: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: themed.soft,
   },
   tableHeaderText: {
     fontWeight: 'bold',
@@ -2085,7 +2086,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   tableRow: {
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   tableCellActions: {
     flexDirection: 'row',
@@ -2103,7 +2104,7 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     padding: 16,
-    backgroundColor: '#ffffff', 
+    backgroundColor: themed.panel, 
     borderRadius: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },

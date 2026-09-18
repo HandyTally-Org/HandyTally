@@ -4,6 +4,7 @@ import { Text, ActivityIndicator, Button } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../../../lib/supabase';
 import { InvoiceForm } from '../../../../components/InvoiceForm';
+import { themed } from '../../../../constants/Colors';
 
 export default function EditInvoiceScreen() {
   const { id } = useLocalSearchParams();
@@ -59,7 +60,7 @@ export default function EditInvoiceScreen() {
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: '#fff' }}>
+    <ScrollView style={{ flex: 1, backgroundColor: themed.panel }}>
       {invoice ? (
         <InvoiceForm 
           invoice={invoice}

@@ -28,6 +28,8 @@ import { exportWorkbook, pickWorkbook, sheetRows, hasColumn } from '../../../uti
 import { ImportExportButtons } from '../../../components/ImportExportButtons';
 import { useRefreshOnFocus } from '../../../hooks/useRefreshOnFocus';
 import { FormDialog, FormDialogFooter, FormField, FormRow, formTheme, inputStyle } from '../../../components/FormDialog';
+import { themed } from '../../../constants/Colors';
+import { useAppTheme } from '../../../contexts/ThemeContext';
 
 // HT-12: the organisation's members. Admins invite people by email with a
 // role, change roles and deactivate. The account is created server-side and
@@ -67,11 +69,12 @@ const STATUS_DOT = {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const white = { backgroundColor: '#ffffff' };
+const white = { backgroundColor: themed.panel };
 
 type Confirmation = { kind: 'remove' | 'delete'; member: OrganizationMember } | null;
 
 export default function UsersScreen() {
+  const { colors: themeColors } = useAppTheme();
   const allowed = useRequireAdmin();
   const { organization, session } = useAuth();
   const [members, setMembers] = useState<OrganizationMember[]>([]);
@@ -513,7 +516,7 @@ export default function UsersScreen() {
                                 <IconButton
                                   icon="account-remove"
                                   size={20}
-                                  iconColor={formTheme.mutedText}
+                                  iconColor={themeColors.muted}
                                   onPress={() => openConfirmation('remove', member)}
                                   disabled={!canAct}
                                   accessibilityLabel="Remove from organization"
@@ -703,22 +706,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   title: {
     fontFamily: 'System',
     fontSize: 26,
     fontWeight: '600',
-    color: '#333333',
+    color: themed.text,
   },
   subtitle: {
     fontSize: 14,
-    color: '#666',
+    color: themed.muted,
     marginTop: 2,
   },
   card: {
     marginBottom: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
     borderRadius: 8,
     elevation: 2,
     shadowColor: 'rgba(0,0,0,0.1)',
@@ -753,7 +756,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   roleTriggerHover: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: themed.soft,
   },
   roleText: {
     fontSize: 14,

@@ -14,6 +14,7 @@ import { assigneeLabel } from '../../utils/inviteUser';
 import { useLabels } from '../../hooks/useLabels';
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 import { formatClientAddress, formatDateTime } from '../../utils/formatting';
+import { themed } from '../../constants/Colors';
 
 type Job = {
   uid: number;
@@ -901,14 +902,14 @@ export default function JobsScreen() {
     <View style={{
       flex: 1,
       padding: 16,
-      backgroundColor: '#ffffff',
+      backgroundColor: themed.panel,
     }}>
       <Text style={{
         fontFamily: 'System',
         fontSize: 26,
         fontWeight: '600',
         marginBottom: 16,
-        color: '#333333',
+        color: themed.text,
       }}>Jobs</Text>
       
       <View style={styles.searchAndAddContainer}>
@@ -916,7 +917,7 @@ export default function JobsScreen() {
         placeholder="Search jobs..."
         onChangeText={setSearchQuery}
         value={searchQuery}
-          style={[styles.searchBar, { backgroundColor: '#f5f5f5' }]}
+          style={[styles.searchBar, { backgroundColor: themed.soft }]}
       />
       
         <View style={{ 
@@ -952,8 +953,8 @@ export default function JobsScreen() {
       </LabelPillRow>
       
       <Card style={styles.tableCard}>
-        <DataTable style={{ backgroundColor: '#ffffff' }}>
-          <DataTable.Header style={{ backgroundColor: '#ffffff' }}>
+        <DataTable style={{ backgroundColor: themed.panel }}>
+          <DataTable.Header style={{ backgroundColor: themed.panel }}>
             <DataTable.Title 
               onPress={() => handleSort('title')}
               sortDirection={sortColumn === 'title' ? sortDirection : undefined}
@@ -1010,34 +1011,34 @@ export default function JobsScreen() {
           </DataTable.Header>
           
           {loading ? (
-            <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
+            <DataTable.Row style={{ backgroundColor: themed.panel }}>
               <DataTable.Cell style={{ flex: 8 }}>
                 <ActivityIndicator size="small" style={{ marginRight: 8 }} />
                 Loading jobs...
               </DataTable.Cell>
             </DataTable.Row>
           ) : getFilteredJobs().length === 0 ? (
-            <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
+            <DataTable.Row style={{ backgroundColor: themed.panel }}>
               <DataTable.Cell style={{ flex: 8 }}>No jobs found</DataTable.Cell>
             </DataTable.Row>
           ) : (
             getFilteredJobs().map(job => (
-              <DataTable.Row key={job.uid} style={{ backgroundColor: '#ffffff' }}>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{job.title}</DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{job.client_name}</DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff', flex: 2 }}>{job.client_address}</DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff', flex: 1.2 }}>{job.client_phone}</DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{assigneeName(job)}</DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
+              <DataTable.Row key={job.uid} style={{ backgroundColor: themed.panel }}>
+                <DataTable.Cell style={{ backgroundColor: themed.panel }}>{job.title}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: themed.panel }}>{job.client_name}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: themed.panel, flex: 2 }}>{job.client_address}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: themed.panel, flex: 1.2 }}>{job.client_phone}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: themed.panel }}>{assigneeName(job)}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: themed.panel }}>
                   <select
                     value={job.status}
                     onChange={(e) => updateJobStatus(job.uid, e.target.value)}
                     style={{
                       padding: 8,
                       borderRadius: 4,
-                      borderColor: '#ccc',
-                      backgroundColor: '#ffffff',
-                      color: '#000000',
+                      borderColor: themed.line,
+                      backgroundColor: themed.panel,
+                      color: themed.text,
                       fontWeight: 'bold'
                     }}
                   >
@@ -1046,9 +1047,9 @@ export default function JobsScreen() {
                     ))}
                   </select>
                 </DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff', flex: 1.5 }}>{formatDateTime(job.start_date)}</DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff', flex: 1.5 }}>{formatDateTime(job.end_date)}</DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff', flex: 1.3 }}>
+                <DataTable.Cell style={{ backgroundColor: themed.panel, flex: 1.5 }}>{formatDateTime(job.start_date)}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: themed.panel, flex: 1.5 }}>{formatDateTime(job.end_date)}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: themed.panel, flex: 1.3 }}>
                   <View style={styles.actionButtons}>
                     <IconButton
                       icon="pencil"
@@ -1136,7 +1137,7 @@ export default function JobsScreen() {
                           style={{
                             padding: 12,
                             borderBottomWidth: 1,
-                            borderBottomColor: '#f0f0f0',
+                            borderBottomColor: themed.line,
                             backgroundColor: client.uid === editingJob.client_id 
                               ? '#f0f0f0' 
                               : 'white',
@@ -1155,7 +1156,7 @@ export default function JobsScreen() {
                           }}
                           onMouseEnter={(e) => {
                             // @ts-ignore - Add hover effect
-                            e.currentTarget.style.backgroundColor = '#f5f5f5';
+                            e.currentTarget.style.backgroundColor = themed.soft;
                           }}
                           onMouseLeave={(e) => {
                             // @ts-ignore - Remove hover effect
@@ -1211,9 +1212,9 @@ export default function JobsScreen() {
                   style={{
                     padding: 8,
                     borderRadius: 4,
-                    borderColor: '#ccc',
-                    backgroundColor: '#ffffff',
-                    color: '#000000',
+                    borderColor: themed.line,
+                    backgroundColor: themed.panel,
+                    color: themed.text,
                     fontWeight: 'bold'
                   }}
                 >
@@ -1385,7 +1386,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   searchAndAddContainer: {
     flexDirection: 'row',
@@ -1395,14 +1396,14 @@ const styles = StyleSheet.create({
   searchBar: {
     flex: 1,
     marginRight: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   addButton: {
     marginLeft: 8,
   },
   tableCard: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
     borderRadius: 8,
     elevation: 2,
     shadowColor: 'rgba(0,0,0,0.1)',
@@ -1418,31 +1419,31 @@ const styles = StyleSheet.create({
     maxWidth: 600,
     alignSelf: 'center',
     borderRadius: 10,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: themed.soft,
     zIndex: 100,
   },
   dialogContent: {
     paddingHorizontal: 20,
     paddingBottom: 10,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: themed.soft,
     zIndex: 100,
   },
   formContainer: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: themed.soft,
     zIndex: 100,
   },
   dialogActions: {
     padding: 15,
     justifyContent: 'space-between',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: themed.soft,
   },
   input: {
     marginBottom: 20,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   statusInput: {
     marginBottom: 20,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
     cursor: 'pointer',
   },
   inputLabel: {
@@ -1464,9 +1465,9 @@ const styles = StyleSheet.create({
     top: 60,
     left: 0,
     right: 0,
-    backgroundColor: 'white',
+    backgroundColor: themed.panel,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: themed.line,
     borderRadius: 4,
     zIndex: 1001,
     elevation: 5,
@@ -1480,7 +1481,7 @@ const styles = StyleSheet.create({
   dropdownItem: {
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: themed.line,
     flexDirection: 'row',
     alignItems: 'center',
     cursor: 'pointer',
@@ -1495,14 +1496,14 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   jobName: {
-    color: 'black',
+    color: themed.text,
   },
   datePickerDialog: {
     width: '90%',
     maxWidth: 400,
     alignSelf: 'center',
     borderRadius: 10,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   datePickerContainer: {
     marginTop: 10,
@@ -1522,7 +1523,7 @@ const styles = StyleSheet.create({
   monthYearText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: themed.text,
   },
   calendar: {
     marginBottom: 20,
@@ -1536,7 +1537,7 @@ const styles = StyleSheet.create({
     width: 30,
     textAlign: 'center',
     fontWeight: 'bold',
-    color: '#757575',
+    color: themed.muted,
   },
   calendarDays: {
     flexDirection: 'row',
@@ -1551,13 +1552,13 @@ const styles = StyleSheet.create({
   },
   calendarDayText: {
     fontSize: 14,
-    color: '#333',
+    color: themed.text,
   },
   notCurrentMonth: {
     opacity: 0.3,
   },
   notCurrentMonthText: {
-    color: '#999',
+    color: themed.faint,
   },
   today: {
     backgroundColor: '#E3F2FD',
@@ -1578,7 +1579,7 @@ const styles = StyleSheet.create({
   timeSelector: {
     marginTop: 15,
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    borderTopColor: themed.line,
     paddingTop: 15,
   },
   timeInputRow: {
@@ -1591,16 +1592,16 @@ const styles = StyleSheet.create({
   },
   timeLabel: {
     fontSize: 14,
-    color: '#757575',
+    color: themed.muted,
     marginBottom: 5,
   },
   timeSelect: {
     width: '100%',
     height: 40,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: themed.line,
     borderRadius: 4,
     paddingHorizontal: 10,
-    backgroundColor: '#fff',
+    backgroundColor: themed.panel,
   },
 }); 

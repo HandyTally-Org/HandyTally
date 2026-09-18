@@ -1,7 +1,7 @@
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { TextInput } from 'react-native-paper';
 import { FormField, FormRow } from '../FormDialog';
-import { FormActions, FormPanel, FormSection, formLayoutTheme, outlinedInputProps } from '../FormLayout';
+import { FormActions, FormPanel, FormSection, formLayoutTheme, useOutlinedInputProps } from '../FormLayout';
 import { OutlineButton, PrimaryButton, st } from '../settings/ui';
 
 // HT-47: the Info section of Admin > Company: the logo in its own card, then
@@ -34,6 +34,7 @@ type Props = {
 };
 
 export function CompanyInfoEditor({ company, onChange, logoUrl, onChangeLogo, onDefaultLogo, logoBusy, onSave, saving, error }: Props) {
+  const outlinedInputProps = useOutlinedInputProps();
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <FormPanel title="Logo" subtitle="Shown in the sidebar and at the top of every estimate and invoice.">

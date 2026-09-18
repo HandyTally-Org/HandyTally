@@ -12,6 +12,7 @@ import { CompanyInfoEditor, type CompanyData } from '../../../components/company
 import { CompanyDocumentsEditor } from '../../../components/company/CompanyDocumentsEditor';
 import { st } from '../../../components/settings/ui';
 import { fileToBase64 } from '../../../utils/fileToBase64';
+import { themed } from '../../../constants/Colors';
 
 // HT-47: Admin > Company on the HT-50 two-pane shell. Left: the organisation
 // and its sections; right: the selected one. Info is the former page (logo,
@@ -403,7 +404,7 @@ const styles = StyleSheet.create({
     borderColor: st.border,
     borderRadius: 10,
     overflow: 'hidden',
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   listContent: { padding: 16 },
   paneTitle: { marginBottom: 4 },
@@ -418,7 +419,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   rowHover: { backgroundColor: st.softBg },
-  rowSelected: { backgroundColor: '#f3f6fb' },
+  rowSelected: { backgroundColor: themed.active },
   rowIcon: {
     width: 34,
     height: 34,

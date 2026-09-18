@@ -2,28 +2,40 @@ import { ReactNode } from 'react';
 import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import { Button, Text } from 'react-native-paper';
 import { formTheme, inputStyle } from './FormDialog';
+import { themed } from '../constants/Colors';
+import { useAppTheme } from '../contexts/ThemeContext';
 
 // HT-60: the pieces of a full-page edit form (Client Details, Job Details)
 // share their look with FormDialog and the Settings editors: a bordered
 // white panel with a max width, small uppercase section headings, quiet
 // outlined inputs with a dark focus ring and a dark primary button.
 
+// HT-68: style-only tokens (CSS variable references); see the note on
+// formTheme in FormDialog.tsx.
 export const formLayoutTheme = {
   ...formTheme,
-  inputBorder: '#D1D5DB',
-  focusBorder: '#111827',
-  placeholder: '#9CA3AF',
-  secondaryText: '#374151',
+  inputBorder: themed.line,
+  focusBorder: themed.text,
+  placeholder: themed.faint,
+  secondaryText: themed.muted,
 };
 
-/** Props for a Paper TextInput in a modernised form: outlined, 8px radius, dark focus ring. */
-export const outlinedInputProps = {
-  mode: 'outlined',
-  outlineColor: formLayoutTheme.inputBorder,
-  activeOutlineColor: formLayoutTheme.focusBorder,
-  outlineStyle: { borderRadius: 8 },
-  style: inputStyle,
-} as const;
+/**
+ * Props for a Paper TextInput in a modernised form: outlined, 8px radius, a
+ * focus ring in the text colour. A hook, because outlineColor and
+ * activeOutlineColor are parsed by Paper and need real hex for the active
+ * theme; spread the result the same way as the old constant.
+ */
+export function useOutlinedInputProps() {
+  const { colors } = useAppTheme();
+  return {
+    mode: 'outlined',
+    outlineColor: colors.line,
+    activeOutlineColor: colors.text,
+    outlineStyle: { borderRadius: 8 },
+    style: inputStyle,
+  } as const;
+}
 
 type FormPanelProps = {
   /** Heading at the top of the panel. */
@@ -81,6 +93,7 @@ type FormActionsProps = {
 
 /** The footer row: an outlined cancel and the dark primary button, right-aligned. */
 export function FormActions({ onSubmit, submitLabel, submitting = false, onCancel, cancelLabel = 'Cancel' }: FormActionsProps) {
+  const { colors } = useAppTheme();
   return (
     <View style={styles.actions}>
       {onCancel ? (
@@ -88,7 +101,7 @@ export function FormActions({ onSubmit, submitLabel, submitting = false, onCance
           mode="outlined"
           onPress={onCancel}
           disabled={submitting}
-          textColor={formLayoutTheme.secondaryText}
+          textColor={colors.muted}
           style={styles.secondaryButton}
         >
           {cancelLabel}
@@ -99,8 +112,8 @@ export function FormActions({ onSubmit, submitLabel, submitting = false, onCance
         onPress={onSubmit}
         loading={submitting}
         disabled={submitting}
-        buttonColor={formLayoutTheme.focusBorder}
-        textColor="#FFFFFF"
+        buttonColor={colors.primary}
+        textColor={colors.onPrimary}
         style={styles.primaryButton}
       >
         {submitLabel}

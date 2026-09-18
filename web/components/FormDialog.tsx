@@ -1,16 +1,22 @@
 import { Children, ReactNode } from 'react';
 import { View, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
 import { Portal, Dialog, Button, Text, IconButton, HelperText } from 'react-native-paper';
+import { themed } from '../constants/Colors';
+import { useAppTheme } from '../contexts/ThemeContext';
 
 // The popup used by every add/edit form. Paper's Dialog stretches to the window
 // on web, so this pins it to a card-sized width, rounds the corners and gives
 // each form the same header, scrolling body and footer.
 
+// HT-68: these are CSS-variable references (see constants/Colors.ts) and are
+// only for *styles*. A Paper colour prop (textColor, iconColor, buttonColor,
+// outlineColor) is parsed by the `color` package and throws on var(); those
+// read hex from useAppTheme().colors instead.
 export const formTheme = {
-  background: '#FFFFFF',
-  border: '#E5E7EB',
-  text: '#111827',
-  mutedText: '#6B7280',
+  background: themed.panel,
+  border: themed.line,
+  text: themed.text,
+  mutedText: themed.muted,
 };
 
 /** Style for a Paper TextInput inside a FormField. */
@@ -30,6 +36,7 @@ type FormDialogProps = {
 
 export function FormDialog({ visible, title, subtitle, onDismiss, footer, maxWidth = 520, children }: FormDialogProps) {
   const { width, height } = useWindowDimensions();
+  const { colors } = useAppTheme();
   return (
     <Portal>
       <Dialog
@@ -42,7 +49,7 @@ export function FormDialog({ visible, title, subtitle, onDismiss, footer, maxWid
             <Text style={styles.title}>{title}</Text>
             {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
           </View>
-          <IconButton icon="close" size={20} onPress={onDismiss} iconColor={formTheme.mutedText} accessibilityLabel="Close" />
+          <IconButton icon="close" size={20} onPress={onDismiss} iconColor={colors.muted} accessibilityLabel="Close" />
         </View>
         <ScrollView
           style={{ maxHeight: Math.max(240, height * 0.65) }}
@@ -65,9 +72,10 @@ type FormDialogFooterProps = {
 };
 
 export function FormDialogFooter({ onCancel, onSubmit, submitLabel, submitting = false }: FormDialogFooterProps) {
+  const { colors } = useAppTheme();
   return (
     <>
-      <Button mode="text" onPress={onCancel} disabled={submitting} textColor={formTheme.mutedText}>
+      <Button mode="text" onPress={onCancel} disabled={submitting} textColor={colors.muted}>
         Cancel
       </Button>
       <Button mode="contained" onPress={onSubmit} loading={submitting} disabled={submitting} style={styles.submitButton}>
@@ -160,7 +168,7 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#374151',
+    color: themed.muted,
     marginBottom: 6,
   },
   row: {

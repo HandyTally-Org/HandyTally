@@ -3,6 +3,7 @@ import { View, StyleSheet, Pressable } from 'react-native';
 import { Text, Button, IconButton, ActivityIndicator, Portal, Dialog, Snackbar, TextInput } from 'react-native-paper';
 import { supabase } from '../lib/supabase';
 import { FormDialog, FormDialogFooter, FormField, formTheme, inputStyle } from './FormDialog';
+import { themed } from '../constants/Colors';
 
 // The Notes entry under DOCUMENTATION on a client or a job: a list of titled
 // notes, an Add note button that opens a compact popup, and edit/delete on
@@ -313,7 +314,7 @@ const styles = StyleSheet.create({
     backgroundColor: formTheme.background,
   },
   noteHover: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: themed.soft,
   },
   noteText: {
     flex: 1,

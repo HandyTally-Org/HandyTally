@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, ScrollView, Modal, TouchableOpacity, StyleSheet } from 'react-native';
 import { Button, Text, List, Surface } from 'react-native-paper';
 import { styles } from '../styles';
+import { themed } from '../constants/Colors';
 
 type DropdownInputProps = {
   label: string;
@@ -110,7 +111,7 @@ const dropdownStyles = StyleSheet.create({
     maxHeight: '80%',
     borderRadius: 8,
     padding: 16,
-    backgroundColor: 'white',
+    backgroundColor: themed.panel,
   },
   modalTitle: {
     fontSize: 18,
@@ -122,7 +123,7 @@ const dropdownStyles = StyleSheet.create({
   },
   listItem: {
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: themed.line,
   },
   closeButton: {
     marginTop: 12,

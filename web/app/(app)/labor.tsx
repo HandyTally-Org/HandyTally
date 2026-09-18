@@ -7,6 +7,7 @@ import { ImportExportButtons } from '../../components/ImportExportButtons';
 import { styles as globalStyles } from '../../styles';
 import { exportWorkbook, pickWorkbook, sheetRows, hasColumn, confirmAction } from '../../utils/excel';
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
+import { themed } from '../../constants/Colors';
 
 export type Service = {
   uid: number;
@@ -546,14 +547,14 @@ export default function ServicesScreen() {
     <View style={{
       flex: 1,
       padding: 16,
-      backgroundColor: '#ffffff',
+      backgroundColor: themed.panel,
     }}>
       <Text style={{
         fontFamily: 'System',
         fontSize: 26,
         fontWeight: '600',
         marginBottom: 16,
-        color: '#333333',
+        color: themed.text,
       }}>Labor</Text>
       
       <View style={styles.searchAndAddContainer}>
@@ -561,7 +562,7 @@ export default function ServicesScreen() {
           placeholder="Search labor codes..."
           onChangeText={setSearchQuery}
           value={searchQuery}
-          style={[styles.searchBar, { backgroundColor: '#f5f5f5' }]}
+          style={[styles.searchBar, { backgroundColor: themed.soft }]}
         />
         
         <View style={{ 
@@ -585,7 +586,7 @@ export default function ServicesScreen() {
       <Card style={{
         flex: 1,
         marginBottom: 16,
-        backgroundColor: '#ffffff',
+        backgroundColor: themed.panel,
         borderRadius: 8,
         elevation: 2,
         shadowColor: 'rgba(0,0,0,0.1)',
@@ -593,58 +594,58 @@ export default function ServicesScreen() {
         shadowOpacity: 0.8,
         shadowRadius: 1,
       }}>
-        <DataTable style={{ backgroundColor: '#ffffff' }}>
-          <DataTable.Header style={{ backgroundColor: '#ffffff' }}>
+        <DataTable style={{ backgroundColor: themed.panel }}>
+          <DataTable.Header style={{ backgroundColor: themed.panel }}>
             <DataTable.Title 
-              style={{ backgroundColor: '#ffffff' }}
+              style={{ backgroundColor: themed.panel }}
               sortDirection={sortColumn === 'name' ? sortDirection : undefined}
               onPress={() => handleSort('name')}
             >
               Name
             </DataTable.Title>
             <DataTable.Title 
-              style={{ backgroundColor: '#ffffff' }}
+              style={{ backgroundColor: themed.panel }}
               sortDirection={sortColumn === 'description' ? sortDirection : undefined}
               onPress={() => handleSort('description')}
             >
               Description
             </DataTable.Title>
             <DataTable.Title 
-              style={{ backgroundColor: '#ffffff' }}
+              style={{ backgroundColor: themed.panel }}
               sortDirection={sortColumn === 'rate' ? sortDirection : undefined}
               onPress={() => handleSort('rate')}
             >
               Rate
             </DataTable.Title>
             <DataTable.Title 
-              style={{ backgroundColor: '#ffffff' }}
+              style={{ backgroundColor: themed.panel }}
               sortDirection={sortColumn === 'unit' ? sortDirection : undefined}
               onPress={() => handleSort('unit')}
             >
               Unit
             </DataTable.Title>
-            <DataTable.Title style={{ backgroundColor: '#ffffff' }}>Actions</DataTable.Title>
+            <DataTable.Title style={{ backgroundColor: themed.panel }}>Actions</DataTable.Title>
           </DataTable.Header>
           
           {loading ? (
-            <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
-              <DataTable.Cell style={{ flex: 5, backgroundColor: '#ffffff' }}>
+            <DataTable.Row style={{ backgroundColor: themed.panel }}>
+              <DataTable.Cell style={{ flex: 5, backgroundColor: themed.panel }}>
                 <ActivityIndicator size="small" style={{ marginRight: 8 }} />
                 Loading services...
               </DataTable.Cell>
             </DataTable.Row>
           ) : getFilteredServices().length === 0 ? (
-            <DataTable.Row style={{ backgroundColor: '#ffffff' }}>
-              <DataTable.Cell style={{ flex: 5, backgroundColor: '#ffffff' }}>No services found</DataTable.Cell>
+            <DataTable.Row style={{ backgroundColor: themed.panel }}>
+              <DataTable.Cell style={{ flex: 5, backgroundColor: themed.panel }}>No services found</DataTable.Cell>
             </DataTable.Row>
           ) : (
             getFilteredServices().map(service => (
-              <DataTable.Row key={service.uid} style={{ backgroundColor: '#ffffff' }}>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{service.name}</DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{service.description}</DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>${service.rate.toFixed(2)}</DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>{service.unit || 'hour'}</DataTable.Cell>
-                <DataTable.Cell style={{ backgroundColor: '#ffffff' }}>
+              <DataTable.Row key={service.uid} style={{ backgroundColor: themed.panel }}>
+                <DataTable.Cell style={{ backgroundColor: themed.panel }}>{service.name}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: themed.panel }}>{service.description}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: themed.panel }}>${service.rate.toFixed(2)}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: themed.panel }}>{service.unit || 'hour'}</DataTable.Cell>
+                <DataTable.Cell style={{ backgroundColor: themed.panel }}>
                   <View style={{ flexDirection: 'row' }}>
                     <IconButton
                       icon="pencil"
@@ -691,7 +692,7 @@ export default function ServicesScreen() {
       
       {/* Delete Service Dialog */}
       <Portal>
-        <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)} style={{ backgroundColor: '#ffffff' }}>
+        <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)} style={{ backgroundColor: themed.panel }}>
           <Dialog.Title>Delete Service</Dialog.Title>
           <Dialog.Content>
             <Text>Are you sure you want to delete {selectedService?.name}?</Text>
@@ -719,7 +720,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   searchAndAddContainer: {
     flexDirection: 'row',
@@ -729,7 +730,7 @@ const styles = StyleSheet.create({
   searchBar: {
     flex: 1,
     marginRight: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
   },
   addButton: {
     minWidth: 150,
@@ -737,7 +738,7 @@ const styles = StyleSheet.create({
   tableCard: {
     flex: 1,
     marginBottom: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: themed.panel,
     borderRadius: 8,
     elevation: 2,
     shadowColor: 'rgba(0,0,0,0.1)',

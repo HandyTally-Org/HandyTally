@@ -7,6 +7,10 @@ import { OPEN_INVOICE_STATUSES } from '../../constants/invoiceStatus';
 import { labelColor, labelText } from '../../constants/labels';
 import { useLabels } from '../../hooks/useLabels';
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
+import { themed } from '../../constants/Colors';
+
+/** Text on the pastel stat cards, which keep their fill in dark mode. */
+const STAT_TEXT = '#202124';
 
 type DashboardStats = {
   clientCount: number;
@@ -810,7 +814,7 @@ export default function DashboardScreen() {
     container: {
       flex: 1,
       padding: 16,
-      backgroundColor: '#ffffff',
+      backgroundColor: themed.panel,
     },
     loadingContainer: {
       flex: 1,
@@ -839,9 +843,13 @@ export default function DashboardScreen() {
       justifyContent: 'space-between',
       marginBottom: 16,
     },
+    // HT-68: the four stat cards keep their pastel fills in both themes (like
+    // the status chips), so their text stays dark rather than following the
+    // theme's light-on-dark text.
+    statText: { color: STAT_TEXT },
     statsCard: {
       width: '48%',
-      backgroundColor: '#ffffff',
+      backgroundColor: themed.panel,
       elevation: 0,
       shadowOpacity: 0,
       borderWidth: 0,
@@ -853,7 +861,7 @@ export default function DashboardScreen() {
     },
     chartCard: {
       marginBottom: 16,
-      backgroundColor: '#ffffff',
+      backgroundColor: themed.panel,
       elevation: 0,
       shadowOpacity: 0,
       borderWidth: 0,
@@ -885,7 +893,7 @@ export default function DashboardScreen() {
     },
     yAxisLabel: {
       fontSize: 10,
-      color: '#666',
+      color: themed.muted,
       position: 'absolute',
       right: 8,
       textAlign: 'right',
@@ -900,7 +908,7 @@ export default function DashboardScreen() {
       left: 0,
       right: 0,
       height: 1,
-      backgroundColor: '#e0e0e0',
+      backgroundColor: themed.active,
     },
     barsArea: {
       flexDirection: 'row',
@@ -925,14 +933,14 @@ export default function DashboardScreen() {
     },
     monthLabel: {
       fontSize: 10,
-      color: '#666',
+      color: themed.muted,
       marginTop: 8,
       textAlign: 'center',
     },
     calloutContainer: {
       position: 'absolute',
       width: 200,
-      backgroundColor: 'white',
+      backgroundColor: themed.panel,
       borderRadius: 8,
       padding: 12,
       shadowColor: '#000',
@@ -942,7 +950,7 @@ export default function DashboardScreen() {
       elevation: 5,
       zIndex: 1000,
       borderWidth: 1,
-      borderColor: '#e0e0e0',
+      borderColor: themed.line,
     },
     calloutHeader: {
       flexDirection: 'row',
@@ -957,7 +965,7 @@ export default function DashboardScreen() {
     calloutClose: {
       fontSize: 18,
       fontWeight: 'bold',
-      color: '#666',
+      color: themed.muted,
     },
     calloutContent: {
       marginTop: 4,
@@ -968,7 +976,7 @@ export default function DashboardScreen() {
       alignItems: 'center',
       paddingVertical: 4,
       borderBottomWidth: 1,
-      borderBottomColor: '#f0f0f0',
+      borderBottomColor: themed.line,
     },
     calloutInvoiceNumber: {
       fontSize: 12,
@@ -979,7 +987,7 @@ export default function DashboardScreen() {
     },
     calloutMoreText: {
       fontSize: 12,
-      color: '#666',
+      color: themed.muted,
       textAlign: 'center',
       marginTop: 4,
     },
@@ -991,7 +999,7 @@ export default function DashboardScreen() {
       paddingHorizontal: 12,
       paddingVertical: 6,
       borderWidth: 1,
-      borderColor: '#e0e0e0',
+      borderColor: themed.line,
       borderRadius: 4,
       marginRight: 8,
     },
@@ -1010,8 +1018,8 @@ export default function DashboardScreen() {
   });
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
-      <ScrollView style={[styles.container, { backgroundColor: '#ffffff' }]}>
+    <View style={{ flex: 1, backgroundColor: themed.panel }}>
+      <ScrollView style={[styles.container, { backgroundColor: themed.panel }]}>
         <View style={{ 
           flexDirection: 'row', 
           justifyContent: 'space-between', 
@@ -1022,7 +1030,7 @@ export default function DashboardScreen() {
             fontFamily: 'System',
             fontSize: 26,
             fontWeight: '600',
-            color: '#333333',
+            color: themed.text,
           }}>Dashboard</Text>
           <IconButton
             icon="refresh"
@@ -1091,11 +1099,11 @@ export default function DashboardScreen() {
                   borderLeftWidth: 0,
                   borderRightWidth: 0
                 }}>
-            <Text variant="titleLarge">Clients</Text>
+            <Text variant="titleLarge" style={styles.statText}>Clients</Text>
             {stats.loading ? (
               <ActivityIndicator size="small" />
             ) : (
-              <Text variant="displayMedium">{stats.clientCount}</Text>
+              <Text variant="displayMedium" style={styles.statText}>{stats.clientCount}</Text>
             )}
           </Card.Content>
                 <Card.Actions style={{ 
@@ -1107,7 +1115,7 @@ export default function DashboardScreen() {
                   borderRightWidth: 0,
                   backgroundColor: '#E0F7FA', // Light teal
                 }}>
-                  <Button onPress={() => window.location.href = '/clients'}>View All</Button>
+                  <Button textColor={STAT_TEXT} onPress={() => window.location.href = '/clients'}>View All</Button>
           </Card.Actions>
         </Card>
         
@@ -1134,11 +1142,11 @@ export default function DashboardScreen() {
                   borderLeftWidth: 0,
                   borderRightWidth: 0
                 }}>
-            <Text variant="titleLarge">Active Jobs</Text>
+            <Text variant="titleLarge" style={styles.statText}>Active Jobs</Text>
             {stats.loading ? (
               <ActivityIndicator size="small" />
             ) : (
-              <Text variant="displayMedium">{stats.activeJobsCount}</Text>
+              <Text variant="displayMedium" style={styles.statText}>{stats.activeJobsCount}</Text>
             )}
           </Card.Content>
                 <Card.Actions style={{ 
@@ -1150,7 +1158,7 @@ export default function DashboardScreen() {
                   borderRightWidth: 0,
                   backgroundColor: '#E8F5E9', // Light green
                 }}>
-                  <Button onPress={() => window.location.href = '/jobs'}>View All</Button>
+                  <Button textColor={STAT_TEXT} onPress={() => window.location.href = '/jobs'}>View All</Button>
           </Card.Actions>
         </Card>
       </View>
@@ -1179,11 +1187,11 @@ export default function DashboardScreen() {
                   borderLeftWidth: 0,
                   borderRightWidth: 0
                 }}>
-            <Text variant="titleLarge">Pending Invoices</Text>
+            <Text variant="titleLarge" style={styles.statText}>Pending Invoices</Text>
             {stats.loading ? (
               <ActivityIndicator size="small" />
             ) : (
-              <Text variant="displayMedium">{stats.pendingInvoicesCount}</Text>
+              <Text variant="displayMedium" style={styles.statText}>{stats.pendingInvoicesCount}</Text>
             )}
           </Card.Content>
                 <Card.Actions style={{ 
@@ -1195,7 +1203,7 @@ export default function DashboardScreen() {
                   borderRightWidth: 0,
                   backgroundColor: '#FFF9C4', // Light yellow
                 }}>
-                  <Button onPress={() => window.location.href = '/invoices'}>View All</Button>
+                  <Button textColor={STAT_TEXT} onPress={() => window.location.href = '/invoices'}>View All</Button>
           </Card.Actions>
         </Card>
         
@@ -1222,11 +1230,11 @@ export default function DashboardScreen() {
                   borderLeftWidth: 0,
                   borderRightWidth: 0
                 }}>
-            <Text variant="titleLarge">Low Stock Items</Text>
+            <Text variant="titleLarge" style={styles.statText}>Low Stock Items</Text>
             {stats.loading ? (
               <ActivityIndicator size="small" />
             ) : (
-              <Text variant="displayMedium">{stats.lowStockItemsCount}</Text>
+              <Text variant="displayMedium" style={styles.statText}>{stats.lowStockItemsCount}</Text>
             )}
           </Card.Content>
                 <Card.Actions style={{ 
@@ -1238,13 +1246,13 @@ export default function DashboardScreen() {
                   borderRightWidth: 0,
                   backgroundColor: '#E1BEE7', // Light purple
                 }}>
-                  <Button onPress={() => window.location.href = '/inventory'}>View All</Button>
+                  <Button textColor={STAT_TEXT} onPress={() => window.location.href = '/inventory'}>View All</Button>
           </Card.Actions>
         </Card>
       </View>
       
             <Card style={[styles.chartCard, { 
-              backgroundColor: '#ffffff', 
+              backgroundColor: themed.panel, 
               elevation: 0, 
               shadowOpacity: 0, 
               borderWidth: 0,
@@ -1257,7 +1265,7 @@ export default function DashboardScreen() {
               padding: 0
             }]}>
               <Card.Content style={{ 
-                backgroundColor: '#ffffff',
+                backgroundColor: themed.panel,
                 borderWidth: 0, 
                 borderColor: 'transparent',
                 borderTopWidth: 0,
@@ -1265,7 +1273,7 @@ export default function DashboardScreen() {
                 borderLeftWidth: 0,
                 borderRightWidth: 0
               }}>
-                <View style={[styles.chartHeader, { backgroundColor: '#ffffff' }]}>
+                <View style={[styles.chartHeader, { backgroundColor: themed.panel }]}>
                   <Text variant="titleLarge" style={styles.sectionTitle}>Sales By Time</Text>
                   <Menu
                     visible={timeRangeMenuVisible}
@@ -1331,13 +1339,13 @@ export default function DashboardScreen() {
                       <Text style={{ marginTop: 16 }}>Loading sales data...</Text>
                     </View>
                   ) : chartData.datasets.length === 0 ? (
-                    <Text style={{ textAlign: 'center', marginVertical: 40, fontSize: 16, color: '#666' }}>
+                    <Text style={{ textAlign: 'center', marginVertical: 40, fontSize: 16, color: themed.muted }}>
                       No sales data available for the selected time period.
                     </Text>
                   ) : (
                     <>
                       {renderStackedBarChart()}
-                      <Text style={{ textAlign: 'center', fontSize: 12, color: '#666', marginTop: 8 }}>
+                      <Text style={{ textAlign: 'center', fontSize: 12, color: themed.muted, marginTop: 8 }}>
                         Tap on a bar segment to see invoice details
                       </Text>
                     </>
@@ -1348,7 +1356,7 @@ export default function DashboardScreen() {
             
             {/* Recent Activity Section */}
             <Card style={[styles.chartCard, { 
-              backgroundColor: '#ffffff', 
+              backgroundColor: themed.panel, 
               elevation: 0, 
               shadowOpacity: 0, 
               borderWidth: 0,
@@ -1362,7 +1370,7 @@ export default function DashboardScreen() {
               marginTop: 16
             }]}>
               <Card.Content style={{ 
-                backgroundColor: '#ffffff',
+                backgroundColor: themed.panel,
                 borderWidth: 0, 
                 borderColor: 'transparent',
                 borderTopWidth: 0,
@@ -1370,7 +1378,7 @@ export default function DashboardScreen() {
                 borderLeftWidth: 0,
                 borderRightWidth: 0
               }}>
-                <View style={[styles.chartHeader, { backgroundColor: '#ffffff' }]}>
+                <View style={[styles.chartHeader, { backgroundColor: themed.panel }]}>
           <Text variant="titleLarge" style={styles.sectionTitle}>Recent Activity</Text>
                 </View>
           
@@ -1380,7 +1388,7 @@ export default function DashboardScreen() {
                     <Text style={{ marginTop: 16 }}>Loading activity data...</Text>
                   </View>
           ) : recentActivity.length === 0 ? (
-                  <Text style={{ textAlign: 'center', marginVertical: 40, fontSize: 16, color: '#666' }}>
+                  <Text style={{ textAlign: 'center', marginVertical: 40, fontSize: 16, color: themed.muted }}>
                     No recent activity to display.
                   </Text>
           ) : (
@@ -1393,14 +1401,14 @@ export default function DashboardScreen() {
                           alignItems: 'center',
                           paddingVertical: 12,
                           borderBottomWidth: 1,
-                          borderBottomColor: '#f0f0f0',
+                          borderBottomColor: themed.line,
                         }}
                       >
                         <View style={{
                           width: 40,
                           height: 40,
                           borderRadius: 20,
-                          backgroundColor: '#f0f0f0',
+                          backgroundColor: themed.soft,
                           justifyContent: 'center',
                           alignItems: 'center',
                           marginRight: 12,
@@ -1414,7 +1422,7 @@ export default function DashboardScreen() {
                         <View style={{ flex: 1 }}>
                           <Text style={{ fontWeight: 'bold', fontSize: 14 }}>{activity.title}</Text>
                           <Text style={{ fontSize: 14 }}>{activity.subtitle}</Text>
-                          <Text style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                          <Text style={{ fontSize: 12, color: themed.muted, marginTop: 4 }}>
                             {formatDate(activity.date)}
                           </Text>
                         </View>
