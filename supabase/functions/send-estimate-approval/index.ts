@@ -199,7 +199,7 @@ serve(async (req) => {
 
   const { data: invoice, error: invoiceError } = await admin
     .from("invoices")
-    .select("uid, invoice_number, status, total, approval_token, created_by, clients:client_id (name, email)")
+    .select("uid, invoice_number, status, total, approval_token, created_by, organization_id, clients:client_id (name, email)")
     .eq("uid", invoiceId)
     .maybeSingle();
 
@@ -237,9 +237,14 @@ serve(async (req) => {
     [clientEmail, creatorEmail].filter((e): e is string => !!e).map((e) => e.toLowerCase()),
   ));
 
-  const { data: company } = await admin
-    .from("company")
-    .select("business_name")
+  // HT-88: the service role sees every organisation's company row, so pick
+  // the estimate's own (newest first, in case an organisation has two).
+  let companyQuery = admin.from("company").select("business_name");
+  if (invoice.organization_id) {
+    companyQuery = companyQuery.eq("organization_id", invoice.organization_id);
+  }
+  const { data: company } = await companyQuery
+    .order("updated_at", { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();
   const businessName = company?.business_name || "HandyTally";

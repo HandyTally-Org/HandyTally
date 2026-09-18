@@ -14,6 +14,8 @@ import { useLabels } from '../hooks/useLabels';
 import { useCustomFields } from '../hooks/useCustomFields';
 import { CustomFieldInputs } from './CustomFields';
 import { normalizeCustomValues, validateCustomValues, type CustomFieldValues } from '../constants/customFields';
+import { useAuth } from '../contexts/AuthContext';
+import { fetchCompanyProfile, type CompanyProfile } from '../utils/companyProfile';
 
 type InvoiceFormProps = {
   jobs: Job[];
@@ -26,6 +28,7 @@ type InvoiceFormProps = {
   isEditing?: boolean;
   hideTitle?: boolean;
   forceInvoiceNumber?: string | null;
+  /** The company logo as a data: URL (HT-88). Falls back to the company row's logo_url. */
   companyLogo?: string | null;
 };
 
@@ -166,7 +169,8 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [services, setServices] = useState<Service[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
-  const [companyInfo, setCompanyInfo] = useState<any>(null);
+  const { organization } = useAuth();
+  const [companyInfo, setCompanyInfo] = useState<CompanyProfile | null>(null);
   // HT-78: Company > Documents rows marked "On invoices"; label + details
   // only (never file_data), previewed here the same way the sent document renders them.
   const [companyDocuments, setCompanyDocuments] = useState<{ label: string; value: string; fileName: string | null }[]>([]);
@@ -189,9 +193,12 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
   useEffect(() => {
     fetchServices();
     fetchMaterials();
-    fetchCompanyInfo();
     fetchCompanyDocuments();
   }, []);
+
+  useEffect(() => {
+    fetchCompanyInfo();
+  }, [organization?.id]);
 
   useEffect(() => {
     // Calculate totals whenever items, the fee, or the tax rate change.
@@ -279,18 +286,13 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
 
   const fetchCompanyInfo = async () => {
     try {
-      const { data, error } = await supabase
-        .from('company')
-        .select('*')
-        .single();
-
-      if (!error && data) {
-        setCompanyInfo(data);
-      }
+      setCompanyInfo(await fetchCompanyProfile(organization?.id));
     } catch (error) {
       console.error('Error fetching company info:', error);
     }
   };
+
+  const logoUri = companyLogo || companyInfo?.logo_url || null;
 
   // HT-78: never selects file_data -- the browser has no reason to hold a
   // document's file just to preview its name and details here.
@@ -690,16 +692,15 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
           {/* ── Header: company block on the left, document meta on the right ── */}
           <View style={doc.headerRow}>
             <View style={doc.headerLeft}>
-              {companyLogo ? (
+              {logoUri ? (
                 <Image
-                  source={{ uri: `data:image/png;base64,${companyLogo}` }}
+                  source={{ uri: logoUri }}
                   style={doc.logo}
                 />
-              ) : (
-                <View style={doc.logoPlaceholder}>
-                  <Text style={{ color: '#b0b6bd', fontSize: 12 }}>Company logo</Text>
-                </View>
-              )}
+              ) : null}
+              {companyInfo?.business_name ? (
+                <Text style={doc.companyName}>{companyInfo.business_name}</Text>
+              ) : null}
 
               {companyInfo?.address ? (
                 String(companyInfo.address)

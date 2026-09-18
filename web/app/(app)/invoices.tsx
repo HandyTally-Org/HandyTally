@@ -18,6 +18,8 @@ import { useLabels } from '../../hooks/useLabels';
 import { LabelPill, LabelPillRow } from '../../components/LabelPill';
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 import { themed } from '../../constants/Colors';
+import { useAuth } from '../../contexts/AuthContext';
+import { fetchCompanyLogoDataUrl } from '../../utils/companyProfile';
 
 export type Invoice = {
   uid: string;
@@ -127,6 +129,8 @@ export default function InvoicesScreen() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showInvoiceList, setShowInvoiceList] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
+  const { organization } = useAuth();
+  // HT-88: the logo as a data: URL, for the on-screen views.
   const [companyLogo, setCompanyLogo] = useState<string | null>(null);
   // HT-78: Company > Documents rows marked "On invoices"; label + details
   // only (never file_data), rendered as the "Licences & Insurance" block.
@@ -152,13 +156,16 @@ export default function InvoicesScreen() {
         fetchInvoices();
         fetchJobs();
         fetchClients();
-        fetchCompanyLogo();
         fetchCompanyDocuments();
       })
       .catch(error => {
         console.error("Error in database checks:", error);
       });
   }, []);
+
+  useEffect(() => {
+    fetchCompanyLogo();
+  }, [organization?.id]);
 
   useEffect(() => {
     const handleError = (error: ErrorEvent) => {
@@ -1618,32 +1625,12 @@ export default function InvoicesScreen() {
     }
   };
 
-  // Add a function to fetch the company logo from company_attachments
+  // HT-88: the newest logo attachment as a data: URL, scoped to the organisation.
   async function fetchCompanyLogo() {
     try {
-      console.log('Fetching company logo...');
-      const { data, error } = await supabase
-        .from('company_attachments')
-        .select('file_data, file_type')
-        .eq('is_logo', true)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-      
-      if (error) {
-        console.error('Error fetching company logo:', error);
-        return;
-      }
-      
-      if (data && data.file_data) {
-        console.log('Company logo found');
-        // Store the base64 image data
-        setCompanyLogo(data.file_data);
-      } else {
-        console.log('No company logo found');
-      }
+      setCompanyLogo(await fetchCompanyLogoDataUrl(organization?.id));
     } catch (error) {
-      console.error('Error in fetchCompanyLogo:', error);
+      console.error('Error fetching company logo:', error);
     }
   }
 
