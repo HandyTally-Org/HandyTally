@@ -66,9 +66,11 @@ export default function AdminPage() {
   // Wide screens open on Info; a narrow one shows the section list first, as Settings does.
   const [selected, setSelected] = useState<Section | null>(() => (width < TWO_PANE_BREAKPOINT ? null : 'info'));
 
+  // Wait for the organisation: on the first focus it is still resolving, and
+  // an unscoped read would pick up another tenant's row (see companyQuery).
   useRefreshOnFocus(() => {
-    fetchCompanyInfo();
-  });
+    if (organization) fetchCompanyInfo();
+  }, [organization?.id]);
 
   // The organisation's own company row. On a tenant host RLS already scopes
   // the table to one organisation, but a superuser on the apex or localhost
@@ -77,7 +79,8 @@ export default function AdminPage() {
   // on 2026-09-17.
   const companyQuery = () => {
     const query = supabase.from('company').select('*');
-    return organization ? query.eq('organization_id', organization.id) : query;
+    if (!organization) throw new Error('No organisation resolved yet');
+    return query.eq('organization_id', organization.id);
   };
 
   const fetchCompanyInfo = async () => {
