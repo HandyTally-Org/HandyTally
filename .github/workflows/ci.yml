@@ -1,5 +1,11 @@
 name: CI
 
+# Pull requests: build and test only.
+# Push to master: build, then deploy to demo.handytally.com (HT-41).
+#
+# Nothing here reaches prod or a customer host. Prod is updated by
+# release.yml when a vX.Y.Z tag is pushed; customers by promote.yml, by hand.
+
 on:
   push:
     branches: [master]
@@ -12,49 +18,10 @@ concurrency:
 jobs:
   web-build:
     name: Build web app
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web
-    env:
-      # Repository variables when set. The fallbacks are the production values,
-      # which are public by construction (they ship in the bundle) and match the
-      # defaults in web/lib/supabase.ts (HT-38).
-      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || 'https://supabase.axiappm.com' }}
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc2NTc3MDAwMCwiZXhwIjo0OTIxNDQzNjAwLCJyb2xlIjoiYW5vbiJ9.gO1H0XzlOU2T9ayabs3A5k6RsNLqqCUv93IG8k3wflk' }}
-      EXPO_PUBLIC_BASE_DOMAIN: ${{ vars.EXPO_PUBLIC_BASE_DOMAIN || 'handytally.com' }}
-    steps:
-      - uses: actions/checkout@v4
+    uses: ./.github/workflows/build-web.yml
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-
-      - name: Install
-        run: npm ci
-
-      - name: Unit tests
-        # Pure-function tests only (tenant hostname parsing, HT-38; label merging,
-        # HT-49; nav order rules, HT-50; custom field rules, HT-52); no native or
-        # rendering setup is involved.
-        run: npx jest --ci --watchAll=false lib/tenant.test.ts constants/labels.test.ts constants/organizationSettings.test.ts constants/customFields.test.ts
-
-      - name: Export static web bundle
-        # The same bundle the deploy job ships, so a PR that breaks the export
-        # fails here before it can reach master.
-        run: npx expo export --platform web
-
-      - name: Upload bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-dist
-          path: web/dist
-          retention-days: 7
-
-  web-deploy:
-    name: Deploy web app to Cloudflare
+  web-deploy-demo:
+    name: Deploy to demo
     # Only the bundle built from master is deployed; PRs stop at the build.
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     needs: web-build
@@ -69,12 +36,15 @@ jobs:
           name: web-dist
           path: web/dist
 
-      - name: Deploy with Wrangler
-        # Assets-only Worker configured in web/wrangler.jsonc (HT-31). The action
-        # installs wrangler itself; nothing is added to web/package.json.
+      - name: Deploy with Wrangler (env demo)
+        # Assets-only Worker `handytally-web-demo`, the `env.demo` block of
+        # web/wrangler.jsonc. The action installs wrangler itself.
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: web
-          command: deploy
+          command: deploy --env demo
+
+      - name: Verify demo serves this build
+        run: .github/scripts/verify-release.sh "https://demo.${{ vars.EXPO_PUBLIC_BASE_DOMAIN || 'handytally.com' }}" "${{ needs.web-build.outputs.app_version }}"

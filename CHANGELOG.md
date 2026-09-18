@@ -4,6 +4,9 @@ All notable changes to HandyTally are recorded here. Ticket numbers refer to `HT
 
 ## Unreleased
 
+### Changed
+- **HT-41** — Release channels. A push to `master` now deploys only `demo.handytally.com` (new Worker `handytally-web-demo`, the `env.demo` block of `web/wrangler.jsonc`). `prod.handytally.com`, the apex and the `*.handytally.com` catch-all are updated by the new `release.yml` workflow when a `vX.Y.Z` tag is pushed, which also publishes a GitHub Release carrying the bundle as `web-dist-vX.Y.Z.tar.gz`. A customer host (`wgelectricus.handytally.com`, `env.wgelectricus`) is updated only by the manual **Promote release to customer** workflow, which deploys that Release asset to the customer's own Worker and refuses a tag newer than prod's. The build is shared (`build-web.yml`) and every bundle carries its version (`EXPO_PUBLIC_APP_VERSION`, `EXPO_PUBLIC_BUILD_SHA`, `dist/release.json`); each deploy verifies the host's `/release.json` before it passes.
+
 ### Added
 - **HT-68** — Sidebar and detail-rail icons are coloured, one hue per module, matching the DevIssues Category colours. A new **Appearance** block on Admin › Settings, under the navigation editor, lets an organisation admin turn on Dark mode; the choice is stored per organisation in `organization_settings.theme` and re-skins the app for every member on next load. The invoice preview, approval e-mail and printed output stay light in either theme. New migration `20260918120000_organization_theme.sql`.
 

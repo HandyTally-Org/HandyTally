@@ -1,0 +1,94 @@
+name: Release
+
+# HT-41: a release is a tag. Pushing `vX.Y.Z` builds that commit, publishes a
+# GitHub Release carrying the customer-facing notes and the exact bundle as
+# `web-dist-vX.Y.Z.tar.gz`, then deploys the bundle to prod.handytally.com
+# (the top-level Worker in web/wrangler.jsonc, which also serves the apex and
+# the `*` catch-all). Customers are promoted from that same Release asset by
+# promote.yml, never rebuilt.
+#
+#   git tag v1.5.0 && git push origin v1.5.0
+#
+# Docs/release-process.md is the checklist around this workflow.
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  web-build:
+    name: Build web app
+    uses: ./.github/workflows/build-web.yml
+    with:
+      app_version: ${{ github.ref_name }}
+
+  github-release:
+    name: Publish GitHub Release
+    needs: web-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+
+      - name: Pack bundle
+        # Release assets are permanent; Actions artifacts expire. The tarball
+        # is what promote.yml deploys to a customer ("build once, promote many").
+        run: |
+          test "$(jq -r .version web/dist/release.json)" = "$TAG"
+          tar -czf "web-dist-$TAG.tar.gz" -C web/dist .
+          ls -l "web-dist-$TAG.tar.gz"
+
+      - name: Release notes
+        # The tag's section of RELEASE_NOTES.md plus a link to CHANGELOG.md.
+        run: node web/scripts/release-notes-section.mjs "$TAG" > release-body.md && cat release-body.md
+
+      - name: Create or update the Release
+        # Re-running the workflow for an existing tag refreshes the asset and
+        # notes instead of failing on "release already exists".
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" "web-dist-$TAG.tar.gz" --clobber
+            gh release edit "$TAG" --title "$TAG" --notes-file release-body.md
+          else
+            gh release create "$TAG" "web-dist-$TAG.tar.gz" --title "$TAG" --notes-file release-body.md --verify-tag
+          fi
+
+  web-deploy-prod:
+    name: Deploy to prod
+    needs: [web-build, github-release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+
+      - name: Deploy with Wrangler (prod)
+        # The top-level configuration of web/wrangler.jsonc: prod, apex, www
+        # and the `*` catch-all for hosts that have never been promoted.
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: web
+          command: deploy
+
+      - name: Verify prod serves this release
+        run: .github/scripts/verify-release.sh "https://prod.${{ vars.EXPO_PUBLIC_BASE_DOMAIN || 'handytally.com' }}" "${{ github.ref_name }}"

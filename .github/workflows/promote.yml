@@ -1,0 +1,91 @@
+name: Promote release to customer
+
+# HT-41: point one customer host at one release, by hand.
+#
+#   GitHub › Actions › Promote release to customer › Run workflow
+#     tag       = v1.5.0
+#     customer  = wgelectricus
+#
+# Downloads `web-dist-<tag>.tar.gz` from the GitHub Release that release.yml
+# published and deploys those exact bytes with `wrangler deploy --env
+# <customer>`, the customer's block in web/wrangler.jsonc. Nothing is rebuilt.
+# Running it again with an older tag is the rollback.
+#
+# Before running it: the notes for the tag are live on prod.handytally.com
+# /whats-new and the customer has been told (Docs/release-process.md).
+#
+# Adding a customer: an `env.<name>` block in web/wrangler.jsonc (with its own
+# routes) and the name in the `customer` list below.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to promote (for example v1.5.0)
+        required: true
+        type: string
+      customer:
+        description: Customer host (its Wrangler environment)
+        required: true
+        type: choice
+        options:
+          - wgelectricus
+      skip_prod_check:
+        description: Allow a tag newer than what prod runs (emergencies only)
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: promote-${{ inputs.customer }}
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: ${{ inputs.customer }} → ${{ inputs.tag }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      TAG: ${{ inputs.tag }}
+      CUSTOMER: ${{ inputs.customer }}
+      BASE_DOMAIN: ${{ vars.EXPO_PUBLIC_BASE_DOMAIN || 'handytally.com' }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # master, for the current web/wrangler.jsonc env blocks.
+      - uses: actions/checkout@v4
+
+      - name: Customer has a Wrangler environment
+        run: |
+          node -e '
+            const fs = require("fs");
+            const text = fs.readFileSync("web/wrangler.jsonc", "utf8").replace(/^\s*\/\/.*$/gm, "");
+            const config = JSON.parse(text);
+            const env = config.env && config.env[process.env.CUSTOMER];
+            if (!env) { console.error(`no env.${process.env.CUSTOMER} block in web/wrangler.jsonc`); process.exit(1); }
+            if (!Array.isArray(env.routes) || env.routes.length === 0) { console.error(`env.${process.env.CUSTOMER} declares no routes; it would inherit prod\x27s and take over the apex`); process.exit(1); }
+            console.log(`env.${process.env.CUSTOMER} -> ${env.name}: ${env.routes.map(r => r.pattern).join(", ")}`);
+          '
+
+      - name: Tag is not newer than prod
+        if: ${{ !inputs.skip_prod_check }}
+        run: .github/scripts/prod-allows-tag.sh "$TAG" "https://prod.$BASE_DOMAIN"
+
+      - name: Download the Release asset
+        run: |
+          gh release download "$TAG" --pattern "web-dist-$TAG.tar.gz" --dir .
+          mkdir -p web/dist
+          tar -xzf "web-dist-$TAG.tar.gz" -C web/dist
+          test "$(jq -r .version web/dist/release.json)" = "$TAG"
+          echo "Unpacked $TAG: $(jq -c . web/dist/release.json)"
+
+      - name: Deploy with Wrangler (env ${{ inputs.customer }})
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: web
+          command: deploy --env ${{ inputs.customer }}
+
+      - name: Verify the customer host serves this release
+        run: .github/scripts/verify-release.sh "https://$CUSTOMER.$BASE_DOMAIN" "$TAG"
