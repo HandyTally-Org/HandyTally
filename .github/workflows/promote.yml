@@ -69,7 +69,7 @@ jobs:
 
       - name: Tag is not newer than prod
         if: ${{ !inputs.skip_prod_check }}
-        run: .github/scripts/prod-allows-tag.sh "$TAG" "https://prod.$BASE_DOMAIN"
+        run: bash .github/scripts/prod-allows-tag.sh "$TAG" "https://prod.$BASE_DOMAIN"
 
       - name: Download the Release asset
         run: |
@@ -88,4 +88,4 @@ jobs:
           command: deploy --env ${{ inputs.customer }}
 
       - name: Verify the customer host serves this release
-        run: .github/scripts/verify-release.sh "https://$CUSTOMER.$BASE_DOMAIN" "$TAG"
+        run: bash .github/scripts/verify-release.sh "https://$CUSTOMER.$BASE_DOMAIN" "$TAG"
