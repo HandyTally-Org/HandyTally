@@ -2,23 +2,29 @@ import { type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { Menu } from 'react-native-paper';
 import { useState } from 'react';
+import { themed } from '../../constants/Colors';
 
 // HT-52 / HT-51: the building blocks of the Settings editors, styled to the
 // approved HT-45 mock-up (§4.6) rather than stock Material widgets: quiet
 // bordered inputs, a dark primary button, underline tabs, dashed add-panels,
 // small square colour swatches. Web-only surface, so plain RN primitives.
 
+// HT-68: chrome (backgrounds, borders, primary/muted/faint text) follows the
+// organisation's theme via the `themed` CSS-variable refs; the status-style
+// constants below (danger, addedPill*) are fixed pastel/semantic colours,
+// like the label pills elsewhere, and are not re-themed.
 export const st = {
-  text: '#111827',
-  muted: '#6b7280',
-  faint: '#9ca3af',
-  border: '#e5e7eb',
-  rowBorder: '#f3f4f6',
-  inputBorder: '#d1d5db',
-  pageBg: '#f5f6f8',
-  panelBg: '#ffffff',
-  softBg: '#f9fafb',
-  primary: '#111827',
+  text: themed.text,
+  onPrimary: themed.onPrimary,
+  muted: themed.muted,
+  faint: themed.faint,
+  border: themed.line,
+  rowBorder: themed.line,
+  inputBorder: themed.line,
+  pageBg: themed.bg,
+  panelBg: themed.panel,
+  softBg: themed.soft,
+  primary: themed.primary,
   danger: '#dc2626',
   addedPillBg: '#ede9fe',
   addedPillText: '#4c1d95',
@@ -228,7 +234,7 @@ const ui = StyleSheet.create({
     borderColor: st.inputBorder,
     borderRadius: 6,
     color: st.text,
-    backgroundColor: '#ffffff',
+    backgroundColor: st.panelBg,
   },
   select: {
     flexDirection: 'row',
@@ -240,20 +246,25 @@ const ui = StyleSheet.create({
     borderWidth: 1,
     borderColor: st.inputBorder,
     borderRadius: 6,
-    backgroundColor: '#ffffff',
+    backgroundColor: st.panelBg,
   },
   selectText: { fontSize: 13.5, color: st.text },
   selectChevron: { fontSize: 10, color: st.faint },
   btn: { paddingVertical: 9, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1, borderColor: 'transparent', alignItems: 'center', justifyContent: 'center' },
   btnPrimary: { backgroundColor: st.primary },
-  btnPrimaryHover: { backgroundColor: '#374151' },
-  btnPrimaryText: { color: '#ffffff', fontSize: 13.5, fontWeight: '600' },
-  btnOutline: { backgroundColor: '#ffffff', borderColor: st.inputBorder },
+  // Opacity rather than a second colour: a fixed hover hex reads as "dimmed"
+  // in light mode but as a random dark blob against the light dark-mode
+  // primary fill (themed.primary is light-on-dark there).
+  btnPrimaryHover: { opacity: 0.85 },
+  btnPrimaryText: { color: st.onPrimary, fontSize: 13.5, fontWeight: '600' },
+  btnOutline: { backgroundColor: st.panelBg, borderColor: st.inputBorder },
   btnOutlineHover: { backgroundColor: st.softBg },
-  btnOutlineText: { color: '#374151', fontSize: 13.5, fontWeight: '600' },
+  btnOutlineText: { color: st.text, fontSize: 13.5, fontWeight: '600' },
   btnDisabled: { opacity: 0.4 },
   link: { paddingVertical: 4, paddingHorizontal: 6, borderRadius: 4 },
-  linkHover: { backgroundColor: '#fef2f2' },
+  // A tint, not a themed surface: red-on-panel reads as an error hover in
+  // both themes without needing a separate dark value.
+  linkHover: { backgroundColor: 'rgba(220, 38, 38, 0.12)' },
   linkText: { color: st.danger, fontSize: 13, fontWeight: '600' },
   arrow: { width: 24, height: 24, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
   arrowHover: { backgroundColor: st.rowBorder },
