@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, ScrollView, StyleSheet } from 'react-native';
-import { Text, Button, Searchbar, Snackbar, Card, DataTable, IconButton, ActivityIndicator, Dialog, Portal } from 'react-native-paper';
+import { Text, Button, Searchbar, Snackbar, Card, DataTable, IconButton, ActivityIndicator } from 'react-native-paper';
 import { supabase } from '../../lib/supabase';
 import { MaterialDialog, MaterialDraft } from '../../components/MaterialDialog';
 import { ImportExportButtons } from '../../components/ImportExportButtons';
@@ -29,7 +29,7 @@ export type Material = {
 };
 
 export default function MaterialsScreen() {
-  const { notify } = useFeedback();
+  const { notify, confirm } = useFeedback();
   const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -38,7 +38,6 @@ export default function MaterialsScreen() {
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [sortColumn, setSortColumn] = useState<string>('name');
   const [sortDirection, setSortDirection] = useState<'ascending' | 'descending'>('ascending');
 
@@ -113,10 +112,23 @@ export default function MaterialsScreen() {
     }
   };
 
+  // HT-89: the trash icon used to delete straight away (the old "Delete
+  // Material" dialog was never opened); it now asks through the shared
+  // confirm dialog (HT-84) first.
+  const confirmDeleteMaterial = async (material: Material) => {
+    const ok = await confirm({
+      title: 'Delete material',
+      message: `Delete "${material.name}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (ok) await handleDeleteMaterial(material.uid);
+  };
+
   const handleDeleteMaterial = async (uid: string) => {
     try {
       setSubmitting(true);
-      
+
       console.log('Deleting material:', uid);
       
       const { error } = await supabase
@@ -624,7 +636,7 @@ export default function MaterialsScreen() {
                               icon="delete"
                               size={20}
                               iconColor="red"
-                              onPress={() => handleDeleteMaterial(material.uid)}
+                              onPress={() => confirmDeleteMaterial(material)}
                               style={{ backgroundColor: themed.panel }}
                             />
                           </View>
@@ -659,21 +671,6 @@ export default function MaterialsScreen() {
           onSubmit={(draft) => editingMaterial && handleUpdateMaterial(editingMaterial.uid, draft)}
         />
         
-        {/* Delete Material Dialog */}
-        <Portal>
-          <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)} style={{ backgroundColor: themed.panel }}>
-            <Dialog.Title style={{ backgroundColor: themed.panel }}>Delete Material</Dialog.Title>
-            <Dialog.Content style={{ backgroundColor: themed.panel }}>
-              <Text style={{ backgroundColor: themed.panel }}>Are you sure you want to delete {editingMaterial?.name}?</Text>
-              <Text style={{ backgroundColor: themed.panel }}>This action cannot be undone.</Text>
-            </Dialog.Content>
-            <Dialog.Actions style={{ backgroundColor: themed.panel }}>
-              <Button onPress={() => setShowDeleteDialog(false)}>Cancel</Button>
-              <Button onPress={() => handleDeleteMaterial(editingMaterial?.uid || '')} textColor="red">Delete</Button>
-            </Dialog.Actions>
-          </Dialog>
-        </Portal>
-
         <Snackbar
           visible={snackbarVisible}
           onDismiss={() => setSnackbarVisible(false)}

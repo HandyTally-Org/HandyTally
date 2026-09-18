@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Modal } from 'react-native';
-import { Text, Button, Searchbar, Snackbar, Card, List, Chip, IconButton, Dialog, Portal, TextInput, DataTable, ActivityIndicator } from 'react-native-paper';
+import { Text, Button, Searchbar, Snackbar, Card, List, Chip, IconButton, Portal, TextInput, DataTable, ActivityIndicator } from 'react-native-paper';
 import { supabase } from '../../lib/supabase';
 import { InvoiceForm } from '../../components/InvoiceForm';
 import { InvoiceDetails } from '../../components/InvoiceDetails';
@@ -19,6 +19,7 @@ import { LabelPill, LabelPillRow } from '../../components/LabelPill';
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 import { themed } from '../../constants/Colors';
 import { useAuth } from '../../contexts/AuthContext';
+import { useFeedback } from '../../contexts/FeedbackContext';
 import { fetchCompanyLogoDataUrl } from '../../utils/companyProfile';
 
 export type Invoice = {
@@ -120,7 +121,7 @@ export default function InvoicesScreen() {
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const { confirm } = useFeedback();
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [sortColumn, setSortColumn] = useState<string>('invoice_number');
   const [sortDirection, setSortDirection] = useState<'ascending' | 'descending'>('descending');
@@ -667,10 +668,22 @@ export default function InvoicesScreen() {
     }
   };
 
+  // HT-89: the list's trash icon asks through the shared confirm dialog
+  // (HT-84) and then runs the unchanged delete below.
+  const confirmDeleteInvoice = async (invoice: Invoice) => {
+    const ok = await confirm({
+      title: 'Delete invoice',
+      message: `Delete invoice #${invoice.invoice_number}? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (ok) await handleDeleteInvoice(invoice.uid);
+  };
+
   const handleDeleteInvoice = async (invoiceId: string) => {
     try {
       setLoading(true);
-      
+
       // Skip checking for payments since the table doesn't exist
       // Instead, just check for related invoice items
       
@@ -723,10 +736,7 @@ export default function InvoicesScreen() {
       
       // Reset selectedInvoice to return to the main invoice list screen
       setSelectedInvoice(null);
-      
-      // Close the delete dialog
-      setShowDeleteDialog(false);
-      
+
       showSnackbar('Invoice deleted successfully');
       
     } catch (error: any) {
@@ -1829,10 +1839,7 @@ export default function InvoicesScreen() {
                           icon="delete"
                           size={20}
                           iconColor="red"
-                          onPress={() => {
-                            setSelectedInvoice(invoice);
-                            setShowDeleteDialog(true);
-                          }}
+                          onPress={() => confirmDeleteInvoice(invoice)}
                         />
                       </View>
                     </DataTable.Cell>
@@ -2001,21 +2008,6 @@ export default function InvoicesScreen() {
         </ScrollView>
       )}
       
-      {/* Delete Invoice Dialog */}
-      <Portal>
-        <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)}>
-          <Dialog.Title>Delete Invoice</Dialog.Title>
-          <Dialog.Content>
-            <Text>Are you sure you want to delete invoice #{selectedInvoice?.invoice_number}?</Text>
-            <Text>This action cannot be undone.</Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setShowDeleteDialog(false)}>Cancel</Button>
-            <Button onPress={() => handleDeleteInvoice(selectedInvoice?.uid || '')} textColor="red">Delete</Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
-
       {showDetailsModal && selectedInvoice && (
         <Portal>
           <Modal

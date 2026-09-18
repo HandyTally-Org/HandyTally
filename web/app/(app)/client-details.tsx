@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { Text, Button, Card, DataTable, TextInput, ActivityIndicator, IconButton, Portal, Dialog, Snackbar } from 'react-native-paper';
+import { Text, Button, Card, DataTable, TextInput, ActivityIndicator, IconButton, Snackbar } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../lib/api';
 import { styles as globalStyles } from '../../styles';
@@ -20,7 +20,7 @@ import { useFeedback } from '../../contexts/FeedbackContext';
 
 export default function ClientDetailsScreen() {
   const router = useRouter();
-  const { notify } = useFeedback();
+  const { notify, confirm } = useFeedback();
   const outlinedInputProps = useOutlinedInputProps();
   const { id } = useLocalSearchParams();
   const [client, setClient] = useState(null);
@@ -35,10 +35,6 @@ export default function ClientDetailsScreen() {
   // HT-80: the same label-backed tag values the Clients list dropdown uses.
   const clientTags = useLabels('client_tag');
   const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
-  const [jobToDelete, setJobToDelete] = useState<string | null>(null);
-  const [invoiceToDelete, setInvoiceToDelete] = useState<string | null>(null);
-  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
-  const [deleteType, setDeleteType] = useState<'job' | 'invoice' | null>(null);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
 
@@ -162,57 +158,67 @@ export default function ClientDetailsScreen() {
     }).format(amount);
   };
 
-  const confirmDeleteJob = (jobId: string) => {
-    setJobToDelete(jobId);
-    setDeleteType('job');
-    setDeleteConfirmVisible(true);
+  // HT-89: both tabs ask through the shared confirm dialog (HT-84) and then
+  // run the same deletes as before.
+  const confirmDeleteJob = async (job: { uid: string; title: string }) => {
+    const ok = await confirm({
+      title: 'Delete job',
+      message: `Delete "${job.title}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (ok) await handleDeleteItem('job', job.uid);
   };
 
-  const confirmDeleteInvoice = (invoiceId: string) => {
-    setInvoiceToDelete(invoiceId);
-    setDeleteType('invoice');
-    setDeleteConfirmVisible(true);
+  const confirmDeleteInvoice = async (invoice: { uid: string; invoice_number: string | number }) => {
+    const ok = await confirm({
+      title: 'Delete invoice',
+      message: `Delete invoice #${invoice.invoice_number}? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (ok) await handleDeleteItem('invoice', invoice.uid);
   };
 
-  const handleDeleteItem = async () => {
+  const handleDeleteItem = async (deleteType: 'job' | 'invoice', uid: string) => {
     try {
       setLoading(true);
-      
-      if (deleteType === 'job' && jobToDelete) {
+
+      if (deleteType === 'job') {
         // Delete job
         const { error } = await supabase
           .from('jobs')
           .delete()
-          .eq('uid', jobToDelete);
-        
+          .eq('uid', uid);
+
         if (error) throw error;
-        
+
         // Refresh jobs
         fetchClientDetails();
         setSnackbarMessage('Job deleted successfully');
-      } 
-      else if (deleteType === 'invoice' && invoiceToDelete) {
+      }
+      else {
         // First delete invoice items
         const { error: itemsError } = await supabase
           .from('invoice_items')
           .delete()
-          .eq('invoice_id', invoiceToDelete);
-        
+          .eq('invoice_id', uid);
+
         if (itemsError) throw itemsError;
-        
+
         // Then delete the invoice
         const { error } = await supabase
           .from('invoices')
           .delete()
-          .eq('uid', invoiceToDelete);
-        
+          .eq('uid', uid);
+
         if (error) throw error;
-        
+
         // Refresh invoices
         fetchClientDetails();
         setSnackbarMessage('Invoice deleted successfully');
       }
-      
+
       setSnackbarVisible(true);
     } catch (error) {
       console.error('Error deleting item:', error);
@@ -220,10 +226,6 @@ export default function ClientDetailsScreen() {
       setSnackbarVisible(true);
     } finally {
       setLoading(false);
-      setDeleteConfirmVisible(false);
-      setJobToDelete(null);
-      setInvoiceToDelete(null);
-      setDeleteType(null);
     }
   };
 
@@ -522,7 +524,7 @@ export default function ClientDetailsScreen() {
                             icon="delete" 
                             size={20}
                             iconColor="#FF3B30"
-                            onPress={() => confirmDeleteJob(job.uid)}
+                            onPress={() => confirmDeleteJob(job)}
                           />
                         </View>
                       </DataTable.Cell>
@@ -578,7 +580,7 @@ export default function ClientDetailsScreen() {
                             icon="delete" 
                             size={20}
                             iconColor="#FF3B30"
-                            onPress={() => confirmDeleteInvoice(invoice.uid)}
+                            onPress={() => confirmDeleteInvoice(invoice)}
                           />
                         </View>
                       </DataTable.Cell>
@@ -618,21 +620,6 @@ export default function ClientDetailsScreen() {
           )}
         </ScrollView>
       </View>
-      <Portal>
-        <Dialog
-          visible={deleteConfirmVisible}
-          onDismiss={() => setDeleteConfirmVisible(false)}
-        >
-          <Dialog.Title>Delete {deleteType === 'job' ? 'Job' : 'Invoice'}</Dialog.Title>
-          <Dialog.Content>
-            <Text>Are you sure you want to delete this {deleteType === 'job' ? 'job' : 'invoice'}? This action cannot be undone.</Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setDeleteConfirmVisible(false)}>Cancel</Button>
-            <Button onPress={handleDeleteItem} textColor="#FF3B30">Delete</Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}

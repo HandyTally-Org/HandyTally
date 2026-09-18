@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, ScrollView, StyleSheet } from 'react-native';
-import { Text, Button, Searchbar, Snackbar, Card, IconButton, DataTable, ActivityIndicator, Dialog, Portal } from 'react-native-paper';
+import { Text, Button, Searchbar, Snackbar, Card, IconButton, DataTable, ActivityIndicator } from 'react-native-paper';
 import { supabase } from '../../lib/supabase';
 import { ServiceDialog, ServiceDraft } from '../../components/ServiceDialog';
 import { ImportExportButtons } from '../../components/ImportExportButtons';
@@ -22,16 +22,14 @@ export type Service = {
 };
 
 export default function ServicesScreen() {
-  const { notify } = useFeedback();
+  const { notify, confirm } = useFeedback();
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
-  const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [editingService, setEditingService] = useState<Service | null>(null);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [sortColumn, setSortColumn] = useState<string>('name');
   const [sortDirection, setSortDirection] = useState<'ascending' | 'descending'>('ascending');
   const [submitting, setSubmitting] = useState(false);
@@ -122,12 +120,16 @@ export default function ServicesScreen() {
     }
   };
 
-  const handleDeleteService = async (service: Service | null) => {
-    setShowDeleteDialog(false);
-    if (!service) {
-      showSnackbar('No service selected to delete');
-      return;
-    }
+  // HT-89: asks through the shared confirm dialog (HT-84); the delete itself
+  // is unchanged.
+  const handleDeleteService = async (service: Service) => {
+    const ok = await confirm({
+      title: 'Delete service',
+      message: `Delete "${service.name}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
 
     try {
       setSubmitting(true);
@@ -154,7 +156,6 @@ export default function ServicesScreen() {
       showSnackbar(`Failed to delete service: ${error.message}`);
     } finally {
       setSubmitting(false);
-      setSelectedService(null);
     }
   };
 
@@ -658,10 +659,7 @@ export default function ServicesScreen() {
                       icon="delete"
                       size={20}
                       iconColor="red"
-                      onPress={() => {
-                        setSelectedService(service);
-                        setShowDeleteDialog(true);
-                      }}
+                      onPress={() => handleDeleteService(service)}
                     />
                   </View>
                 </DataTable.Cell>
@@ -692,21 +690,6 @@ export default function ServicesScreen() {
         onDismiss={() => setEditingService(null)}
         onSubmit={(draft) => editingService && handleUpdateService(editingService.uid, draft)}
       />
-      
-      {/* Delete Service Dialog */}
-      <Portal>
-        <Dialog visible={showDeleteDialog} onDismiss={() => setShowDeleteDialog(false)} style={{ backgroundColor: themed.panel }}>
-          <Dialog.Title>Delete Service</Dialog.Title>
-          <Dialog.Content>
-            <Text>Are you sure you want to delete {selectedService?.name}?</Text>
-            <Text>This action cannot be undone.</Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setShowDeleteDialog(false)}>Cancel</Button>
-            <Button onPress={() => handleDeleteService(selectedService)} disabled={submitting} textColor="red">Delete</Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
       
       <Snackbar
         visible={snackbarVisible}
