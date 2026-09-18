@@ -23,6 +23,7 @@ import { LabelPill } from '../../../components/LabelPill';
 import { useRefreshOnFocus } from '../../../hooks/useRefreshOnFocus';
 import { useCustomFields } from '../../../hooks/useCustomFields';
 import { CustomFieldsView } from '../../../components/CustomFields';
+import { JobCostsEditor, JobCostsList } from '../../../components/jobs/JobCostsEditor';
 import { useFeedback } from '../../../contexts/FeedbackContext';
 
 // Let's create a simple calendar component using the existing libraries
@@ -289,7 +290,8 @@ export default function JobDetailsScreen() {
   const [selectedServices, setSelectedServices] = useState([]);
   const [selectedMaterials, setSelectedMaterials] = useState([]);
   const [customItems, setCustomItems] = useState([]);
-  const [customItemInput, setCustomItemInput] = useState({ description: '', price: '0' });
+  const [customItemInput, setCustomItemInput] = useState({ description: '', price: '' });
+  const [savingCosts, setSavingCosts] = useState(false);
   // Add these refs near your state variables
   const addServiceButtonRef = useRef(null);
   const addMaterialButtonRef = useRef(null);
@@ -920,7 +922,14 @@ export default function JobDetailsScreen() {
     }
   };
 
-  const handleDeleteCostItem = async (uid: string) => {
+  const handleDeleteCostItem = async (uid: string, description?: string | null) => {
+    const ok = await confirm({
+      title: 'Remove cost line',
+      message: `Remove "${description || 'this line'}" from the job's costs? This cannot be undone.`,
+      confirmLabel: 'Remove',
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       const { error } = await supabase
         .from('job_costs')
@@ -928,7 +937,7 @@ export default function JobDetailsScreen() {
         .eq('uid', uid);
 
       if (error) throw error;
-      
+
       setJobCosts(jobCosts.filter(item => item.uid !== uid));
       setSnackbarMessage('Cost item deleted');
       setSnackbarVisible(true);
@@ -1469,57 +1478,76 @@ export default function JobDetailsScreen() {
   };
 
   // Modify the handleSaveCosts function to handle updates
+  // HT-86: this used to map the services and stop ("Rest of the function
+  // remains unchanged"), so Save never inserted a row; and services and
+  // materials carry `uid`, not `id`, so even the mapped lines lost their link.
   const handleSaveCosts = async () => {
+    const rowId = (row: any) => row?.id ?? row?.uid ?? null;
+    const number = (value: string) => parseFloat(value || '0') || 0;
+    const rows = [
+      ...selectedServices.map(item => ({
+        description: item.service.name,
+        quantity: number(item.quantity),
+        price: number(item.rate),
+        type: 'labor',
+        service_id: rowId(item.service),
+        material_id: null,
+      })),
+      ...selectedMaterials.map(item => ({
+        description: item.material.name,
+        quantity: number(item.quantity),
+        price: number(item.cost),
+        type: 'material',
+        service_id: null,
+        material_id: rowId(item.material),
+      })),
+      ...customItems.map(item => ({
+        description: item.description,
+        quantity: 1,
+        price: number(item.price),
+        type: 'other',
+        service_id: null,
+        material_id: null,
+      })),
+    ].map(row => ({ ...row, job_id: id, amount: row.quantity * row.price, created_at: new Date().toISOString() }));
+
+    if (rows.length === 0) {
+      setSnackbarMessage('Add at least one service, material or custom item first');
+      setSnackbarVisible(true);
+      return;
+    }
+
     try {
-      setLoading(true);
-      
-      // If we're editing an existing cost
+      setSavingCosts(true);
+
+      // Editing replaces the one line that was opened; the editor holds only that line.
       if (isEditingCost && editingCostId) {
-        // Delete the old record
         const { error: deleteError } = await supabase
           .from('job_costs')
           .delete()
           .eq('uid', editingCostId);
-        
         if (deleteError) throw deleteError;
       }
-      
-      const costsToAdd = [
-        // Process services
-        ...selectedServices.map(item => ({
-          job_id: id,
-          description: item.service.name,
-          quantity: parseFloat(item.quantity),
-          price: parseFloat(item.rate),
-          amount: parseFloat(item.quantity) * parseFloat(item.rate),
-          type: 'labor',
-          service_id: item.service.id,
-          material_id: null,
-          created_at: new Date().toISOString()
-        })),
-        
-        // Rest of the function remains unchanged
-      ];
-      
-      // After adding the costs
-      // Reset form and editing state
+
+      const { error } = await supabase.from('job_costs').insert(rows);
+      if (error) throw error;
+
+      await fetchJobCosts();
       setSelectedServices([]);
       setSelectedMaterials([]);
       setCustomItems([]);
+      setCustomItemInput({ description: '', price: '' });
       setShowCostsInputSection(false);
       setIsEditingCost(false);
       setEditingCostId(null);
-      
-      // Show success message
-      setSnackbarMessage('Job costs updated successfully');
+      setSnackbarMessage(isEditingCost ? 'Cost updated' : `${rows.length === 1 ? '1 cost line' : `${rows.length} cost lines`} added`);
       setSnackbarVisible(true);
-      
     } catch (error) {
-      console.error('Error adding job costs:', error);
-      setSnackbarMessage(`Error: ${error.message}`);
+      console.error('Error saving job costs:', error);
+      setSnackbarMessage(`Could not save the costs: ${error.message}`);
       setSnackbarVisible(true);
     } finally {
-      setLoading(false);
+      setSavingCosts(false);
     }
   };
 
@@ -1820,304 +1848,41 @@ export default function JobDetailsScreen() {
         </View>
 
         {showCostsInputSection ? (
-          <ScrollView 
-            style={{ 
-              flex: 1, 
-              marginBottom: 20,
-              borderWidth: 0,
-              borderColor: 'transparent',
-              elevation: 0,
-              shadowOpacity: 0
+          <JobCostsEditor
+            services={selectedServices}
+            onServiceChange={updateServiceItem}
+            onRemoveService={removeServiceItem}
+            onAddService={handleServiceMenuOpen}
+            materials={selectedMaterials}
+            onMaterialChange={updateMaterialItem}
+            onRemoveMaterial={removeMaterialItem}
+            onAddMaterial={handleMaterialMenuOpen}
+            customItems={customItems}
+            onRemoveCustomItem={removeCustomItem}
+            customItemInput={customItemInput}
+            onCustomItemInputChange={patch => setCustomItemInput(current => ({ ...current, ...patch }))}
+            onAddCustomItem={addCustomItem}
+            onCancel={() => {
+              setShowCostsInputSection(false);
+              setSelectedServices([]);
+              setSelectedMaterials([]);
+              setCustomItems([]);
+              setCustomItemInput({ description: '', price: '' });
+              setIsEditingCost(false);
+              setEditingCostId(null);
             }}
-          >
-            {/* Main card with content */}
-            <Card 
-              style={{ 
-                marginBottom: 0, // Reduce bottom margin to avoid visual separation
-                backgroundColor: themed.panel,
-                elevation: 0,
-                shadowOpacity: 0,
-                borderWidth: 0,
-                borderRadius: 0,
-                borderColor: 'transparent'
-              }}
-            >
-              <Card.Content style={{ 
-                padding: 0, 
-                borderWidth: 0,
-                borderColor: 'transparent'
-              }}>
-                {/* SERVICES SECTION */}
-                <View style={{ marginBottom: 20 }}>
-                  <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>Services</Text>
-                  
-                  {selectedServices.map((item, index) => (
-                    <View key={`service-${index}`} style={{ marginBottom: 12, borderWidth: 1, borderColor: themed.line, padding: 12, borderRadius: 4 }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                        <Text style={{ fontWeight: 'bold' }}>{item.service.name}</Text>
-                        <IconButton icon="close" size={20} onPress={() => removeServiceItem(index)} />
-                      </View>
-                      
-                      <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <TextInput
-                          label="Rate ($)"
-                          value={item.rate}
-                          onChangeText={(text) => updateServiceItem(index, 'rate', text)}
-                          keyboardType="numeric"
-                          style={{ flex: 1 }}
-                        />
-                        <TextInput
-                          label="Quantity"
-                          value={item.quantity}
-                          onChangeText={(text) => updateServiceItem(index, 'quantity', text)}
-                          keyboardType="numeric"
-                          style={{ flex: 1 }}
-                        />
-                        <TextInput
-                          label="Total ($)"
-                          value={(parseFloat(item.rate || '0') * parseFloat(item.quantity || '0')).toFixed(2)}
-                          disabled
-                          style={{ flex: 1, backgroundColor: themed.soft }}
-                        />
-                      </View>
-                    </View>
-                  ))}
-                  
-                  {selectedServices.length > 0 && (
-                    <View style={{ marginTop: 8, marginBottom: 16, padding: 12, backgroundColor: themed.soft, borderRadius: 4 }}>
-                      <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'right' }}>
-                        Total Labor Cost: ${calculateTotals().serviceTotal.toFixed(2)}
-                      </Text>
-                    </View>
-                  )}
-                  
-                  <Button 
-                    ref={addServiceButtonRef}
-                    mode="outlined" 
-                    icon="plus"
-                    onPress={handleServiceMenuOpen}
-                    style={{ 
-                      borderWidth: 1, 
-                      borderColor: themed.line, 
-                      borderRadius: 25, 
-                      marginTop: 8
-                    }}
-                    contentStyle={{ 
-                      height: 50
-                    }}
-                    labelStyle={{
-                      fontSize: 16
-                    }}
-                  >
-                    Add Service
-                  </Button>
-                </View>
-                
-                {/* MATERIALS SECTION */}
-                <View style={{ marginBottom: 20 }}>
-                  <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>Materials</Text>
-                  
-                  {selectedMaterials.map((item, index) => (
-                    <View key={`material-${index}`} style={{ marginBottom: 12, borderWidth: 1, borderColor: themed.line, padding: 12, borderRadius: 4 }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                        <Text style={{ fontWeight: 'bold' }}>{item.material.name}</Text>
-                        <IconButton icon="close" size={20} onPress={() => removeMaterialItem(index)} />
-                      </View>
-                      
-                      <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <TextInput
-                          label="Cost ($)"
-                          value={item.cost}
-                          onChangeText={(text) => updateMaterialItem(index, 'cost', text)}
-                          keyboardType="numeric"
-                          style={{ flex: 1 }}
-                        />
-                        <TextInput
-                          label="Quantity"
-                          value={item.quantity}
-                          onChangeText={(text) => updateMaterialItem(index, 'quantity', text)}
-                          keyboardType="numeric"
-                          style={{ flex: 1 }}
-                        />
-                        <TextInput
-                          label="Total ($)"
-                          value={(parseFloat(item.cost || '0') * parseFloat(item.quantity || '0')).toFixed(2)}
-                          disabled
-                          style={{ flex: 1, backgroundColor: themed.soft }}
-                        />
-                      </View>
-                    </View>
-                  ))}
-                  
-                  {selectedMaterials.length > 0 && (
-                    <View style={{ marginTop: 8, marginBottom: 16, padding: 12, backgroundColor: themed.soft, borderRadius: 4 }}>
-                      <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'right' }}>
-                        Total Material Cost: ${calculateTotals().materialTotal.toFixed(2)}
-                      </Text>
-                    </View>
-                  )}
-                  
-                  <Button 
-                    ref={addMaterialButtonRef}
-                    mode="outlined" 
-                    icon="plus"
-                    onPress={handleMaterialMenuOpen}
-                    style={{ 
-                      borderWidth: 1, 
-                      borderColor: themed.line, 
-                      borderRadius: 25, 
-                      marginTop: 8
-                    }}
-                    contentStyle={{ 
-                      height: 50
-                    }}
-                    labelStyle={{
-                      fontSize: 16
-                    }}
-                  >
-                    Add Material
-                  </Button>
-                </View>
-                
-                {/* CUSTOM ITEMS SECTION */}
-                <View style={{ marginBottom: 20 }}>
-                  <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>Custom Items</Text>
-                  
-                  {customItems.map((item, index) => (
-                    <View key={`custom-${index}`} style={{ marginBottom: 12, borderWidth: 1, borderColor: themed.line, padding: 12, borderRadius: 4 }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text style={{ fontWeight: 'bold' }}>{item.description}</Text>
-                        <IconButton icon="close" size={20} onPress={() => removeCustomItem(index)} />
-                      </View>
-                      <Text style={{ alignSelf: 'flex-end' }}>
-                        Price: ${parseFloat(item.price).toFixed(2)}
-                      </Text>
-                    </View>
-                  ))}
-                  
-                  <TextInput
-                    label="Description"
-                    value={customItemInput.description}
-                    onChangeText={(text) => setCustomItemInput({ ...customItemInput, description: text })}
-                    style={{ marginBottom: 12 }}
-                    placeholder="Description"
-                  />
-                  
-                  <TextInput
-                    label="Price ($)"
-                    value={customItemInput.price}
-                    onChangeText={(text) => setCustomItemInput({ ...customItemInput, price: text })}
-                    keyboardType="numeric"
-                    style={{ marginBottom: 12 }}
-                    placeholder="0"
-                  />
-                  
-                  <Button 
-                    mode="outlined" 
-                    icon="plus"
-                    onPress={addCustomItem}
-                    style={{ 
-                      borderWidth: 1, 
-                      borderColor: themed.line, 
-                      borderRadius: 25, 
-                      marginTop: 8
-                    }}
-                    contentStyle={{ 
-                      height: 50
-                    }}
-                    labelStyle={{
-                      fontSize: 16
-                    }}
-                  >
-                    Add Custom Item
-                  </Button>
-                </View>
-                
-                {/* Grand total section */}
-                {(selectedServices.length > 0 || selectedMaterials.length > 0 || customItems.length > 0) && (
-                  <View style={{ padding: 16, backgroundColor: themed.soft, borderRadius: 4, marginTop: 10 }}>
-                    <Text style={{ fontSize: 18, fontWeight: 'bold', textAlign: 'right' }}>
-                      Grand Total: ${calculateTotals().grandTotal.toFixed(2)}
-                    </Text>
-                  </View>
-                )}
-              </Card.Content>
-            </Card>
-            
-            {/* Action buttons directly in the ScrollView without separation */}
-            <View style={{ 
-              flexDirection: 'row', 
-              justifyContent: 'flex-end', 
-              marginTop: 0, // Remove top margin
-              padding: 16,
-              backgroundColor: themed.panel,
-              borderTopWidth: 0,
-              borderColor: 'transparent',
-              elevation: 0,
-              shadowOpacity: 0
-            }}>
-              <Button 
-                onPress={() => {
-                  setShowCostsInputSection(false);
-                  setSelectedServices([]);
-                  setSelectedMaterials([]);
-                  setCustomItems([]);
-                }} 
-                style={{ marginRight: 10 }}
-              >
-                Cancel
-              </Button>
-              <Button 
-                mode="contained" 
-                onPress={handleSaveCosts}
-                style={{ backgroundColor: themed.primary }}
-              >
-                Save All Costs
-              </Button>
-            </View>
-          </ScrollView>
+            onSave={handleSaveCosts}
+            saving={savingCosts}
+          />
         ) : (
-          // The regular job costs list when not adding new ones
-          <View>
-            {jobCosts.length > 0 ? (
-              <DataTable>
-                <DataTable.Header>
-                  <DataTable.Title>Description</DataTable.Title>
-                  <DataTable.Title>Quantity</DataTable.Title>
-                  <DataTable.Title>Total</DataTable.Title>
-                  <DataTable.Title>Type</DataTable.Title>
-                  <DataTable.Title>Actions</DataTable.Title>
-                </DataTable.Header>
-                
-                {jobCosts.map((cost, index) => (
-                  <DataTable.Row key={index}>
-                    <DataTable.Cell>{cost.description}</DataTable.Cell>
-                    <DataTable.Cell>{cost.quantity}</DataTable.Cell>
-                    <DataTable.Cell>${parseFloat(cost.amount || cost.price * cost.quantity).toFixed(2)}</DataTable.Cell>
-                    <DataTable.Cell> {cost.type}</DataTable.Cell>
-                    <DataTable.Cell>
-                      <View style={{ flexDirection: 'row' }}>
-                        <IconButton icon="pencil" size={20} onPress={() => handleEditCost(cost)} />
-                        <IconButton icon="delete" size={20} iconColor="red" onPress={() => handleDeleteCostItem(cost.uid)} />
-                      </View>
-                    </DataTable.Cell>
-                  </DataTable.Row>
-                ))}
-                
-                <DataTable.Row style={{ backgroundColor: themed.soft }}>
-                  <DataTable.Cell style={{ fontWeight: 'bold' }}>Total</DataTable.Cell>
-                  <DataTable.Cell></DataTable.Cell>
-                  <DataTable.Cell style={{ fontWeight: 'bold' }}>
-                    ${jobCosts.reduce((sum, cost) => sum + parseFloat(cost.amount || cost.price * cost.quantity), 0).toFixed(2)}
-                  </DataTable.Cell>
-                  <DataTable.Cell></DataTable.Cell>
-                  <DataTable.Cell></DataTable.Cell>
-                </DataTable.Row>
-              </DataTable>
-            ) : (
-              <Text style={styles.emptyMessage}>No costs added yet.</Text>
-            )}
-          </View>
+          <ScrollView>
+            <JobCostsList
+              lines={jobCosts}
+              onEdit={handleEditCost}
+              onRemove={cost => handleDeleteCostItem(cost.uid, cost.description)}
+              onAdd={() => setShowCostsInputSection(true)}
+            />
+          </ScrollView>
         )}
       </View>
     );
@@ -2447,7 +2212,7 @@ export default function JobDetailsScreen() {
     }
     
     setCustomItems([...customItems, { ...customItemInput }]);
-    setCustomItemInput({ description: '', price: '0' });
+    setCustomItemInput({ description: '', price: '' });
   };
 
   const removeCustomItem = (index) => {
