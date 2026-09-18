@@ -11,6 +11,8 @@ import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 import { useCustomFields } from '../../hooks/useCustomFields';
 import { CustomFieldInputs } from '../../components/CustomFields';
 import { normalizeCustomValues, validateCustomValues } from '../../constants/customFields';
+import { useLabels } from '../../hooks/useLabels';
+import { findLabel, labelText } from '../../constants/labels';
 import { FormField, FormRow } from '../../components/FormDialog';
 import { FormActions, FormPanel, FormSection, useOutlinedInputProps } from '../../components/FormLayout';
 import { themed } from '../../constants/Colors';
@@ -28,6 +30,8 @@ export default function ClientDetailsScreen() {
   const [saving, setSaving] = useState(false);
   // HT-52: the organisation's custom fields, edited alongside the built-in ones.
   const customDefs = useCustomFields('clients');
+  // HT-80: the same label-backed tag values the Clients list dropdown uses.
+  const clientTags = useLabels('client_tag');
   const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
   const [jobToDelete, setJobToDelete] = useState<string | null>(null);
   const [invoiceToDelete, setInvoiceToDelete] = useState<string | null>(null);
@@ -420,11 +424,30 @@ export default function ClientDetailsScreen() {
 
               <FormSection title="Details">
                 <FormField label="Tag">
-                  <TextInput
+                  {/* HT-80: label-backed dropdown, matching the Clients list. A legacy
+                      free-text value not in the label list stays selectable so saving
+                      the form doesn't silently discard it. */}
+                  <select
                     value={editedClient?.tag || ''}
-                    onChangeText={(text) => setEditedClient({ ...editedClient, tag: text })}
-                    {...outlinedInputProps}
-                  />
+                    onChange={(e) => setEditedClient({ ...editedClient, tag: e.target.value })}
+                    style={{
+                      padding: 8,
+                      borderRadius: 4,
+                      borderColor: themed.line,
+                      backgroundColor: themed.panel,
+                      color: themed.text,
+                      fontWeight: 'bold',
+                      width: '100%',
+                    }}
+                  >
+                    <option value="">No Tag</option>
+                    {editedClient?.tag && !findLabel(clientTags, editedClient.tag) && (
+                      <option value={editedClient.tag}>{labelText(clientTags, editedClient.tag)}</option>
+                    )}
+                    {clientTags.map(tag => (
+                      <option key={tag.value} value={tag.value}>{tag.label}</option>
+                    ))}
+                  </select>
                 </FormField>
                 <FormField label="Notes">
                   <TextInput
