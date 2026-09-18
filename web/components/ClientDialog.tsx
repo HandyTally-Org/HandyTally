@@ -2,8 +2,11 @@ import { useEffect, useState } from 'react';
 import { TextInput } from 'react-native-paper';
 import { CustomFieldInputs } from './CustomFields';
 import { useCustomFields } from '../hooks/useCustomFields';
+import { useLabels } from '../hooks/useLabels';
+import { findLabel, labelText } from '../constants/labels';
 import { normalizeCustomValues, validateCustomValues, type CustomFieldValues } from '../constants/customFields';
 import { FormDialog, FormDialogFooter, FormField, FormRow, inputStyle } from './FormDialog';
+import { themed } from '../constants/Colors';
 
 // The add/edit popup for a client on the Clients list, in the same shell as
 // the material and labor dialogs.
@@ -15,6 +18,8 @@ export type ClientDraft = {
   phone: string;
   address: string;
   notes: string;
+  /** HT-80: a client_tag label value, or '' for no tag. */
+  tag: string;
   /** HT-52: values of the organisation's custom fields, keyed by field key. */
   custom_fields: CustomFieldValues;
 };
@@ -24,7 +29,7 @@ type ClientLike = Partial<ClientDraft> & { uid?: string };
 type Values = Omit<ClientDraft, 'custom_fields'>;
 type Errors = Partial<Record<keyof Values, string>>;
 
-const EMPTY: Values = { name: '', email: '', phone: '', address: '', notes: '' };
+const EMPTY: Values = { name: '', email: '', phone: '', address: '', notes: '', tag: '' };
 
 function toValues(client?: ClientLike | null): Values {
   if (!client) return EMPTY;
@@ -34,6 +39,7 @@ function toValues(client?: ClientLike | null): Values {
     phone: client.phone ?? '',
     address: client.address ?? '',
     notes: client.notes ?? '',
+    tag: client.tag ?? '',
   };
 }
 
@@ -61,6 +67,8 @@ export function ClientDialog({
 }: ClientDialogProps) {
   const [values, setValues] = useState<Values>(EMPTY);
   const [errors, setErrors] = useState<Errors>({});
+  // HT-80: the same label-backed tag values the Clients list dropdown uses.
+  const clientTags = useLabels('client_tag');
   // HT-52: the organisation's custom fields for this section.
   const customDefs = useCustomFields('clients');
   const [customValues, setCustomValues] = useState<CustomFieldValues>({});
@@ -103,6 +111,7 @@ export function ClientDialog({
       phone: values.phone.trim(),
       address: values.address.trim(),
       notes: values.notes.trim(),
+      tag: values.tag,
       custom_fields: normalizeCustomValues(customDefs, customValues),
     });
   };
@@ -175,6 +184,31 @@ export function ClientDialog({
           numberOfLines={3}
           style={inputStyle}
         />
+      </FormField>
+
+      <FormField label="Tag">
+        {/* HT-80: label-backed dropdown, matching the Clients list and Client Details. */}
+        <select
+          value={values.tag}
+          onChange={(e) => change('tag')(e.target.value)}
+          style={{
+            padding: 8,
+            borderRadius: 4,
+            borderColor: themed.line,
+            backgroundColor: themed.panel,
+            color: themed.text,
+            fontWeight: 'bold',
+            width: '100%',
+          }}
+        >
+          <option value="">No Tag</option>
+          {values.tag && !findLabel(clientTags, values.tag) && (
+            <option value={values.tag}>{labelText(clientTags, values.tag)}</option>
+          )}
+          {clientTags.map(tag => (
+            <option key={tag.value} value={tag.value}>{tag.label}</option>
+          ))}
+        </select>
       </FormField>
 
       <CustomFieldInputs defs={customDefs} values={customValues} errors={customErrors} onChange={changeCustom} />
