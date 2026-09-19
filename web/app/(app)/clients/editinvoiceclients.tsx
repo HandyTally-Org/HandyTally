@@ -6,6 +6,7 @@ import { supabase } from '../../../lib/supabase';
 import { styles as globalStyles } from '../../../styles';
 import { InvoiceForm } from '../../../components/InvoiceForm';
 import { themed } from '../../../constants/Colors';
+import { invoiceItemRow } from '../../../utils/invoiceItems';
 
 export default function EditInvoiceClientScreen() {
   const { id: invoiceId, client_id: clientId } = useLocalSearchParams();
@@ -163,6 +164,7 @@ export default function EditInvoiceClientScreen() {
           job_id: updatedInvoice.job_id,
           issue_date: updatedInvoice.issue_date,
           due_date: updatedInvoice.due_date,
+          terms: updatedInvoice.terms ?? null,
           status: updatedInvoice.status,
           notes: updatedInvoice.notes,
           total: updatedInvoice.total,
@@ -186,15 +188,7 @@ export default function EditInvoiceClientScreen() {
       
       // Then insert new items
       if (updatedItems && updatedItems.length > 0) {
-        const itemsToInsert = updatedItems.map(item => ({
-          invoice_id: invoiceId,
-          description: item.description,
-          notes: item.notes || null,
-          photos: item.photos || [],
-          quantity: item.quantity,
-          unit_price: item.price,
-          amount: item.total
-        }));
+        const itemsToInsert = updatedItems.map(item => invoiceItemRow({ ...item, unit_price: item.price, amount: item.total }, invoiceId));
         
         const { error: insertError } = await supabase
           .from('invoice_items')

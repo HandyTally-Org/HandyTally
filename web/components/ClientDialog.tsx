@@ -15,6 +15,8 @@ import { formatPhone } from '../utils/formatting';
 /** The fields a user can type for a client; everything else is set by the database. */
 export type ClientDraft = {
   name: string;
+  /** HT-25: company name (QuickBooks "Company"); '' for none. */
+  company: string;
   email: string;
   phone: string;
   address: string;
@@ -25,17 +27,19 @@ export type ClientDraft = {
   custom_fields: CustomFieldValues;
 };
 
-type ClientLike = Partial<ClientDraft> & { uid?: string };
+/** A client row as stored: every draft field may be missing or null. */
+type ClientLike = { [K in keyof ClientDraft]?: ClientDraft[K] | null } & { uid?: string };
 
 type Values = Omit<ClientDraft, 'custom_fields'>;
 type Errors = Partial<Record<keyof Values, string>>;
 
-const EMPTY: Values = { name: '', email: '', phone: '', address: '', notes: '', tag: '' };
+const EMPTY: Values = { name: '', company: '', email: '', phone: '', address: '', notes: '', tag: '' };
 
 function toValues(client?: ClientLike | null): Values {
   if (!client) return EMPTY;
   return {
     name: client.name ?? '',
+    company: client.company ?? '',
     email: client.email ?? '',
     phone: formatPhone(client.phone),
     address: client.address ?? '',
@@ -108,6 +112,7 @@ export function ClientDialog({
     }
     onSubmit({
       name: values.name.trim(),
+      company: values.company.trim(),
       email,
       phone: values.phone.trim(),
       address: values.address.trim(),
@@ -125,17 +130,28 @@ export function ClientDialog({
       onDismiss={onDismiss}
       footer={<FormDialogFooter onCancel={onDismiss} onSubmit={submit} submitLabel={submitLabel} submitting={submitting} />}
     >
-      <FormField error={errors.name}>
-        <TextInput
-          mode="outlined"
-          label="Name"
-          value={values.name}
-          onChangeText={change('name')}
-          error={!!errors.name}
-          style={inputStyle}
-          autoFocus
-        />
-      </FormField>
+      <FormRow>
+        <FormField error={errors.name}>
+          <TextInput
+            mode="outlined"
+            label="Name"
+            value={values.name}
+            onChangeText={change('name')}
+            error={!!errors.name}
+            style={inputStyle}
+            autoFocus
+          />
+        </FormField>
+        <FormField>
+          <TextInput
+            mode="outlined"
+            label="Company"
+            value={values.company}
+            onChangeText={change('company')}
+            style={inputStyle}
+          />
+        </FormField>
+      </FormRow>
 
       <FormRow>
         <FormField error={errors.email}>

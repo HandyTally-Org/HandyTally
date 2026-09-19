@@ -4,6 +4,13 @@ All notable changes to HandyTally are recorded here. Ticket numbers refer to `HT
 
 ## Unreleased
 
+### Added
+- **HT-25** — Groundwork for the QuickBooks Online export (the Export page follows in a second PR). Clients gain **Company**, **Mobile** and **Website**, and the ZIP is stored as text in a new `clients.postal_code` column so `02134` and ZIP+4 survive; the old numeric `clients.zip` stays for the compatibility window and a trigger (`clients_sync_postal_code`) keeps the two in step in both directions. Invoices gain **Terms** (Due on receipt / Net 15 / 30 / 60, `invoices.terms`), which sets the due date and defaults from the organisation's export settings; each line item gains a **Taxable** checkbox (`invoice_items.taxable`, default true) and the tax amount now applies only to taxable lines plus the fee. New `organization_settings.export` document (country, default terms, date format). Migration `20260919100000_quickbooks_export_fields.sql`, expand-only.
+  - **Contract-window items (not in this release):** drop `clients.zip` and its sync trigger once every host runs a tag ≥ v2.0.0; add the unique index on `invoices (organization_id, invoice_number)` only after the data is audited and every host runs a bundle that prevents duplicates.
+
+### Fixed
+- **HT-25** — Every invoice save path now writes a line item's `type`, `service_id`, `material_id` (three of the seven paths dropped them, so a catalogue item lost its link on save) through one helper, `utils/invoiceItems.ts`; the legacy `'custom'` type value is normalised to `'other'`.
+
 ### Changed
 - **HT-41** — `Docs/release-process.md` and `Docs/deploy-customer.md` §8 walkthrough logs record the first release (`v1.5.0`): release PR, tag, prod deploy, `prod` organisation, and the first promote to `wgelectricus`.
 

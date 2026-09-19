@@ -1,6 +1,7 @@
 import type { ThemeScheme } from './Colors';
 import type { OrganizationLabels } from './labels';
 import { parseCustomFieldDefs, type OrganizationCustomFields } from './customFields';
+import { DEFAULT_EXPORT_SETTINGS, parseExportSettings, type ExportSettings } from './exportSettings';
 import type { NavItem } from './navigation';
 
 // HT-50: the organisation's Settings row (organization_settings) as the app
@@ -23,6 +24,8 @@ export type OrganizationSettings = {
   customFields: OrganizationCustomFields;
   /** organization_settings.theme: the colour theme every member gets (HT-68). */
   theme: ThemeScheme;
+  /** organization_settings.export: Admin > Export options (HT-25). */
+  export: ExportSettings;
 };
 
 export const DEFAULT_NAV_SETTINGS: NavSettings = { order: [], hidden: [] };
@@ -32,6 +35,7 @@ export const DEFAULT_ORGANIZATION_SETTINGS: OrganizationSettings = {
   labels: {},
   customFields: {},
   theme: 'light',
+  export: DEFAULT_EXPORT_SETTINGS,
 };
 
 /** A row as PostgREST returns it; every column may be missing or malformed. */
@@ -41,6 +45,7 @@ export type OrganizationSettingsRow = {
   labels?: unknown;
   custom_fields?: unknown;
   theme?: unknown;
+  export?: unknown;
 };
 
 const stringList = (value: unknown): string[] =>
@@ -61,6 +66,7 @@ export function parseOrganizationSettings(row: OrganizationSettingsRow | null | 
     labels: record(row.labels) as OrganizationLabels,
     customFields: parseCustomFieldDefs(row.custom_fields),
     theme: parseThemeScheme(row.theme),
+    export: parseExportSettings(row.export),
   };
 }
 

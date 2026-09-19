@@ -221,7 +221,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const { data, error } = await supabase
       .from('organization_settings')
-      .select('organization_id, nav, labels, custom_fields, theme')
+      .select('organization_id, nav, labels, custom_fields, theme, export')
       .eq('organization_id', organizationId)
       .maybeSingle();
     if (error) {

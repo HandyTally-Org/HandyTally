@@ -4,7 +4,7 @@ import { Text, Button, Card, DataTable, TextInput, ActivityIndicator, IconButton
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../lib/api';
 import { styles as globalStyles } from '../../styles';
-import { formatDate, formatPhone } from '../../utils/formatting';
+import { clientPostalCode, formatDate, formatPhone } from '../../utils/formatting';
 import { MaterialIcons } from '@expo/vector-icons';
 import { NotesSection } from '../../components/NotesSection';
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
@@ -110,14 +110,20 @@ export default function ClientDetailsScreen() {
     setCustomErrors(nextCustomErrors);
     if (Object.keys(nextCustomErrors).length > 0) return;
 
-    // HT-66: clients.zip is numeric, so a cleared field must go up as null and
-    // anything that is not a number is rejected here instead of by Postgres.
-    const zipText = String(editedClient.zip ?? '').trim();
-    if (zipText && !/^\d+$/.test(zipText)) {
-      notify('ZIP must contain digits only', 'error');
+    // HT-25: the ZIP is stored as text in postal_code (leading zeros and ZIP+4
+    // survive); the numeric zip column is kept in step by a database trigger
+    // for hosts still on the older bundle, so it is not written here.
+    const postalText = String(editedClient.postal_code ?? '').trim();
+    if (postalText && !/^[A-Za-z0-9][A-Za-z0-9 -]{0,11}$/.test(postalText)) {
+      notify('ZIP must be letters, digits or a hyphen (up to 12 characters)', 'error');
       return;
     }
-    const zip = zipText ? Number(zipText) : null;
+    const postal_code = postalText || null;
+    const website = String(editedClient.website ?? '').trim() || null;
+    if (website && !/^(https?:\/\/)?[\w.-]+\.[a-z]{2,}(\/\S*)?$/i.test(website)) {
+      notify('Enter a website like example.com', 'error');
+      return;
+    }
 
     try {
       setSaving(true);
@@ -127,12 +133,15 @@ export default function ClientDetailsScreen() {
         .update({
           custom_fields: normalizeCustomValues(customDefs, customValues),
           name: editedClient.name,
+          company: String(editedClient.company ?? '').trim() || null,
           email: editedClient.email,
           phone: editedClient.phone,
+          mobile: String(editedClient.mobile ?? '').trim() || null,
+          website,
           address: editedClient.address,
           city: editedClient.city,
           state: editedClient.state,
-          zip,
+          postal_code,
           tag: editedClient.tag,
           notes: editedClient.notes
         })
@@ -368,13 +377,24 @@ export default function ClientDetailsScreen() {
           {activeSection === 'info' && (
             <FormPanel title="Client Information" subtitle="Contact details, address and notes for this client.">
               <FormSection title="Contact">
-                <FormField label="Name">
-                  <TextInput
-                    value={editedClient?.name || ''}
-                    onChangeText={(text) => setEditedClient({ ...editedClient, name: text })}
-                    {...outlinedInputProps}
-                  />
-                </FormField>
+                <FormRow>
+                  <FormField label="Name">
+                    <TextInput
+                      value={editedClient?.name || ''}
+                      onChangeText={(text) => setEditedClient({ ...editedClient, name: text })}
+                      {...outlinedInputProps}
+                    />
+                  </FormField>
+                  {/* HT-25: company name, exported as the QuickBooks "Company" column. */}
+                  <FormField label="Company">
+                    <TextInput
+                      value={editedClient?.company || ''}
+                      onChangeText={(text) => setEditedClient({ ...editedClient, company: text })}
+                      placeholder="Optional"
+                      {...outlinedInputProps}
+                    />
+                  </FormField>
+                </FormRow>
                 <FormRow>
                   <FormField label="Email">
                     <TextInput
@@ -390,6 +410,28 @@ export default function ClientDetailsScreen() {
                       keyboardType="phone-pad"
                       maxLength={17}
                       placeholder="+1 (555) 555-0100"
+                      {...outlinedInputProps}
+                    />
+                  </FormField>
+                </FormRow>
+                <FormRow>
+                  <FormField label="Mobile">
+                    <TextInput
+                      value={formatPhone(editedClient?.mobile)}
+                      onChangeText={(text) => setEditedClient({ ...editedClient, mobile: formatPhone(text) })}
+                      keyboardType="phone-pad"
+                      maxLength={17}
+                      placeholder="+1 (555) 555-0100"
+                      {...outlinedInputProps}
+                    />
+                  </FormField>
+                  <FormField label="Website">
+                    <TextInput
+                      value={editedClient?.website || ''}
+                      onChangeText={(text) => setEditedClient({ ...editedClient, website: text })}
+                      keyboardType="url"
+                      autoCapitalize="none"
+                      placeholder="example.com"
                       {...outlinedInputProps}
                     />
                   </FormField>
@@ -420,9 +462,12 @@ export default function ClientDetailsScreen() {
                     />
                   </FormField>
                   <FormField label="ZIP">
+                    {/* HT-25: text, so "02134" and "02134-1234" round-trip. */}
                     <TextInput
-                      value={editedClient?.zip || ''}
-                      onChangeText={(text) => setEditedClient({ ...editedClient, zip: text })}
+                      value={editedClient?.postal_code ?? clientPostalCode(editedClient)}
+                      onChangeText={(text) => setEditedClient({ ...editedClient, postal_code: text })}
+                      maxLength={12}
+                      placeholder="02134"
                       {...outlinedInputProps}
                     />
                   </FormField>
