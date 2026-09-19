@@ -4,7 +4,8 @@ All notable changes to HandyTally are recorded here. Ticket numbers refer to `HT
 
 ## Unreleased
 
-_Nothing yet._
+### Changed
+- **HT-41** — `Docs/release-process.md` and `Docs/deploy-customer.md` §8 walkthrough logs record the first release (`v1.5.0`): release PR, tag, prod deploy, `prod` organisation, and the first promote to `wgelectricus`.
 
 ## 1.5.0 — 2026-09-18
 
