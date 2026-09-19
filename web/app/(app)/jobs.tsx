@@ -45,6 +45,7 @@ type Client = {
   city?: string;
   state?: string;
   zip?: number | string;
+  postal_code?: string | null;
 };
 
 export default function JobsScreen() {
@@ -92,7 +93,7 @@ export default function JobsScreen() {
         .from('jobs')
         .select(`
           *,
-          clients:client_id (name, address, city, state, zip, phone)
+          clients:client_id (name, address, city, state, zip, postal_code, phone)
         `)
         .order('created_at', { ascending: false });
       

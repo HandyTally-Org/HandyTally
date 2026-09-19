@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 import { InvoiceForm } from '../../../components/InvoiceForm';
 import { useFeedback } from '../../../contexts/FeedbackContext';
+import { invoiceItemRow } from '../../../utils/invoiceItems';
 
 export default function InvoiceFormScreen() {
   const { id } = useLocalSearchParams();
@@ -79,6 +80,7 @@ export default function InvoiceFormScreen() {
                   job_id: updatedInvoice.job_id,
                   issue_date: updatedInvoice.issue_date,
                   due_date: updatedInvoice.due_date,
+                  terms: updatedInvoice.terms ?? null,
                   subtotal: updatedInvoice.subtotal,
                   tax_rate: updatedInvoice.tax_rate,
                   tax_amount: updatedInvoice.tax_amount,
@@ -104,15 +106,7 @@ export default function InvoiceFormScreen() {
 
               // Then insert new items
               if (updatedInvoice.invoice_items && updatedInvoice.invoice_items.length > 0) {
-                const itemsToInsert = updatedInvoice.invoice_items.map(item => ({
-                  invoice_id: id,
-                  description: item.description,
-                  notes: item.notes || null,
-                  photos: item.photos || [],
-                  quantity: item.quantity,
-                  unit_price: item.unit_price,
-                  amount: item.amount
-                }));
+                const itemsToInsert = updatedInvoice.invoice_items.map(item => invoiceItemRow(item, String(id)));
 
                 const { error: insertError } = await supabase
                   .from('invoice_items')
@@ -132,6 +126,7 @@ export default function InvoiceFormScreen() {
                   job_id: updatedInvoice.job_id,
                   issue_date: updatedInvoice.issue_date,
                   due_date: updatedInvoice.due_date,
+                  terms: updatedInvoice.terms ?? null,
                   subtotal: updatedInvoice.subtotal,
                   tax_rate: updatedInvoice.tax_rate,
                   tax_amount: updatedInvoice.tax_amount,
@@ -149,15 +144,7 @@ export default function InvoiceFormScreen() {
               
               // Insert invoice items
               if (updatedInvoice.invoice_items && updatedInvoice.invoice_items.length > 0) {
-                const itemsToInsert = updatedInvoice.invoice_items.map(item => ({
-                  invoice_id: newInvoice.uid,
-                  description: item.description,
-                  notes: item.notes || null,
-                  photos: item.photos || [],
-                  quantity: item.quantity,
-                  unit_price: item.unit_price,
-                  amount: item.amount
-                }));
+                const itemsToInsert = updatedInvoice.invoice_items.map(item => invoiceItemRow(item, newInvoice.uid));
 
                 const { error: insertError } = await supabase
                   .from('invoice_items')

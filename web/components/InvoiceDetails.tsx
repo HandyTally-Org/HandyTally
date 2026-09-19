@@ -5,7 +5,7 @@ import { Invoice, InvoiceItem } from '../app/(app)/invoices';
 import { supabase } from '../lib/supabase';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { formatCurrency, formatDate } from '../utils/formatting';
+import { clientPostalCode, formatCurrency, formatDate } from '../utils/formatting';
 import { generateInvoiceHTML, renderInvoiceDocument } from '../utils/invoiceHtml';
 import { doc, GREEN, NAVY, BORDER, LABEL, INK } from './invoiceDocStyles';
 import { invoiceDocumentLabel } from '../constants/invoiceStatus';
@@ -281,7 +281,7 @@ export function InvoiceDetails({
     ? [
         client.address,
         [client.city, client.state].filter(Boolean).join(', '),
-        client.zip,
+        clientPostalCode(client),
         client.email,
         client.phone,
       ].filter(Boolean)

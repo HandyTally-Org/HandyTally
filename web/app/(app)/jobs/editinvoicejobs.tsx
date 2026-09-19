@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 import { InvoiceForm } from '../../../components/InvoiceForm';
 import { themed } from '../../../constants/Colors';
+import { invoiceItemRow } from '../../../utils/invoiceItems';
 
 export default function EditInvoiceJobScreen() {
   const { id } = useLocalSearchParams();
@@ -180,6 +181,7 @@ export default function EditInvoiceJobScreen() {
           client_id: updatedInvoice.client_id,
           issue_date: updatedInvoice.issue_date,
           due_date: updatedInvoice.due_date,
+          terms: updatedInvoice.terms ?? null,
           subtotal: updatedInvoice.subtotal,
           tax_rate: updatedInvoice.tax_rate,
           tax_amount: updatedInvoice.tax_amount,
@@ -205,18 +207,7 @@ export default function EditInvoiceJobScreen() {
 
       // Then insert new items
       if (updatedItems && updatedItems.length > 0) {
-        const itemsToInsert = updatedItems.map(item => ({
-          invoice_id: invoiceId,
-          description: item.description,
-          notes: item.notes || null,
-          photos: item.photos || [],
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          amount: item.amount,
-          type: item.type || 'other',
-          service_id: item.service_id || null,
-          material_id: item.material_id || null
-        }));
+        const itemsToInsert = updatedItems.map(item => invoiceItemRow(item, invoiceId));
 
         const { error: insertError } = await supabase
           .from('invoice_items')

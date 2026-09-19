@@ -13,6 +13,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { ImportExportButtons } from '../../components/ImportExportButtons';
 import { exportWorkbook, pickWorkbook, sheetRows, confirmAction, toIsoDate } from '../../utils/excel';
 import { InvoiceStatus, NEW_INVOICE_STATUS } from '../../constants/invoiceStatus';
+import { invoiceItemRow } from '../../utils/invoiceItems';
 import { labelColor, labelText, labelTextColor } from '../../constants/labels';
 import { useLabels } from '../../hooks/useLabels';
 import { LabelPill, LabelPillRow } from '../../components/LabelPill';
@@ -38,6 +39,9 @@ export type Invoice = {
   tax_amount: number;
   total: number;
   notes: string;
+  // HT-25: payment terms (due_on_receipt, net_15, net_30, net_60); null on
+  // rows from before the column, or when the dates were set by hand.
+  terms?: string | null;
   // Covers both document type (estimate/work_order) and payment state. The
   // list of values lives in constants/invoiceStatus.ts.
   status: InvoiceStatus;
@@ -78,6 +82,8 @@ export type InvoiceItem = {
   type: 'service' | 'material' | 'other';
   service_id?: number;
   material_id?: number;
+  // HT-25: whether the invoice tax rate applies to this line (default true).
+  taxable?: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -538,7 +544,8 @@ export default function InvoicesScreen() {
           fee_amount: Number(invoice.fee_amount) || 0,
           total: Number(invoice.total),
           notes: invoice.notes || '',
-          status: invoice.status || NEW_INVOICE_STATUS
+          status: invoice.status || NEW_INVOICE_STATUS,
+          terms: invoice.terms ?? null,
         })
         .select(`
           *,
@@ -561,15 +568,7 @@ export default function InvoicesScreen() {
         }
         
         // Prepare items with the invoice_id
-        const itemsToInsert = items.map(item => ({
-          invoice_id: numericInvoiceId,
-          description: item.description,
-          notes: item.notes || null,
-          photos: item.photos || [],
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          amount: item.amount
-        }));
+        const itemsToInsert = items.map(item => invoiceItemRow(item, numericInvoiceId));
         
         // Insert the items
         const { error: itemsError } = await supabase
@@ -1279,19 +1278,7 @@ export default function InvoicesScreen() {
           }
           
           // Now insert the new items
-          const itemsWithInvoiceId = items.map(item => {
-            // Only include fields we know exist in the schema
-            return {
-              invoice_id: editingInvoice.uid,
-              description: item.description || '',
-              notes: item.notes || null,
-              photos: item.photos || [],
-              quantity: Number(item.quantity) || 0,
-              unit_price: Number(item.unit_price) || 0,
-              amount: Number(item.amount) || 0,
-              // Exclude material_id, service_id, and type if they're causing issues
-            };
-          });
+          const itemsWithInvoiceId = items.map(item => invoiceItemRow(item, editingInvoice.uid));
           
           const { data: insertedItems, error: insertError } = await supabase
             .from('invoice_items')
@@ -1326,6 +1313,7 @@ export default function InvoicesScreen() {
             total: updatedInvoice.total,
             notes: updatedInvoice.notes,
             status: updatedInvoice.status || NEW_INVOICE_STATUS,
+            terms: updatedInvoice.terms ?? null,
           })
           .select()
           .single();
@@ -1336,19 +1324,7 @@ export default function InvoicesScreen() {
         
         // Now handle the invoice items
         if (items && items.length > 0 && newInvoice) {
-          const itemsWithInvoiceId = items.map(item => {
-            // Only include fields we know exist in the schema
-            return {
-              invoice_id: newInvoice.uid,
-              description: item.description || '',
-              notes: item.notes || null,
-              photos: item.photos || [],
-              quantity: item.quantity,
-              unit_price: item.unit_price,
-              amount: item.amount,
-              // Exclude material_id, service_id, and type if they're causing issues
-            };
-          });
+          const itemsWithInvoiceId = items.map(item => invoiceItemRow(item, newInvoice.uid));
           
           const { data: insertedItems, error: insertError } = await supabase
             .from('invoice_items')
@@ -1425,15 +1401,7 @@ export default function InvoicesScreen() {
 
       // Then insert new items
       if (items && items.length > 0) {
-        const itemsToInsert = items.map(item => ({
-          invoice_id: invoiceId,
-          description: item.description,
-          notes: item.notes || null,
-          photos: item.photos || [],
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          amount: item.amount
-        }));
+        const itemsToInsert = items.map(item => invoiceItemRow(item, invoiceId));
 
         const { error: insertError } = await supabase
           .from('invoice_items')
@@ -1905,19 +1873,7 @@ export default function InvoicesScreen() {
 
                       // Then insert new items
                       if (invoiceItems && invoiceItems.length > 0) {
-                        const itemsToInsert = invoiceItems.map(item => ({
-                          invoice_id: invoiceToEdit.uid,
-                          description: item.description,
-                          notes: item.notes || null,
-                          photos: item.photos || [],
-                          quantity: item.quantity,
-                          unit_price: item.unit_price,
-                          amount: item.amount,
-                          // Include these if they exist
-                          service_id: item.service_id || null,
-                          material_id: item.material_id || null,
-                          type: item.type || 'custom'
-                        }));
+                        const itemsToInsert = invoiceItems.map(item => invoiceItemRow(item, invoiceToEdit.uid));
 
                         console.log('Inserting invoice items:', itemsToInsert);
 
@@ -1957,19 +1913,7 @@ export default function InvoicesScreen() {
                         
                         // Insert invoice items if any
                         if (invoiceItems && invoiceItems.length > 0) {
-                          const itemsToInsert = invoiceItems.map(item => ({
-                            invoice_id: newInvoice.uid,
-                            description: item.description,
-                            notes: item.notes || null,
-                            photos: item.photos || [],
-                            quantity: item.quantity,
-                            unit_price: item.unit_price,
-                            amount: item.amount,
-                            // Include these if they exist
-                            service_id: item.service_id || null,
-                            material_id: item.material_id || null,
-                            type: item.type || 'custom'
-                          }));
+                          const itemsToInsert = invoiceItems.map(item => invoiceItemRow(item, newInvoice.uid));
 
                           console.log('Inserting invoice items for new invoice:', itemsToInsert);
 

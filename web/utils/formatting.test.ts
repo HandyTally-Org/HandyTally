@@ -1,4 +1,22 @@
-import { formatClientAddress, formatDateTime, formatEin, formatPhone } from './formatting';
+import { clientPostalCode, formatClientAddress, formatDateTime, formatEin, formatPhone } from './formatting';
+
+describe('clientPostalCode (HT-25)', () => {
+  it('prefers the text postal_code, keeping leading zeros and ZIP+4', () => {
+    expect(clientPostalCode({ postal_code: '02134', zip: 2134 })).toBe('02134');
+    expect(clientPostalCode({ postal_code: '02134-1234', zip: 2134 })).toBe('02134-1234');
+  });
+
+  it('falls back to the numeric zip, padded back to five digits', () => {
+    expect(clientPostalCode({ postal_code: null, zip: 2134 })).toBe('02134');
+    expect(clientPostalCode({ zip: '18503.00' })).toBe('18503');
+    expect(clientPostalCode({ postal_code: '  ', zip: 18503 })).toBe('18503');
+  });
+
+  it('is blank with neither', () => {
+    expect(clientPostalCode({ postal_code: null, zip: null })).toBe('');
+    expect(clientPostalCode(null)).toBe('');
+  });
+});
 
 describe('formatClientAddress', () => {
   it('joins all four parts as "address, city, state zip"', () => {
@@ -22,6 +40,11 @@ describe('formatClientAddress', () => {
   it('renders a numeric zip as a plain string', () => {
     expect(formatClientAddress({ state: 'PA', zip: '18503.00' })).toBe('PA 18503');
     expect(formatClientAddress({ state: 'PA', zip: 18503 })).toBe('PA 18503');
+  });
+
+  it('uses postal_code over zip so a leading zero survives (HT-25)', () => {
+    expect(formatClientAddress({ state: 'MA', zip: 2134, postal_code: '02134' })).toBe('MA 02134');
+    expect(formatClientAddress({ state: 'MA', zip: 2134 })).toBe('MA 02134');
   });
 
   it('is blank when every part is empty', () => {

@@ -114,7 +114,24 @@ export type ClientAddressParts = {
   state?: string | null;
   /** clients.zip is numeric in the database, so it may arrive as a number or a numeric string. */
   zip?: number | string | null;
+  /** HT-25: the text ZIP ("02134", "02134-1234"); preferred over zip when set. */
+  postal_code?: string | null;
 };
+
+/**
+ * HT-25: the ZIP to show for a client. postal_code is the text column that
+ * keeps leading zeros and ZIP+4; zip is the older numeric column that the
+ * v1.5.0 bundle still writes (a trigger keeps the two in step). Prefer
+ * postal_code; fall back to zip with its decimal tail dropped and padded
+ * back to five digits.
+ */
+export function clientPostalCode(client: Pick<ClientAddressParts, 'zip' | 'postal_code'> | null | undefined): string {
+  if (!client) return '';
+  const postal = (client.postal_code ?? '').trim();
+  if (postal) return postal;
+  const zip = client.zip === null || client.zip === undefined ? '' : String(client.zip).trim().replace(/\.0*$/, '');
+  return /^\d{1,4}$/.test(zip) ? zip.padStart(5, '0') : zip;
+}
 
 /**
  * HT-56: join a client's address, city, state and zip as
@@ -127,8 +144,7 @@ export function formatClientAddress(client: ClientAddressParts | null | undefine
   const text = (value: string | number | null | undefined): string =>
     value === null || value === undefined ? '' : String(value).trim();
 
-  // numeric zips: drop any decimal tail ("18503.00" -> "18503"), never add separators.
-  const zip = text(client.zip).replace(/\.0*$/, '');
+  const zip = clientPostalCode(client);
   const stateZip = [text(client.state), zip].filter(Boolean).join(' ');
 
   return [text(client.address), text(client.city), stateZip].filter(Boolean).join(', ');

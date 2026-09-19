@@ -16,6 +16,8 @@ import { CustomFieldInputs } from './CustomFields';
 import { normalizeCustomValues, validateCustomValues, type CustomFieldValues } from '../constants/customFields';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchCompanyProfile, type CompanyProfile } from '../utils/companyProfile';
+import { clientPostalCode } from '../utils/formatting';
+import { PAYMENT_TERMS, TERMS_LABELS, dueDateForTerms, isPaymentTerms, termsFromDates, type PaymentTerms } from '../constants/exportSettings';
 
 type InvoiceFormProps = {
   jobs: Job[];
@@ -130,12 +132,24 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
       generateNextInvoiceNumber())
   );
 
+  const { settings } = useAuth();
+  // HT-25: payment terms. A new invoice takes the organisation's default and
+  // its due date follows; an older invoice with no stored terms shows the
+  // terms its dates imply, or none.
+  const initialTerms: PaymentTerms | '' = isPaymentTerms(initialInvoice?.terms)
+    ? initialInvoice.terms
+    : initialInvoice
+      ? termsFromDates(initialInvoice.issue_date, initialInvoice.due_date) ?? ''
+      : settings.export.terms;
+  const initialIssueDate = initialInvoice?.issue_date || new Date().toISOString().split('T')[0];
+
   const [formData, setFormData] = useState({
     job_id: safeToString(initialInvoice?.job_id),
     client_id: safeToString(initialInvoice?.client_id),
     invoice_number: invoiceNumber,
-    issue_date: initialInvoice?.issue_date || new Date().toISOString().split('T')[0],
-    due_date: initialInvoice?.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    issue_date: initialIssueDate,
+    due_date: initialInvoice?.due_date || (initialTerms ? dueDateForTerms(initialIssueDate, initialTerms) : dueDateForTerms(initialIssueDate, 'net_30')),
+    terms: initialTerms,
     subtotal: initialInvoice?.subtotal || 0,
     fee_type: initialInvoice?.fee_type || 'fixed',
     fee_value: initialInvoice?.fee_value || 0,
@@ -159,7 +173,11 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
           amount: item.amount || 0,
           service_id: item.service_id || null,
           material_id: item.material_id || null,
-          type: item.type || 'custom'
+          // HT-25: 'other' is the stored value for a custom line (the form
+          // used to write 'custom' as well; both are read as a custom line).
+          type: item.type === 'service' || item.type === 'material' ? item.type : 'other',
+          // HT-25: lines from before the taxable column count as taxable.
+          taxable: item.taxable !== false,
         }))
       : []
   );
@@ -213,11 +231,16 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
       ? subtotal * (feeValue / 100)
       : feeValue;
 
-    // Fees are taxable: they land in the base the tax rate applies to.
-    const taxableBase = subtotal + feeAmount;
+    // HT-25: only lines marked taxable carry tax; fees are always taxable
+    // and land in the base the tax rate applies to.
+    const taxableLines = invoiceItems.reduce(
+      (sum, item) => (item.taxable === false ? sum : sum + safeParseNumber(item.amount)),
+      0,
+    );
+    const taxableBase = taxableLines + feeAmount;
     const taxRate = safeParseNumber(formData.tax_rate);
     const taxAmount = taxableBase * (taxRate / 100);
-    const total = taxableBase + taxAmount;
+    const total = subtotal + feeAmount + taxAmount;
 
     setFormData(prev => ({
       ...prev,
@@ -320,7 +343,16 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
   };
 
   const handleChange = (field: keyof typeof formData, value: any) => {
-    setFormData(prevData => ({ ...prevData, [field]: value }));
+    setFormData(prevData => {
+      const next = { ...prevData, [field]: value };
+      // HT-25: terms drive the due date; changing either the terms or the
+      // issue date while terms are set moves the due date with them. Editing
+      // the due date by hand clears the terms (QBO then takes the dates as given).
+      if (field === 'terms' && isPaymentTerms(value)) next.due_date = dueDateForTerms(next.issue_date, value);
+      if (field === 'issue_date' && isPaymentTerms(prevData.terms)) next.due_date = dueDateForTerms(value, prevData.terms);
+      if (field === 'due_date' && isPaymentTerms(prevData.terms) && value !== dueDateForTerms(prevData.issue_date, prevData.terms)) next.terms = '';
+      return next;
+    });
 
     // Clear error when field is edited
     if (errors[field as string]) {
@@ -437,7 +469,8 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
       quantity: 1,
       unit_price: 0,
       amount: 0,
-      type: 'other'
+      type: 'other',
+      taxable: true,
     };
     setInvoiceItems([...invoiceItems, newItem]);
     setErrors(prev => ({ ...prev, items: '' }));
@@ -580,6 +613,7 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
 
       const invoiceData = {
         ...formData,
+        terms: isPaymentTerms(formData.terms) ? formData.terms : null,
         job_id: toId(formData.job_id),
         client_id: toId(formData.client_id),
         subtotal: safeParseNumber(formData.subtotal),
@@ -599,6 +633,7 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
         amount: safeParseNumber(item.amount),
         service_id: toId(item.service_id),
         material_id: toId(item.material_id),
+        taxable: item.taxable !== false,
       }));
 
       onSubmit(invoiceData, normalizedItems);
@@ -647,7 +682,7 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
     ? [
         selectedClient.address,
         [selectedClient.city, selectedClient.state].filter(Boolean).join(', '),
-        selectedClient.zip,
+        clientPostalCode(selectedClient),
         selectedClient.email,
         selectedClient.phone,
       ].filter(Boolean)
@@ -777,6 +812,21 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
                 />
               </View>
               {errors.issue_date && <Text style={doc.errorText}>{errors.issue_date}</Text>}
+
+              {/* HT-25: payment terms; sets the due date, exported to QuickBooks as "Terms". */}
+              <View style={doc.field}>
+                <Text style={doc.fieldLabel}>Terms</Text>
+                <select
+                  style={nativeSelectStyle}
+                  value={formData.terms || ''}
+                  onChange={(e: any) => handleChange('terms', e.target.value)}
+                >
+                  <option value="">Custom dates</option>
+                  {PAYMENT_TERMS.map(t => (
+                    <option key={t} value={t}>{TERMS_LABELS[t]}</option>
+                  ))}
+                </select>
+              </View>
 
               {/* Due date */}
               <View style={[doc.field, errors.due_date ? doc.fieldError : null]}>
@@ -908,6 +958,23 @@ export function InvoiceForm({ jobs, clients, lastInvoiceNumber, onSubmit, onCanc
                     <Text style={{ fontSize: 14, color: INK }}>{formatCurrency(item.amount)}</Text>
                   </View>
                 </View>
+
+                {/* HT-25: per-line taxable flag; only taxable lines carry the
+                    invoice tax rate (labor is untaxed in most states). */}
+                <TouchableOpacity
+                  style={doc.taxableToggle}
+                  onPress={() => handleUpdateItem(index, 'taxable', item.taxable === false)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: item.taxable !== false }}
+                >
+                  <IconButton
+                    icon={item.taxable !== false ? 'checkbox-marked' : 'checkbox-blank-outline'}
+                    iconColor={item.taxable !== false ? GREEN : LABEL}
+                    size={18}
+                    style={{ margin: 0 }}
+                  />
+                  <Text style={doc.taxableText}>Taxable</Text>
+                </TouchableOpacity>
 
                 {/* Per-item notes */}
                 <View style={doc.itemNotesRow}>

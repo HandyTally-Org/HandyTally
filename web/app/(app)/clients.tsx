@@ -15,6 +15,7 @@ import { LabelPill, LabelPillRow } from '../../components/LabelPill';
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 import { themed } from '../../constants/Colors';
 import { useFeedback } from '../../contexts/FeedbackContext';
+import { clientPostalCode, formatPhone } from '../../utils/formatting';
 
 type Client = {
   uid: string;
@@ -27,6 +28,11 @@ type Client = {
   city?: string;
   state?: string;
   zip?: string;
+  /** HT-25: text ZIP; preferred over the numeric zip. */
+  postal_code?: string | null;
+  company?: string | null;
+  mobile?: string | null;
+  website?: string | null;
   notes?: string;
 };
 
@@ -429,19 +435,23 @@ export default function ClientsScreen() {
       const exportData = clients.map(client => ({
         id: client.uid,
         name: client.name,
+        company: client.company || '',
         email: client.email || '',
         phone: client.phone || '',
+        mobile: client.mobile || '',
+        website: client.website || '',
         address: client.address || '',
         city: client.city || '',
         state: client.state || '',
-        zip: client.zip || '',
+        // HT-25: the text ZIP, so "02134" exports as "02134".
+        zip: clientPostalCode(client),
         tag: client.tag || '',
         notes: client.notes || '',
         delete: 'n'  // Default to 'n' (don't delete)
       }));
       
       await exportWorkbook('clients.xlsx', [
-        { name: 'clients', rows: exportData, columnWidths: [36, 25, 30, 15, 30, 15, 10, 10, 15, 40, 10] },
+        { name: 'clients', rows: exportData, columnWidths: [36, 25, 25, 30, 15, 15, 25, 30, 15, 10, 10, 15, 40, 10] },
       ]);
       
       notify('Clients exported. Set the "delete" column to "y" in the file to delete a client on import.', 'success');
@@ -497,7 +507,7 @@ export default function ClientsScreen() {
             }
           } else {
             // Prepare client data
-            const clientData = {
+            const clientData: Record<string, unknown> = {
               name: row.name || '',
               email: row.email || '',
               phone: row.phone || '',
@@ -508,7 +518,16 @@ export default function ClientsScreen() {
             // Add city, state, zip if they exist
             if (row.city) clientData.city = row.city;
             if (row.state) clientData.state = row.state;
-            if (row.zip) clientData.zip = row.zip;
+            // HT-25: a spreadsheet ZIP lands in the text column (the numeric
+            // zip follows through the database trigger); a numeric cell that
+            // lost its leading zero is padded back to five digits.
+            if (row.zip !== undefined && row.zip !== null && String(row.zip).trim() !== '') {
+              const zipText = String(row.zip).trim().replace(/\.0*$/, '');
+              clientData.postal_code = /^\d{1,4}$/.test(zipText) ? zipText.padStart(5, '0') : zipText;
+            }
+            if (row.company) clientData.company = row.company;
+            if (row.mobile) clientData.mobile = formatPhone(String(row.mobile));
+            if (row.website) clientData.website = row.website;
             if (row.notes) clientData.notes = row.notes;
             
             console.log('Client data to save:', clientData);

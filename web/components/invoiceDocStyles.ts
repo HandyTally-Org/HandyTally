@@ -206,6 +206,19 @@ export const doc = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
+  // HT-25: the per-line "Taxable" checkbox row above the notes.
+  taxableToggle: {
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  taxableText: {
+    fontSize: 13,
+    color: LABEL,
+  },
   itemNotesRow: {
     borderTopWidth: 1,
     borderTopColor: BORDER,
