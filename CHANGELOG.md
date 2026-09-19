@@ -4,6 +4,10 @@ All notable changes to HandyTally are recorded here. Ticket numbers refer to `HT
 
 ## Unreleased
 
+_Nothing yet._
+
+## 1.5.0 — 2026-09-18
+
 ### Added
 - **HT-41** — Every host says what it runs. The sidebar footer shows the version and channel (`v1.5.0 · prod`, `v1.5.0 · wgelectricus`, `master-3f2a1c9 · demo`) instead of a hard-coded `v1.0`, and links to a public `/whats-new` page that renders the notes for that version. `demo.handytally.com` carries a persistent "SANDBOX · demo" tag. After a customer host is promoted, members see a one-time "Updated to vX.Y.Z" toast on their next load. New customer-facing `RELEASE_NOTES.md`; `npm run release-notes` (in `web/`) generates `constants/releaseNotes.generated.ts` from it and CI fails when the two differ. New `web/constants/release.ts` (`APP_VERSION`, `BUILD_SHA`) and `releaseChannel()` in `web/lib/tenant.ts`.
 
@@ -55,6 +59,47 @@ All notable changes to HandyTally are recorded here. Ticket numbers refer to `HT
 ### Removed
 - **HT-31** — `web/amplify.yml`; AWS Amplify no longer serves the app.
 - Deleted the unused `web/components/MaterialsPage.tsx`; the Excel export/import and material list it duplicated live in `web/app/(app)/inventory.tsx`.
+
+### Added (backfilled at release time from the merged PRs; see the DevIssues tickets for detail)
+- **HT-10** — Estimates can be sent to the client for approval (`send-estimate-approval`); the client's **Approve** click (`approve-estimate`) turns the estimate into a work order. Approval e-mail logo and button fixed; invoice document header laid out for e-mail; invoice and job status badges are centred pills.
+- **HT-12** — Organisation roles (admin / member), admin-only gating of the Admin pages, and e-mail invitations (`invite-user`).
+- **HT-27** — Schedule calendar rebuilt (month / week / day) and the unused calendar packages removed.
+- **HT-46** — Excel export and import for Admin › Users.
+- **HT-47** — Admin › Company rebuilt as **Info** (name, address, EIN, contact, logo) and **Documents** (licences, insurance, attachments) sections; `company_attachments` gains document rows (`20260918110000_company_documents.sql`).
+- **HT-48** — The drawer is driven from one navigation config.
+- **HT-49** — One `labels` module for job, invoice and client labels.
+- **HT-50** — Admin › Settings shell with a navigation order editor.
+- **HT-51 / HT-52** — Labels tab and custom fields on Clients, Inventory and Labor, styled to the approved mock-up.
+- **HT-53** — Custom fields on Jobs and Invoices (`custom_fields jsonb`).
+- **HT-54** — Materials on an approved invoice are deducted from inventory.
+- **HT-56** — Jobs list shows job times and the client's Address and Phone columns.
+- **HT-60** — Client Details and Job Details forms modernised.
+- **HT-62** — One shared label pill for the Jobs, Invoices and Clients filters.
+- **HT-65** — Superusers appear on every organisation's Users page; **Remove** (membership) and **Delete** (account) actions; `user_profiles` mirrors `auth.users`.
+- **HT-74** — Collapsible Services / Materials sections in the invoice item picker.
+- **HT-75** — `useFeedback()` (`notify` / `confirm`) replaces native alerts in the invoice send flow; **HT-85 / HT-84 / HT-89** extend it to every `alert()` / `confirm()` in the app and every delete confirmation, with one centred destructive-action dialog.
+- **HT-76** — Date fields accept `MM/DD/YYYY` with auto-formatting.
+- **HT-77 / HT-82** — Company EIN masked as `NN-NNNNNNN`; every phone field masked live as `+1 (XXX) XXX-XXXX`.
+- **HT-78 / HT-87** — Company › Documents rows marked **On invoices** render as a *Licences & Insurance* block on screen, print/PDF and both e-mails, and their files are attached to the sent e-mail server-side with an 8 MB guard (`20260918130000_company_documents_include_on_invoices.sql`).
+- **HT-80** — Client tag on Client Details / Add Client is a label-backed dropdown.
+- Inventory gains SKU and Quantity columns; Cost is renamed Unit Cost. The job date picker is a popup that accepts a typed time.
+
+### Fixed (backfilled)
+- **HT-13** — Screens refresh when they regain focus, so a save on one page shows on the next.
+- **HT-44** — Status pill bar removed from the invoice view.
+- **HT-61** — Job Details tabs keep working while a job is being edited.
+- **HT-63** — Invite User modal restyled to match the other form dialogs.
+- **HT-64** — Schedule week/day grid header alignment.
+- **HT-66** — A cleared client ZIP saves as null; non-numeric ZIPs are rejected.
+- **HT-67** — The job edit form shows the job's current client.
+- **HT-69** — Plain-text, centred Role and Status on the Users table.
+- **HT-73** — Date/time picker no longer blanks the page.
+- **HT-79** — Clients list updates after add / edit / tag / delete.
+- **HT-81** — Inventory, Jobs, Labor and Clients list pages scroll again.
+- **HT-83** — Changing or resetting the company logo updates the sidebar in place instead of reloading the app to the Dashboard.
+- **HT-86** — Job › Costs redrawn in the panel style, and **Save** actually saves.
+- **HT-88** — Invoices, estimates and their e-mails show the organisation's real name, address, contact and logo instead of placeholders; every reader is scoped to the invoice's organisation and saving Company Info never creates a second row; `send-estimate-approval` and `approve-estimate` look the company up by organisation.
+- The Expo starter `(tabs)` group that had taken over `/` on the live site is removed; Settings label/field rows no longer leak between sections; dead `DateTimePicker` and `MaterialsPage` copies deleted.
 
 ## 1.04 — 2025-12-15
 - Migrated to a self-hosted Supabase instance.

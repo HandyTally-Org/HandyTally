@@ -8,7 +8,7 @@ the section for the version a site is running at `/whats-new`, and the
 version itself is in the sidebar footer. To edit: change this file, run
 `npm run release-notes` in `web/`, and commit both files.
 
-## v1.5.0
+## v1.5.0 — 2026-09-18
 
 The first release delivered through HandyTally's new release process: it
 reaches the demo site first, then `prod.handytally.com`, and your site only
