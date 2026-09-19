@@ -18,3 +18,14 @@ Roles are `organization_memberships.role`; `user_profiles.role` is only used to 
 ## Company (`company.tsx`)
 
 Company profile and logo. Admin-only since HT-12.
+
+## Export (`export.tsx`) — HT-25
+
+Files for other systems. One target today: **QuickBooks Online**, whose Import Data screens take the files as written.
+
+| Download | File | Rules |
+| --- | --- | --- |
+| Customers | `quickbooks-customers.xlsx`, sheet `Sheet1`, Intuit's 16 columns | Optional tag filter; ZIP written as text; Country from Export settings; optional opening balance (sum of open invoice totals) instead of exporting invoices |
+| Invoices | `quickbooks-invoices.csv` (`-1`, `-2`… when over 1,000 rows) | One row per line item; header values on the first row of each invoice; `*ItemAmount` recomputed as qty × rate; a *Service Fee* line for the invoice fee; `Taxable`/`TaxRate` per line; `Terms` from `invoices.terms` or the date gap; estimates, work orders and cancelled documents never included |
+
+Blockers (duplicate client names, duplicate or missing invoice numbers, missing client) stop the download and are listed; warnings (recomputed amounts, total mismatches, paid invoices — QBO imports every invoice as open) are listed under the download. Export settings (country, default terms, date format) live in `organization_settings.export`. All rules are in `web/utils/quickbooksExport.ts` and are unit-tested; the screen only fetches rows (scoped to the organisation explicitly) and shows results.

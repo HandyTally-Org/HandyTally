@@ -8,6 +8,32 @@ the section for the version a site is running at `/whats-new`, and the
 version itself is in the sidebar footer. To edit: change this file, run
 `npm run release-notes` in `web/`, and commit both files.
 
+## v2.0.0
+
+### QuickBooks Online export
+
+- A new **Admin › Export** page writes files that QuickBooks Online's own
+  *Import Data* screens accept without editing: a **Customers** spreadsheet and
+  an **Invoices** file, laid out exactly the way Intuit's samples are.
+- Before importing, turn on *Custom transaction numbers* in QuickBooks, import
+  customers before invoices, and choose the same date format on the import
+  screen as in Export settings. The page repeats these three steps after every
+  download.
+- The export tells you what to check: it stops if two clients share a name or
+  two invoices share a number (QuickBooks would merge or reject them), and it
+  lists invoices whose totals need a second look and invoices you have already
+  been paid for, because QuickBooks imports every invoice as open.
+- Estimates, work orders and cancelled documents are never exported.
+
+### Clients and invoices
+
+- Clients have **Company**, **Mobile** and **Website** fields, and ZIP codes
+  keep their leading zero (`02134`) and their ZIP+4 extension.
+- Invoices have **Terms** (Due on receipt, Net 15, Net 30, Net 60) that set the
+  due date; the default for new invoices is chosen on the Export page.
+- Each invoice line has a **Taxable** checkbox, so labor can be left untaxed
+  while materials are taxed. Existing invoices are unchanged.
+
 ## v1.5.0 — 2026-09-18
 
 The first release delivered through HandyTally's new release process: it
