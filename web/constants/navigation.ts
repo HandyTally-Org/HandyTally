@@ -60,6 +60,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
     children: [
       { key: 'admin-users', label: 'Users', icon: 'people', color: 'navAdmin', route: '/admin/users', screen: 'admin/users' },
       { key: 'admin-company', label: 'Company', icon: 'business', color: 'navAdmin', route: '/admin/company', screen: 'admin/company' },
+      // HT-25: QuickBooks Online (and later other) exports.
+      { key: 'admin-export', label: 'Export', icon: 'download-outline', color: 'navAdmin', route: '/admin/export', screen: 'admin/export' },
       // HT-50: the same gear as Admin itself, by decision.
       { key: 'admin-settings', label: 'Settings', icon: 'settings-outline', color: 'navAdmin', route: '/admin/settings', screen: 'admin/settings' },
     ],
